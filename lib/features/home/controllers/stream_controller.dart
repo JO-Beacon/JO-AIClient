@@ -101,6 +101,21 @@ class StreamController {
   Map<String, List<ReasoningSegmentData>> get reasoningSegments =>
       _reasoningSegments;
 
+  /// 每条助手消息当前推理片段对应的提供方推理 id。
+  ///
+  /// 界面真正渲染的是 `StreamChunkHandler` 产出的推理部件，而部件按推理 id
+  /// 决定是否新起一个 `ReasoningPart`。计时片段必须用同一个 id 切分，界面上的
+  /// 推理块与计时段才能一一对应；否则部件被合并、片段却被切开，计时会停在
+  /// 已结束的那一段上。缺少 id 时退回按工具边界切分的旧规则。
+  final Map<String, String> _reasoningSegmentIds = <String, String>{};
+
+  /// 自上一段推理之后是否出现过工具调用。
+  ///
+  /// 渲染部件在工具边界会切断推理（`StreamChunkHandler._closeReasoning`），
+  /// 计时片段必须用同一个信号开新段，否则部件新开、片段复用，
+  /// 新推理会挂到已结束的旧段上，工具耗时也会被算进思考时长。
+  final Set<String> _reasoningToolBoundary = <String>{};
+
   /// 每条助手消息的内容/文本拆分元数据。
   final Map<String, ContentSplitData> _contentSplits =
       <String, ContentSplitData>{};
@@ -229,6 +244,8 @@ class StreamController {
   /// 移除消息的推理片段。
   void removeReasoningSegments(String messageId) {
     _reasoningSegments.remove(messageId);
+    _reasoningSegmentIds.remove(messageId);
+    _reasoningToolBoundary.remove(messageId);
   }
 
   /// 获取消息的内容拆分元数据。
@@ -267,6 +284,8 @@ class StreamController {
   void clearMessageState(String messageId) {
     _reasoning.remove(messageId);
     _reasoningSegments.remove(messageId);
+    _reasoningSegmentIds.remove(messageId);
+    _reasoningToolBoundary.remove(messageId);
     _contentSplits.remove(messageId);
     _toolParts.remove(messageId);
     _geminiThoughtSigs.remove(messageId);
@@ -281,6 +300,8 @@ class StreamController {
     bool discard(String id) => !keepMessageIds.contains(id);
     _reasoning.removeWhere((id, _) => discard(id));
     _reasoningSegments.removeWhere((id, _) => discard(id));
+    _reasoningSegmentIds.removeWhere((id, _) => discard(id));
+    _reasoningToolBoundary.removeWhere(discard);
     _contentSplits.removeWhere((id, _) => discard(id));
     _toolParts.removeWhere((id, _) => discard(id));
     _geminiThoughtSigs.removeWhere((id, _) => discard(id));
@@ -842,10 +863,14 @@ class StreamController {
   // ============================================================================
 
   /// 处理流中的推理分块。
+  ///
+  /// [reasoningId] 是提供方为这段推理给出的块 id。渲染侧的推理部件按同一个
+  /// id 合并或切分，这里必须保持一致，否则计时片段会与界面上的推理块错位。
   Future<void> handleReasoningChunk(
     String reasoning,
-    StreamingState state,
-  ) async {
+    StreamingState state, {
+    String? reasoningId,
+  }) async {
     if (reasoning.isEmpty || !state.ctx.supportsReasoning) return;
 
     final messageId = state.messageId;
@@ -856,6 +881,9 @@ class StreamController {
       final r = _reasoning[messageId] ?? ReasoningData();
       r.appendText(reasoning);
       r.startAt ??= DateTime.now();
+      // 推理重新到来即视为仍在进行；清掉可能残留的结束时间，
+      // 否则界面上的耗时计时会停在上一个边界。
+      r.finishedAt = null;
       // NOTE: Do not reset r.expanded here - preserve user's toggle state during streaming
       if (isNewReasoning) {
         r.expanded = initialExpanded;
@@ -865,7 +893,15 @@ class StreamController {
       // Add to reasoning segments for mixed display
       final segments =
           _reasoningSegments[messageId] ?? <ReasoningSegmentData>[];
-      if (segments.isEmpty) {
+      final id = reasoningId?.trim() ?? '';
+      final hasId = id.isNotEmpty;
+      final previousId = _reasoningSegmentIds[messageId];
+      final toolBoundary = _reasoningToolBoundary.remove(messageId);
+      final startsNewSegment =
+          segments.isEmpty ||
+          (hasId && previousId != id) ||
+          (toolBoundary && segments.isNotEmpty);
+      if (startsNewSegment) {
         final newSegment = ReasoningSegmentData();
         newSegment.text = reasoning;
         newSegment.startAt = DateTime.now();
@@ -873,20 +909,13 @@ class StreamController {
         newSegment.toolStartIndex = (_toolParts[messageId]?.length ?? 0);
         segments.add(newSegment);
       } else {
-        final hasToolsAfterLastSegment =
-            (_toolParts[messageId]?.isNotEmpty ?? false);
         final lastSegment = segments.last;
-        if (hasToolsAfterLastSegment && lastSegment.finishedAt != null) {
-          final newSegment = ReasoningSegmentData();
-          newSegment.text = reasoning;
-          newSegment.startAt = DateTime.now();
-          newSegment.expanded = initialExpanded;
-          newSegment.toolStartIndex = (_toolParts[messageId]?.length ?? 0);
-          segments.add(newSegment);
-        } else {
-          lastSegment.appendText(reasoning);
-          lastSegment.startAt ??= DateTime.now();
-        }
+        lastSegment.appendText(reasoning);
+        lastSegment.startAt ??= DateTime.now();
+        lastSegment.finishedAt = null;
+      }
+      if (hasId) {
+        _reasoningSegmentIds[messageId] = id;
       }
       _reasoningSegments[messageId] = segments;
 
@@ -932,6 +961,10 @@ class StreamController {
 
     // Finish any unfinished reasoning segment when tools start
     final segments = _reasoningSegments[messageId] ?? <ReasoningSegmentData>[];
+    if (segments.isNotEmpty) {
+      // 与渲染部件在工具边界切断保持一致；下一次推理 delta 会开新段。
+      _reasoningToolBoundary.add(messageId);
+    }
     if (segments.isNotEmpty && segments.last.finishedAt == null) {
       segments.last.finishedAt = DateTime.now();
       final autoCollapse = getSettingsProvider().autoCollapseThinking;
@@ -1582,6 +1615,10 @@ class StreamController {
         payload.segments,
       );
     }
+    // 历史片段没有提供方 id，继续生成时会按新 id 重新开段；
+    // 清掉上轮可能残留的 id，避免把新块并进旧片段。
+    _reasoningSegmentIds.remove(messageId);
+    _reasoningToolBoundary.remove(messageId);
     final contentSplits = payload.contentSplits;
     if (contentSplits != null) {
       _contentSplits[messageId] = contentSplits;

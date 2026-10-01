@@ -2260,12 +2260,12 @@ class ChatActions {
       case TextDelta(:final text):
         await _handleContentChunk(state, text);
         _scheduleStreamingCheckpoint(state);
-      case ReasoningDelta(:final text, :final details):
+      case ReasoningDelta(:final id, :final text, :final details):
         if (details != null) {
           streamController.setReasoningDetails(state.messageId, details);
         }
         if (text.isNotEmpty && state.ctx.supportsReasoning) {
-          await _handleReasoningChunk(text, state);
+          await _handleReasoningChunk(text, state, reasoningId: id);
         }
         _scheduleStreamingCheckpoint(state);
       case ToolCallStart(:final id, :final toolName):
@@ -2346,9 +2346,14 @@ class ChatActions {
   /// 处理流中的推理分块。
   Future<void> _handleReasoningChunk(
     String reasoning,
-    stream_ctrl.StreamingState state,
-  ) async {
-    await streamController.handleReasoningChunk(reasoning, state);
+    stream_ctrl.StreamingState state, {
+    String? reasoningId,
+  }) async {
+    await streamController.handleReasoningChunk(
+      reasoning,
+      state,
+      reasoningId: reasoningId,
+    );
     _publishAssistantParts(state);
   }
 

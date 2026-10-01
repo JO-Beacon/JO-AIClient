@@ -17,6 +17,7 @@ import '../../../core/models/chat_message.dart';
 import '../../../core/models/conversation.dart';
 import '../../../core/models/conversation_tree.dart';
 import '../../../core/models/workspace_binding.dart';
+import '../../../core/services/logging/flutter_logger.dart';
 import '../../../core/providers/workspace_provider.dart';
 import '../../../core/models/quick_phrase.dart';
 import '../../../core/models/assistant_regex.dart';
@@ -2637,6 +2638,12 @@ class HomePageController extends ChangeNotifier {
       final h = box.size.height;
       if ((_inputBarHeight - h).abs() > 1.0) {
         _inputBarHeight = h;
+        if (FlutterLogger.enabled) {
+          FlutterLogger.log(
+            'inputBar measured=$h stored=$_inputBarHeight',
+            tag: 'ChatBottom',
+          );
+        }
         notifyListeners();
       }
     } catch (_) {}

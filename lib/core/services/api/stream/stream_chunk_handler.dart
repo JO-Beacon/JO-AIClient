@@ -173,6 +173,7 @@ class StreamChunkHandler {
       case ReasoningEnd(:final id):
         _endText(_reasoningIndex.remove(id));
       case ToolCallStart(:final id, :final toolName, :final metadata):
+        _closeReasoning();
         _upsertTool(id, name: toolName, metadata: metadata);
       case ToolCallDelta(
         :final id,
@@ -196,6 +197,7 @@ class StreamChunkHandler {
         :final input,
         :final metadata,
       ):
+        _closeReasoning();
         _upsertTool(
           id,
           name: toolName,
@@ -337,6 +339,19 @@ class StreamChunkHandler {
     }
     _parts.add(const ReasoningPart(''));
     return _reasoningIndex[id] = _parts.length - 1;
+  }
+
+  /// 结束当前仍在流的推理部件。
+  ///
+  /// OpenAI / Google 这类提供方整轮推理共用一个 id，若不在工具边界切断，
+  /// 工具之后的推理会被并回工具之前的同一个部件：界面既无法按段计时，
+  /// 顺序也会错。切断后，后续推理 delta 会新起一个 `ReasoningPart`，
+  /// 与流控制器的计时片段一一对应。
+  void _closeReasoning() {
+    for (final index in _reasoningIndex.values) {
+      _endText(index);
+    }
+    _reasoningIndex.clear();
   }
 
   int _ensureImage(

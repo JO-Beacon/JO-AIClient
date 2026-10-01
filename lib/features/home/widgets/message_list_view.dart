@@ -15,6 +15,7 @@ import '../../../core/models/message_part.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/assistant_regex.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/logging/flutter_logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/assistant_regex.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
@@ -486,6 +487,10 @@ class _MessageListViewState extends State<MessageListView> {
     _refreshRenderModels();
     _synchronizeExtentCache(oldWidget, oldRenderModels);
     _snapshotToolSignatures();
+    if (oldWidget.isConversationGenerating &&
+        !widget.isConversationGenerating) {
+      _logBottomDiagnostics('generation-end');
+    }
   }
 
   void _refreshRenderModels() {
@@ -1948,6 +1953,18 @@ class _MessageListViewState extends State<MessageListView> {
   bool _handleScrollNotification(ScrollNotification notification) {
     if (notification.depth != 0) return false;
     if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification is ScrollEndNotification ||
+        notification is OverscrollNotification) {
+      final gap =
+          notification.metrics.maxScrollExtent - notification.metrics.pixels;
+      if (gap <= 96) {
+        _logBottomDiagnostics(
+          notification is OverscrollNotification
+              ? 'overscroll-bottom'
+              : 'scroll-end-bottom',
+        );
+      }
+    }
     if (notification is ScrollUpdateNotification) {
       if (notification.dragDetails != null) {
         _recordPointerDrag(notification.metrics);
@@ -2001,6 +2018,96 @@ class _MessageListViewState extends State<MessageListView> {
   void _recordPointerDrag(ScrollMetrics metrics) {
     _pointerDragInProgress = true;
     _latestPointerDragMetrics = metrics;
+  }
+
+  DateTime? _lastBottomDiagAt;
+
+  /// 底部定位诊断输出，受“应用日志打印”开关控制。
+  ///
+  /// 现场“最下面的消息滑不下去”需要区分三类原因：
+  /// 1. 屏外高度没量完（`estimated > 0`）；
+  /// 2. 量完了但账面总高与真实不符（`estimated == 0` 却仍够不到）；
+  /// 3. 下留白（输入框叠加高度）本身不对。
+  /// 这里把这三类判据一并写进日志，便于真机复现后直接定位。
+  void _logBottomDiagnostics(String reason) {
+    if (!FlutterLogger.enabled) return;
+    final now = DateTime.now();
+    final last = _lastBottomDiagAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastBottomDiagAt = now;
+    try {
+      final controller = widget.listController;
+      final attached = controller.isAttached;
+      final items = attached ? controller.numberOfItems : -1;
+      final estimated = attached
+          ? controller.numberOfItemsWithEstimatedExtent
+          : -1;
+      final total = attached ? controller.totalExtent : double.nan;
+      final lastIndex = items > 0 ? items - 1 : null;
+      final lastExtent = (attached && lastIndex != null)
+          ? controller.extentForIndex(lastIndex)
+          : null;
+      final visible = attached ? controller.visibleRange : null;
+      double? pixels;
+      double? max;
+      double? viewport;
+      if (widget.scrollController.hasClients) {
+        final pos = widget.scrollController.position;
+        pixels = pos.pixels;
+        max = pos.maxScrollExtent;
+        viewport = pos.viewportDimension;
+      }
+      final gap = (max != null && pixels != null) ? max - pixels : null;
+      double? tailHeight;
+      double? tailOverflow;
+      final selfRender = context.findRenderObject();
+      if (selfRender is RenderBox) {
+        final sliver = _findSliverMultiBoxAdaptor(selfRender);
+        final child = sliver?.lastChild;
+        if (child is RenderBox && child.attached) {
+          tailHeight = child.size.height;
+          final topLeft = child.localToGlobal(Offset.zero);
+          final selfTopLeft = selfRender.localToGlobal(Offset.zero);
+          tailOverflow =
+              topLeft.dy +
+              child.size.height -
+              (selfTopLeft.dy + selfRender.size.height);
+        }
+      }
+      FlutterLogger.log(
+        'bottom[$reason] items=$items estimated=$estimated '
+        'total=${total.toStringAsFixed(1)} '
+        'lastExtent=${lastExtent?.$1.toStringAsFixed(1)} '
+        'lastEstimated=${lastExtent?.$2} '
+        'tailHeight=${tailHeight?.toStringAsFixed(1)} '
+        'tailOverflow=${tailOverflow?.toStringAsFixed(1)} '
+        'pixels=${pixels?.toStringAsFixed(1)} '
+        'max=${max?.toStringAsFixed(1)} '
+        'gap=${gap?.toStringAsFixed(1)} '
+        'viewport=${viewport?.toStringAsFixed(1)} '
+        'bottomPad=${widget.bottomContentPadding.toStringAsFixed(1)} '
+        'topPad=${widget.topContentPadding.toStringAsFixed(1)} '
+        'pinned=${widget.isPinnedIndicatorActive} visible=$visible',
+        tag: 'ChatBottom',
+      );
+    } catch (_) {}
+  }
+
+  RenderSliverMultiBoxAdaptor? _findSliverMultiBoxAdaptor(RenderObject root) {
+    RenderSliverMultiBoxAdaptor? found;
+    void visit(RenderObject node) {
+      if (found != null) return;
+      if (node is RenderSliverMultiBoxAdaptor) {
+        found = node;
+        return;
+      }
+      node.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
   }
 
   void _settlePointerDrag([ScrollMetrics? metrics]) {

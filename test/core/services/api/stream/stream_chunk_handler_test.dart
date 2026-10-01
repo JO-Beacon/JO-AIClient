@@ -178,6 +178,25 @@ void main() {
     expect((handler.parts[2] as TextPart).text, 'done');
   });
 
+  test(
+    'splits reasoning around a tool even when the provider reuses one id',
+    () {
+      final handler = StreamChunkHandler();
+      handler.handle(const ReasoningDelta(id: 'r', text: 'plan'));
+      handler.handle(const ToolCallStart(id: 'call_1', toolName: 'lookup'));
+      handler.handle(const ToolCallEnd('call_1'));
+      handler.handle(const ReasoningDelta(id: 'r', text: 'continue'));
+
+      expect(handler.parts.map((p) => p.kind).toList(), [
+        'reasoning',
+        'tool_call',
+        'reasoning',
+      ]);
+      expect((handler.parts[0] as ReasoningPart).text, 'plan');
+      expect((handler.parts[2] as ReasoningPart).text, 'continue');
+    },
+  );
+
   test('locates parallel tool calls by id, not by last part', () {
     final handler = StreamChunkHandler();
     handler.handle(const ToolCallStart(id: 'a', toolName: 'search_web'));
