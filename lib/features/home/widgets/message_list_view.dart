@@ -1342,6 +1342,33 @@ class _MessageListViewState extends State<MessageListView> {
       return;
     }
 
+    // 缓存同步诊断：记录走了哪条分支、更新前后的条目数与总高。
+    // 故障时账面到底（pixels=max）却仍有内容在下方，说明某个屏外条目的账面高度过期，
+    // 需要知道是哪条分支留下的旧值。
+    final diagItemsBefore = controller.numberOfItems;
+    final diagTotalBefore = controller.totalExtent;
+    final diagEstimatedBefore = controller.numberOfItemsWithEstimatedExtent;
+    void logSync(String path, {int changed = -1, bool slotsMatch = true}) {
+      if (!FlutterLogger.enabled) return;
+      final now = DateTime.now();
+      final last = _lastExtentSyncLogAt;
+      if (last != null &&
+          now.difference(last) < const Duration(milliseconds: 500)) {
+        return;
+      }
+      _lastExtentSyncLogAt = now;
+      FlutterLogger.log(
+        'sync[$path] items=$diagItemsBefore->${controller.numberOfItems} '
+        'total=${diagTotalBefore.toStringAsFixed(1)}'
+        '->${controller.totalExtent.toStringAsFixed(1)} '
+        'estimated=$diagEstimatedBefore'
+        '->${controller.numberOfItemsWithEstimatedExtent} '
+        'changed=$changed slotsMatch=$slotsMatch '
+        'visible=${controller.visibleRange}',
+        tag: 'ChatBottom',
+      );
+    }
+
     final newModels = _effectiveRenderModels;
     if ((_hasFooter || _showsFooter(oldWidget)) &&
         (oldModels.length != newModels.length ||
@@ -1371,11 +1398,13 @@ class _MessageListViewState extends State<MessageListView> {
         oldWidget.collapsedCodeLines != widget.collapsedCodeLines ||
         oldWidget.wrapCodeBlocks != widget.wrapCodeBlocks ||
         !identical(oldWidget.assistant, widget.assistant);
+    logSync('metric-inputs');
     if (metricInputsChanged) {
       controller.invalidateAllExtents();
       return;
     }
 
+    logSync('prefix-append');
     if (oldModels.length < newModels.length &&
         _isPrefix(oldModels, newModels)) {
       return;
@@ -1387,6 +1416,7 @@ class _MessageListViewState extends State<MessageListView> {
       for (var index = 0; index < added; index++) {
         controller.addItem(index);
       }
+      logSync('suffix-prepend');
       if (anchor != null) {
         _restoreVisibleAnchorAfterLayout(
           controller,
@@ -1396,6 +1426,7 @@ class _MessageListViewState extends State<MessageListView> {
       }
       return;
     }
+    logSync('prefix-truncate');
     if (newModels.length < oldModels.length &&
         _isPrefix(newModels, oldModels)) {
       return;
@@ -1414,6 +1445,7 @@ class _MessageListViewState extends State<MessageListView> {
         for (var index = removedOldIndices.length - 1; index >= 0; index--) {
           controller.removeItem(removedOldIndices[index]);
         }
+        logSync('removed-indices');
         if (anchor != null) {
           _restoreVisibleAnchorAfterLayout(
             controller,
@@ -1435,6 +1467,7 @@ class _MessageListViewState extends State<MessageListView> {
         for (var index = 0; index < added; index++) {
           controller.removeItem(newModels.length);
         }
+        logSync('equal-window-shift');
         if (anchor != null && anchor.index + added < newModels.length) {
           _restoreVisibleAnchorAfterLayout(
             controller,
@@ -1482,6 +1515,7 @@ class _MessageListViewState extends State<MessageListView> {
             });
           }
         }
+        logSync('slot-change', changed: changedIndices.length);
         for (final index in changedIndices) {
           controller.invalidateExtent(index);
         }
@@ -1489,6 +1523,7 @@ class _MessageListViewState extends State<MessageListView> {
       }
     }
 
+    logSync('fallback', slotsMatch: false);
     controller.invalidateAllExtents();
   }
 
@@ -1671,6 +1706,10 @@ class _MessageListViewState extends State<MessageListView> {
         old.cachedTokens != current.cachedTokens ||
         old.durationMs != current.durationMs ||
         old.firstTokenMs != current.firstTokenMs ||
+        old.isStreaming != current.isStreaming ||
+        // 流式结束会挂上操作栏，末条消息随之变高；不比较这一项，
+        // 已量过的高度就会过期，账面底部偏小，末条滑不进视口
+        // （真机 ChatBottom 日志：gap=0 且 lastEstimated=false 却 tailOverflow>0）。
         _partsIdentityChanged(old.parts, current.parts);
   }
 
@@ -2021,6 +2060,7 @@ class _MessageListViewState extends State<MessageListView> {
   }
 
   DateTime? _lastBottomDiagAt;
+  DateTime? _lastExtentSyncLogAt;
 
   /// 底部定位诊断输出，受“应用日志打印”开关控制。
   ///
@@ -2060,6 +2100,14 @@ class _MessageListViewState extends State<MessageListView> {
         viewport = pos.viewportDimension;
       }
       final gap = (max != null && pixels != null) ? max - pixels : null;
+      double? sumExtents;
+      if (attached && items > 0) {
+        var sum = 0.0;
+        for (var i = 0; i < items; i++) {
+          sum += controller.extentForIndex(i).$1;
+        }
+        sumExtents = sum;
+      }
       double? tailHeight;
       double? tailOverflow;
       final selfRender = context.findRenderObject();
@@ -2087,6 +2135,8 @@ class _MessageListViewState extends State<MessageListView> {
         'max=${max?.toStringAsFixed(1)} '
         'gap=${gap?.toStringAsFixed(1)} '
         'viewport=${viewport?.toStringAsFixed(1)} '
+        'sumExtents=${sumExtents?.toStringAsFixed(1)} '
+        'sumVsTotal=${sumExtents == null || total.isNaN ? null : (sumExtents - total).toStringAsFixed(1)} '
         'bottomPad=${widget.bottomContentPadding.toStringAsFixed(1)} '
         'topPad=${widget.topContentPadding.toStringAsFixed(1)} '
         'pinned=${widget.isPinnedIndicatorActive} visible=$visible',

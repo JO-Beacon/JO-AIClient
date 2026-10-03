@@ -67,6 +67,180 @@ void main() {
       reason: '量完之后列表应停在真实末尾',
     );
   });
+
+  testWidgets('生成结束时末条高度必须重新测量（真机日志：账面到底却仍滑不到底）', (tester) async {
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final key = GlobalKey<_ProbeHarnessState>();
+    await tester.pumpWidget(_ProbeHarness(key: key));
+    await tester.pump(const Duration(milliseconds: 50));
+    final state = key.currentState!;
+    final listController = state.scrollCtrl.messageListController;
+
+    state.startStreamingTail();
+    state.scrollCtrl.positionAtBottomOnNextLayout();
+    var frames = 0;
+    while (frames < 400) {
+      state.pushStreamTick(frames);
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+      frames++;
+      if (listController.numberOfItemsWithEstimatedExtent == 0) break;
+    }
+    final lastIndex = listController.numberOfItems - 1;
+    final before = listController.extentForIndex(lastIndex);
+    expect(before, isNotNull, reason: '末条应有测量值');
+
+    // 生成结束：只把末条 isStreaming 由真变假，内容不变。
+    // 真机上这一刻会挂上操作栏，末条变高；已量过的高度必须失效并重测，
+    // 否则账面底部偏小，gap=0 时末条仍滑不进视口。
+    state.finishStreamingTail();
+    for (var i = 0; i < 5; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final after = listController.extentForIndex(lastIndex);
+    expect(after, isNotNull, reason: '重测后末条应有测量值');
+    expect(
+      after.$1,
+      isNot(before.$1),
+      reason:
+          '生成结束后末条渲染状态变了，已量过的高度必须失效并重测'
+          '（旧值 ${before.$1.toStringAsFixed(1)}，重测后 ${after.$1.toStringAsFixed(1)}）',
+    );
+    final position = state.scrollController.position;
+    expect(
+      position.maxScrollExtent - position.pixels,
+      lessThan(1),
+      reason: '重测后仍应停在真实末尾',
+    );
+  });
+
+  testWidgets('末条在屏外被换成更高的内容后，仍然必须能滑到底并看见它', (tester) async {
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final key = GlobalKey<_ProbeHarnessState>();
+    await tester.pumpWidget(_ProbeHarness(key: key));
+    await tester.pump(const Duration(milliseconds: 50));
+    final state = key.currentState!;
+    final listController = state.scrollCtrl.messageListController;
+
+    // 预热：让预计算把屏外高度量完
+    state.startStreamingTail();
+    state.scrollCtrl.positionAtBottomOnNextLayout();
+    var frames = 0;
+    while (frames < 400) {
+      state.pushStreamTick(frames);
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+      frames++;
+      if (listController.numberOfItemsWithEstimatedExtent == 0) break;
+    }
+
+    // 滑到最上面：末条离开布局，只剩预计算留下的高度
+    state.scrollController.jumpTo(0);
+    for (var i = 0; i < 3; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    // 末条在屏外时被换成更高的新内容（等价于重新生成后尾巴换人）
+    state.replaceTailWithLonger();
+    for (var i = 0; i < 5; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    // 再滑到底：必须真的到达末尾，且末条出现在可视区
+    final position = state.scrollController.position;
+    state.scrollController.jumpTo(position.maxScrollExtent);
+    for (var i = 0; i < 5; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final visible = state.scrollCtrl.messageListController.visibleRange;
+    final lastIndex = listController.numberOfItems - 1;
+    expect(
+      position.maxScrollExtent - position.pixels,
+      lessThan(1),
+      reason: '应当停在账面末尾',
+    );
+    expect(
+      visible?.$2,
+      lastIndex,
+      reason: '滑到底后末条必须在可视区内（末项 ${visible?.$2} / 末条 $lastIndex）',
+    );
+  });
+
+  testWidgets('末条在屏外被换成更长的分支（条目数量也变）后，仍然必须能滑到底并看见末条', (tester) async {
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final key = GlobalKey<_ProbeHarnessState>();
+    await tester.pumpWidget(_ProbeHarness(key: key));
+    await tester.pump(const Duration(milliseconds: 50));
+    final state = key.currentState!;
+    final listController = state.scrollCtrl.messageListController;
+
+    state.startStreamingTail();
+    state.scrollCtrl.positionAtBottomOnNextLayout();
+    var frames = 0;
+    while (frames < 400) {
+      state.pushStreamTick(frames);
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+      frames++;
+      if (listController.numberOfItemsWithEstimatedExtent == 0) break;
+    }
+    final countBefore = listController.numberOfItems;
+
+    // 滑到最上面：末条离开布局
+    state.scrollController.jumpTo(0);
+    for (var i = 0; i < 3; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    // 末条屏外时换成更长的分支：条目数量发生变化
+    state.replaceTailWithLongerBranch();
+    for (var i = 0; i < 5; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(
+      listController.numberOfItems,
+      greaterThan(countBefore),
+      reason: '本用例要求走"条目数量变化"那条路',
+    );
+
+    // 滑到底：必须真的到达末尾，且末条在可视区内
+    final position = state.scrollController.position;
+    state.scrollController.jumpTo(position.maxScrollExtent);
+    for (var i = 0; i < 5; i++) {
+      tester.binding.scheduleFrame();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final visible = state.scrollCtrl.messageListController.visibleRange;
+    final lastIndex = listController.numberOfItems - 1;
+    expect(
+      position.maxScrollExtent - position.pixels,
+      lessThan(1),
+      reason: '应当停在账面末尾',
+    );
+    expect(
+      visible?.$2,
+      lastIndex,
+      reason: '滑到底后末条必须在可视区内（末项 ${visible?.$2} / 末条 $lastIndex）',
+    );
+  });
 }
 
 class _ProbeHarness extends StatefulWidget {
@@ -84,6 +258,58 @@ class _ProbeHarnessState extends State<_ProbeHarness> {
 
   void startStreamingTail() {
     streamingNotifier.getNotifier(_tailId);
+  }
+
+  /// 模拟"重新生成靠前的消息后，末尾那条换成了新分支的内容"。
+  /// 长度保持不变，只把末条换成明显更高的一条。
+  void replaceTailWithLonger() {
+    setState(() {
+      messages = <ChatMessage>[
+        ...messages.sublist(0, messages.length - 1),
+        ChatMessage(
+          id: 'new-branch-tail',
+          role: 'assistant',
+          content: _longBody(2001) + _longBody(2002) + _longBody(2003),
+          conversationId: 'conversation-1',
+        ),
+      ];
+    });
+  }
+
+  /// 模拟重新生成靠前消息后，末尾换成**更长的**新分支：条目数量也发生变化。
+  void replaceTailWithLongerBranch() {
+    setState(() {
+      messages = <ChatMessage>[
+        ...messages.sublist(0, messages.length - 1),
+        ChatMessage(
+          id: 'new-branch-a',
+          role: 'assistant',
+          content: _longBody(2001),
+          conversationId: 'conversation-1',
+        ),
+        ChatMessage(
+          id: 'new-branch-b',
+          role: 'user',
+          content: _longBody(2002),
+          conversationId: 'conversation-1',
+        ),
+        ChatMessage(
+          id: 'new-branch-tail',
+          role: 'assistant',
+          content: _longBody(2003) + _longBody(2004),
+          conversationId: 'conversation-1',
+        ),
+      ];
+    });
+  }
+
+  void finishStreamingTail() {
+    setState(() {
+      messages = <ChatMessage>[
+        ...messages.sublist(0, messages.length - 1),
+        messages.last.copyWith(isStreaming: false),
+      ];
+    });
   }
 
   void pushStreamTick(int frame) {

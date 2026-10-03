@@ -22,6 +22,7 @@
 
 .lic-message-circle::before { content: "\e116"; }
 .lic-message-circle-plus::before { content: "\e567"; }
+.lic-message-square-plus::before { content: "\e40c"; }
 .lic-search::before { content: "\e151"; }
 .lic-languages::before { content: "\e0fe"; }
 .lic-folder::before { content: "\e0d7"; }
@@ -33,11 +34,15 @@
 .lic-plus::before { content: "\e13d"; }
 .lic-paperclip::before { content: "\e12d"; }
 .lic-brain::before { content: "\e3c6"; }
+.lic-sparkles::before { content: "\e412"; }
+.lic-copy::before { content: "\e09e"; }
+.lic-volume-2::before { content: "\e1ab"; }
 .lic-image::before { content: "\e0f6"; }
 .lic-tool-case::before { content: "\e67d"; }
 .lic-book-open::before { content: "\e05f"; }
 .lic-globe::before { content: "\e0e8"; }
 .lic-wand-2::before { content: "\e357"; }
+.lic-history::before { content: "\e1f5"; }
 .lic-link::before { content: "\e102"; }
 .lic-tag::before { content: "\e17f"; }
 .lic-arrow-up::before { content: "\e04a"; }
@@ -46,8 +51,20 @@
 .lic-chevron-right::before { content: "\e06f"; }
 .lic-chevron-up::before { content: "\e070"; }
 .lic-chevron-down::before { content: "\e06d"; }
+.lic-chevrons-up::before { content: "\e074"; }
+.lic-chevrons-down::before { content: "\e071"; }
 .lic-rotate-cw::before { content: "\e149"; }
 .lic-refresh-cw::before { content: "\e145"; }
 .lic-ellipsis::before { content: "\e0b6"; }
 .lic-sliders-horizontal::before { content: "\e29a"; }
 .lic-x::before { content: "\e1b2"; }
+.lic-boxes::before { content: "\e2d0"; }
+.lic-folder-code::before { content: "\e5fb"; }
+.lic-zap::before { content: "\e1b4"; }
+.lic-camera::before { content: "\e064"; }
+.lic-layers-2::before { content: "\e52a"; }
+.lic-eraser::before { content: "\e28f"; }
+.lic-map::before { content: "\e110"; }
+.lic-eye::before { content: "\e0ba"; }
+.lic-mic::before { content: "\e118"; }
+.lic-package-2::before { content: "\e340"; }

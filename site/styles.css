@@ -1650,7 +1650,9 @@ ul.tight li:last-child { margin-bottom: 0; }
   background: var(--a-surface);
   color: var(--a-on);
   overflow: hidden;
-  box-shadow: 0 24px 60px -34px var(--a-shadow), 1px 0 0 var(--a-inset) inset;
+  box-shadow: 0 24px 60px -34px var(--a-shadow);
+  /* 状态过渡：最大化／还原用 FLIP（见 mock.js），关闭走这里 */
+  transition: opacity .24s ease, transform .28s cubic-bezier(.22,.61,.36,1);
 }
 .win[data-app-theme="dark"] {
   color-scheme: dark;
@@ -1721,20 +1723,33 @@ ul.tight li:last-child { margin-bottom: 0; }
   cursor: pointer;
 }
 .wc:hover { background: var(--a-hover); opacity: 1; }
-.wc::before { content: "—"; }
-.wc--max::before { content: "▢"; }
+.wc[data-win="min"]::before { content: "—"; }
+.wc__i { display: block; }
+.wc__i--restore { display: none; }
+/* 最大化后换成「还原」的两个叠放方框（自绘，和最小化/关闭一样是矢量图形，不用文字符号） */
+.wc--max.is-restore .wc__i--max { display: none; }
+.wc--max.is-restore .wc__i--restore { display: block; }
 .wc--close::before { content: "✕"; }
 .wc--close:hover { background: #c42b1c; color: #fff; opacity: 1; }
 
 .win__body {
   display: grid;
-  grid-template-columns: 64px var(--sbw, 240px) 6px minmax(0, 1fr);
+  grid-template-columns: 64px auto 6px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   height: clamp(420px, 58vh, 620px);
+  max-height: 100vh; /* 供最小化折叠用 */
+  /* 侧栏展开/收起：真机是 AnimatedContainer(260ms, Curves.easeOutCubic)
+     （home_desktop_layout.dart 的 _sidebarAnimDuration / _sidebarAnimCurve）。
+     grid-template-columns 本身不可过渡，所以侧栏自己量宽度、列宽用 auto 跟随。
+     注意：这里必须与最小化折叠的过渡写在同一条声明里，否则会被覆盖。 */
+  transition:
+    max-height .26s cubic-bezier(.22,.61,.36,1),
+    opacity .2s ease;
 }
-.win.is-collapsed .win__body { grid-template-columns: 64px 0 0 minmax(0, 1fr); }
-.win.is-collapsed .sbar { display: none; }
-.win.is-collapsed .sbhandle { display: none; }
+.win.is-collapsed .win__body { grid-template-columns: 64px auto 0 minmax(0, 1fr); }
+/* 收起时保留元素、由列宽裁掉，才能跟着宽度一起过渡（真机同样是宽度收窄、内容被裁） */
+.win.is-collapsed .sbar { width: 0; padding-left: 0; padding-right: 0; overflow: hidden; opacity: 0; }
+.win.is-collapsed .sbhandle { overflow: hidden; opacity: 0; }
 
 /* 侧栏宽度拖拽手柄：6px 拖拽区、1px 分隔线 */
 .sbhandle { position: relative; background: transparent; cursor: col-resize; }
@@ -1762,11 +1777,7 @@ ul.tight li:last-child { margin-bottom: 0; }
   width: 36px; height: 36px;
   margin: 4px 0 12px;
   display: grid; place-items: center;
-  border-radius: 999px;
-  background: var(--a-p15);
-  color: var(--a-primary);
-  font-size: 16px;
-  font-weight: 600;
+  /* 真机这里是应用自己的图标（不是字母头像）：去掉圆形底色，直接放 logo */
 }
 .rail__ico {
   width: 40px; height: 40px;
@@ -1791,14 +1802,25 @@ ul.tight li:last-child { margin-bottom: 0; }
   min-height: 0;
   padding: 10px;
   background: var(--a-surface);
+  /* 宽度跟随 --sbw，展开/收起用 width 过渡 —— 真机是 AnimatedContainer(260ms, easeOutCubic)。
+     grid-template-columns 本身不可过渡，所以让侧栏自己量宽度、列宽用 auto 跟随。 */
+  width: var(--sbw, 240px);
+  /* 网格项默认 min-width: auto，会自动最小尺寸挡住收缩（width:0 和 !important 都压不过），
+     必须显式清零，侧栏才能真正收成 0 */
+  min-width: 0;
+  /* 网格项默认 justify-self: stretch，会忽略自身的 width（列宽决定一切），
+     必须改成 start 才能让自己的宽度生效 */
+  justify-self: start;
+  /* 不用 CSS 过渡：render() 会重建侧栏 DOM，新元素没有"变化前"样式，过渡不会触发。
+     展开/收起的动画由 mock.js 用 Web Animations API 播放。 */
 }
 .sbar__search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 40px;
+  gap: 4px;
+  height: 36px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--a-fill);
   color: var(--a-on);
 }
@@ -1810,7 +1832,7 @@ ul.tight li:last-child { margin-bottom: 0; }
   background: transparent;
   color: var(--a-on);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   outline: none;
 }
 .sbar__search input::placeholder { color: var(--a-on); opacity: .6; }
@@ -1841,7 +1863,7 @@ ul.tight li:last-child { margin-bottom: 0; }
   border-radius: 13px;
   background: transparent;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--a-on);
   opacity: .68;
   cursor: pointer;
@@ -1856,7 +1878,7 @@ ul.tight li:last-child { margin-bottom: 0; }
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   scrollbar-width: thin;
   scrollbar-color: var(--a-hair) transparent;
 }
@@ -1866,7 +1888,7 @@ ul.tight li:last-child { margin-bottom: 0; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-radius: 14px;
   color: var(--a-on);
   cursor: pointer;
@@ -1884,8 +1906,16 @@ ul.tight li:last-child { margin-bottom: 0; }
   font-size: 13px;
   font-weight: 600;
 }
+/* 日期分组标题：真机 14px / semibold / 主色，内距 14/6/0/6（side_drawer.dart 约 4077 行） */
+.sbar__group {
+  padding: 6px 0 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-primary);
+  list-style: none;
+}
 .sbar__name {
-  font-size: 13.5px;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1894,15 +1924,23 @@ ul.tight li:last-child { margin-bottom: 0; }
 
 /* 会话区 */
 .cchat { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--a-surface); }
+/* 会话头：真机是 AppBar，头高取 Flutter 默认的 kToolbarHeight = 56。
+   间距出处 home_desktop_layout.dart：titleSpacing 2（列表按钮→头像）、
+   头像点按区 2 + SizedBox(10)（→标题）、SizedBox(8)（标题→模型胶囊）。 */
 .cchat__head {
   display: flex;
   align-items: center;
-  gap: 6px;
   height: 56px;
   padding: 0 8px;
   flex: none;
 }
+.cchat__lead { margin-right: 2px; }
+.cchat__av { margin-right: 12px; }   /* 2（点头像的内距）+ 10 */
+.cchat__name { margin-right: 20px; }
 .cchat__lead, .cchat__new {
+  /* 真机是 IosIconButton(minSize: 40)，固定 40 的盒子，不随会话头拥挤而收缩。
+     CSS 里 flex 子项默认 flex-shrink: 1，不写 flex: none 就会被压小。 */
+  flex: none;
   width: 40px; height: 40px;
   display: grid; place-items: center;
   border: 0; border-radius: 999px;
@@ -1934,25 +1972,28 @@ ul.tight li:last-child { margin-bottom: 0; }
   cursor: text;
 }
 .cchat__chip {
+  /* 真机这一块没有药丸底色、没有描边、没有内距：就是品牌图标 + 一行文字
+     （真机截图实测：标题末→图标 20、图标→模型名 8、"|"两侧各约 9）。 */
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: var(--a-fill);
+  gap: 8px;
+  /* 它是 button，必须显式清掉浏览器默认样式（灰底 + 1px 6px 内距 + 边框），
+     否则去掉药丸样式后会露出 UA 默认外观 */
+  background: transparent;
+  border: 0;
+  padding: 0;
   color: var(--a-on);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
-.cchat__chip em { font-style: normal; opacity: .45; margin: 0 1px; }
+.cchat__chip em { font-style: normal; opacity: .45; margin: 0 3px; }
 .cchat__chip-ico {
   flex: none;
-  width: 14px; height: 14px;
-  border-radius: 4px;
-  background: var(--a-p15);
-  box-shadow: inset 0 0 0 1px var(--a-hair);
+  /* 提供方品牌图标（真机是品牌 svg，未知提供方回退 Lucide.Boxes，16×16） */
+  font-size: 16px;
+  color: var(--a-primary);
 }
 .cchat__edit { margin-left: auto; color: var(--a-on); opacity: .7; }
 .cchat__title-in {
@@ -1974,21 +2015,83 @@ ul.tight li:last-child { margin-bottom: 0; }
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 内容限宽 860 并居中：真机在列表上算 (可用宽度 − 860) / 2 作为水平内距
+     （message_list_view.dart 的 horizontalPad）。窗口不够宽时为 0。 */
+  padding-left: max(0px, calc((100% - 860px) / 2));
+  padding-right: max(0px, calc((100% - 860px) / 2));
   padding: 4px 22px 16px;
   scrollbar-width: thin;
   scrollbar-color: var(--a-hair) transparent;
 }
 .cstream::-webkit-scrollbar { width: 8px; }
 .cstream::-webkit-scrollbar-thumb { background: var(--a-hair); border-radius: 4px; }
-.cmsg { max-width: 100%; }
-.cmsg p { margin: 0; font-size: 13.5px; line-height: 1.72; }
-.cmsg--u { align-self: flex-end; max-width: 82%; }
+/* 每条消息自带内距 16/8/16/24（出处 chat_message_widget.dart:931 的默认 padding），
+   消息之间的间距也由它产生，所以列表本身不再设 gap */
+.cmsg { max-width: 100%; padding: 8px 16px 24px; }
+/* 助手消息内距 16/8/16/24 来自 chat_message_widget.dart:931 的默认 padding；
+   用户消息另有自己的 16/12（同文件 1807 行 EdgeInsets.symmetric(horizontal:16, vertical:12)）。 */
+.cmsg--u { padding: 12px 16px; }
+/* 正文字号：桌面端用户与助手都是 14.0（2091 行 baseUser、2547 行 baseAssistant），
+   行高用户 1.45（2094 行）、助手 1.5（2557 行）。 */
+.cmsg p { margin: 0; font-size: 14px; line-height: 1.5; }
+.cmsg--u { align-self: flex-end; max-width: 75%; }
 .cmsg--u p {
-  padding: 8px 12px;
-  background: var(--a-fill);
-  border-radius: 14px 14px 4px 14px;
+  /* _buildBubbleContainer（2505 行）：统一 16 圆角 + 四周 12 内距，没有缺口造型。
+     底色取应用默认档：主色淡底（深色 0.15），无描边
+     （chat_surface.dart 的 defaultStyle 分支 + defaultColor；带描边的是用户另选的"实心"档） */
+  padding: 12px;
+  line-height: 1.45;
+  background: var(--a-p15);
+  border-radius: 16px;
 }
+/* 消息头部（真机截图）：
+   用户消息 = 昵称 + 时间 + 头像（右对齐，位于气泡上方）；
+   助手消息 = 品牌图标 + 模型名 | 提供方，下一行是时间。 */
+.cmsg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  justify-content: flex-end;
+}
+.cmsg-head__n { font-size: 13px; opacity: .9; }
+.cmsg-head__t { font-size: 11px; opacity: .5; white-space: nowrap; }
+.cmsg-av {
+  flex: none;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: var(--a-p15);
+  color: var(--a-primary);
+  font-size: 13px; font-weight: 600;
+}
+.cmsg-head--a { justify-content: flex-start; gap: 6px; margin-bottom: 0; }
+.cmsg-head--a .cmsg-head__i { font-size: 16px; color: var(--a-primary); flex: none; }
+.cmsg-head--a .cmsg-head__m { font-size: 12.5px; }
+.cmsg-head--a em { font-style: normal; opacity: .45; }
+.cmsg-head--a .cmsg-head__p { font-size: 12.5px; opacity: .55; }
+.cmsg--a .cmsg-head__t { display: block; margin: 2px 0 6px; }
+
+/* 助手消息操作行：图标 16（IosIconButton size: 16）、分支切换、右端 token 数 */
+.cacts { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
+.cacts__b {
+  flex: none;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border: 0; padding: 0; background: transparent;
+  border-radius: 999px;
+  color: var(--a-on);
+  opacity: .6;
+  cursor: pointer;
+}
+.cacts__b .lic { font-size: 16px; }
+.cacts__b:hover { opacity: 1; background: var(--a-hover); }
+.cacts__b[disabled] { opacity: .25; cursor: default; }
+.cacts__b[disabled]:hover { background: transparent; }
+.cacts__branch { display: flex; align-items: center; gap: 2px; margin-left: 8px; }
+.cacts__n { font-size: 12px; opacity: .6; padding: 0 2px; }
+.cacts__tok { margin-left: auto; font-size: 11px; opacity: .45; white-space: nowrap; }
+
 .cmsg--a { align-self: stretch; }
 .ccode {
   margin: 8px 0 0;
@@ -2014,8 +2117,14 @@ ul.tight li:last-child { margin-bottom: 0; }
   color: var(--a-on);
   opacity: .62;
 }
-.cthink__h { font-weight: 500; opacity: .95; margin-bottom: 5px; }
-.cthink__l { margin: 0; padding: 0; list-style: none; }
+/* 头部：图标 18 + 标题 13 + 间隔 6，右侧折角（chat_message_widget.dart 思考卡片） */
+.cthink__h { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; opacity: .95; margin-bottom: 5px; }
+.cthink__i { font-size: 18px; flex: none; }
+.cthink__c { margin-left: auto; font-size: 16px; opacity: .6; }
+.cthink__l { margin: 0; padding: 0; list-style: none; line-height: 1.32; font-size: 12.5px; }
+/* 默认收起：只有点开后才显示内容（真机 reasoningExpanded 默认 false） */
+.cthink:not(.is-open) .cthink__l { display: none; }
+.cthink__h { width: 100%; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 .cthink__l li { position: relative; padding-left: 12px; }
 .cthink__l li::before { content: "•"; position: absolute; left: 0; opacity: .7; }
 .cbranch {
@@ -2048,50 +2157,69 @@ ul.tight li:last-child { margin-bottom: 0; }
 .cscrollnav {
   position: absolute;
   right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: 80px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--a-hair);
-  border-radius: 999px;
-  background: var(--a-card);
-  box-shadow: 0 6px 18px -10px var(--a-shadow);
+  gap: 8px;
 }
 .cscrollnav__b {
-  width: 24px; height: 24px;
+  width: 28px; height: 28px;
   display: grid; place-items: center;
-  border: 0; border-radius: 999px;
-  background: transparent;
+  border: 1px solid var(--a-hair); border-radius: 999px;
+  background: var(--a-fill);  /* 必须与底板拉开：--a-card 与 --a-surface 几乎同色 */
   color: var(--a-on);
   opacity: .7;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
 }
+.cscrollnav__b:hover { opacity: 1; background: var(--a-hover); }
 .cscrollnav__b:hover { background: var(--a-hover); opacity: 1; }
 
 /* 输入条：大圆角盒子 + 工具行 + 圆形发送键 */
+/* 输入条外层：间距 12/4/12/8，最大宽度 860 并居中
+   （出处：ChatInputBar.build 的 Padding(fromLTRB(sm,xxs,sm,xs))，
+   以及 home_page 里 Align(bottomCenter) + ConstrainedBox(maxInputWidth)） */
+.composer-wrap { padding: 4px 12px 8px; }
+/* 输入条盒子：圆角 20、1px 边框，自带不设内距
+   （内距分别在输入行与工具行上，出处 chat_input_bar.dart 的
+   EdgeInsetsDirectional.fromSTEB(16,4,8,8) 与 fromLTRB(8,0,8,8)） */
 .composer {
+  position: relative; /* 输入条的小面板要浮在它上方，不占布局 */
   flex: none;
-  margin: 0 14px 14px;
-  padding: 10px 12px;
+  margin: 0 auto;
+  max-width: 860px;
+  padding: 0;
+  border: 1px solid var(--a-hair);
   border-radius: 20px;
   background: var(--a-fill);
 }
+/* 输入行包裹层：内距 16/4/8/8（真机 fromSTEB 在输入框外面），字号桌面 14 */
+.composer__in-wrap { padding: 4px 8px 8px 16px; }
+/* 输入框：真机是 Flutter 的非 dense TextField，固有最小高度约 48px，
+   所以空输入时的高度不是"行高 + 内距"。截图实测：文字墨迹中心落在
+   48px 框的正中，据此与真机 102px 的总高吻合。 */
 .composer__in {
   display: block;
   width: 100%;
-  margin-bottom: 8px;
+  margin: 0;
+  padding: 2px 0; /* contentPadding 垂直 2 */
   border: 0;
   background: transparent;
   color: var(--a-on);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
+  line-height: 1.5;
   outline: none;
+  resize: none;
+  min-height: 48px;
+  max-height: 108px; /* 5 行 */
+  box-sizing: border-box;
 }
 .composer__in::placeholder { color: var(--a-on); opacity: .55; }
-.composer__tools { display: flex; align-items: center; gap: 2px; }
+/* 工具行：按钮 32、间距 8（出处见 mock.js 的 COMPOSER_ACTIONS 注释） */
+.composer__tools { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; }
+.composer__tools-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.composer__tools-right { display: flex; align-items: center; gap: 8px; flex: none; }
 .ctool {
   width: 32px; height: 32px;
   display: grid; place-items: center;
@@ -2099,47 +2227,90 @@ ul.tight li:last-child { margin-bottom: 0; }
   background: transparent;
   color: var(--a-on);
   opacity: .75;
-  font-size: 15px;
+  font-size: 20px; /* 字形 20：_CompactIconButton 的 iconSize */
   line-height: 1;
   cursor: pointer;
 }
 .ctool:hover { background: var(--a-hover); opacity: 1; }
 .ctool.is-on { color: var(--a-primary); background: var(--a-sel); opacity: 1; }
-.ctool--add { background: var(--a-primary); color: var(--a-on-primary); opacity: 1; }
 .ctool--send {
-  margin-left: auto;
-  width: 36px; height: 36px;
+  width: 32px; height: 32px;
   background: var(--a-primary);
   color: var(--a-on-primary);
   opacity: 1;
-  font-size: 17px;
+  font-size: 18px; /* 发送图标 18（内距 7，按钮仍是 32） */
+}
+/* 模型按钮：真机显示的是当前模型的品牌图标（带底色）。网站不放品牌 logo，
+   这里用通用图标配一层浅底，位置与尺寸仍按真机。 */
+.ctool--model { width: 30px; height: 30px; background: var(--a-hover); opacity: 1; }
+
+/* 上下文用量环：16px 环、2px 描边（出处同 mock.js 注释） */
+.cring {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--a-primary) calc(var(--p) * 1%), var(--a-hair) 0);
+  -webkit-mask: radial-gradient(circle, transparent 6px, #000 7px);
+  mask: radial-gradient(circle, transparent 6px, #000 7px);
+}
+/* 输入条的小面板：浮在输入条上方 */
+.cmenu--composer {
+  position: absolute;
+  left: 11px;
+  bottom: calc(100% + 8px); /* 离锚点 8，与真机 gap 一致 */
+  margin: 0;
+  z-index: 6;
+  max-height: 50vh; /* 真机：超过半屏就滚动 */
+  overflow: auto;
+}
+.cmenu--composer li { display: block; }
+.cmenu__note {
+  display: block;
+  padding: 0 10px 7px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--a-onv);
+  opacity: .75;
+}
+.cmenu--composer button em {
+  font-style: normal;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--a-primary);
 }
 
 /* 菜单 */
+/* 菜单：尺寸出处 lib/desktop/desktop_context_menu.dart
+   —— 菜单宽 160–360、项高 44、左右内距 12、图标 18、图标与文字间距 10、字号 14.5 */
 .cmenu {
   margin: 8px 0 0;
   padding: 5px;
   list-style: none;
   width: max-content;
-  min-width: 156px;
+  min-width: 160px;
+  max-width: 360px;
   border: 1px solid var(--a-hair);
   border-radius: 12px;
   background: var(--a-c-high);
   box-shadow: 0 18px 36px -20px var(--a-shadow);
 }
 .cmenu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
+  min-height: 44px;
   text-align: left;
-  padding: 7px 10px;
+  padding: 0 12px;
   border: 0;
   background: transparent;
   color: var(--a-on);
   font: inherit;
-  font-size: 13px;
+  font-size: 14.5px;
+  font-weight: 500;
   border-radius: 8px;
   cursor: pointer;
 }
+.cmenu button .lic { font-size: 18px; }
 .cmenu button:hover { background: var(--a-hover); }
 
 /* 非聊天页占位 */
@@ -2159,17 +2330,34 @@ ul.tight li:last-child { margin-bottom: 0; }
 
 /* Lucide 图标字形的大小（对应应用源码里的图标尺寸） */
 .rail__ico .lic { font-size: 18px; }
-.sbar__search .lic { font-size: 15px; }
+.sbar__search .lic { font-size: 16px; }
 .cchat__new .lic { font-size: 20px; }
 .cbranch .lic { font-size: 13px; }
-.ctool .lic { font-size: 15px; }
-.ctool--send .lic { font-size: 17px; }
-.cscrollnav__b .lic { font-size: 13px; }
+.ctool .lic { font-size: 20px; } /* 字形 20：_CompactIconButton 的 iconSize */
+.ctool--send .lic { font-size: 18px; } /* 发送图标 18 */
+/* 空输入（trim 后为空）时发送按钮禁用：灰底 + 暗图标，不可点（真机行为） */
+/* 禁用时保留看得见的圆底，只压暗箭头（整块降 opacity 会把底色一起冲淡） */
+.ctool--send.is-disabled { background: var(--a-fill); color: var(--a-on); cursor: default; }
+.ctool--send.is-disabled .lic { opacity: .35; }
+.cscrollnav__b .lic { font-size: 16px; } /* 真机 iconSize: 16 */
 
 /* 窗口按钮的真功能 */
-.win.is-min .win__body { display: none; }
-.win.is-closed { display: none; }
-.win.is-max { position: fixed; inset: 14px; z-index: 80; }
+.win.is-min .win__body {
+  /* 原来是 display: none，无法补间；改成折叠 */
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.win.is-closed {
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(.985);
+  /* 先播完动画再真正隐藏 */
+  transition: opacity .24s ease, transform .28s cubic-bezier(.22,.61,.36,1), visibility 0s linear .24s;
+}
+/* 最大化：铺满视口。z-index 必须高于站点顶栏（.site-header 是 100），
+   否则顶栏会压住模拟窗口的标题栏，还原按钮就点不到了。 */
+.win.is-max { position: fixed; inset: 14px; z-index: 200; }
 .win.is-max .win__body { height: calc(100vh - 60px); }
 .win-reopen {
   display: block;

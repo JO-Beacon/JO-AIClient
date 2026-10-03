@@ -20,6 +20,7 @@ from fontTools import subset
 ICONS = [
     "message-circle",
     "message-circle-plus",
+    "message-square-plus",
     "search",
     "languages",
     "folder",
@@ -31,11 +32,15 @@ ICONS = [
     "plus",
     "paperclip",
     "brain",
+    "sparkles",
+    "copy",
+    "volume-2",
     "image",
     "tool-case",
     "book-open",
     "globe",
     "wand-2",
+    "history",
     "link",
     "tag",
     "arrow-up",
@@ -44,11 +49,27 @@ ICONS = [
     "chevron-right",
     "chevron-up",
     "chevron-down",
+    "chevrons-up",
+    "chevrons-down",
     "rotate-cw",
     "refresh-cw",
     "ellipsis",
     "sliders-horizontal",
     "x",
+    # 输入条工具行（取值出处：lib/features/home/widgets/chat_input_bar.dart 的
+    # _buildResponsiveLeftActions 与桌面分支右侧按钮）
+    "boxes",
+    "folder-code",
+    "zap",
+    "camera",
+    # 字体里没有 layers 与 wand-sparkles 两个名字，取最接近的既有字形：
+    # layers-2 对应应用的 Lucide.Layers，技能用已有的 wand-2。
+    "layers-2",
+    "eraser",
+    "map",
+    "eye",
+    "mic",
+    "package-2",
 ]
 
 

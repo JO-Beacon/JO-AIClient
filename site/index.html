@@ -102,13 +102,13 @@
             <span class="win__name">JO-AIClient</span>
             <span class="win__ctrls">
               <button type="button" class="wc" data-win="min" aria-label="最小化" title="最小化"></button>
-              <button type="button" class="wc wc--max" data-win="max" aria-label="最大化" title="最大化"></button>
+              <button type="button" class="wc wc--max" data-win="max" aria-label="最大化" title="最大化"><svg class="wc__i wc__i--max" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg><svg class="wc__i wc__i--restore" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 2.5V0.5H9.5V7.5H7.5" fill="none" stroke="currentColor"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor"/></svg></button>
               <button type="button" class="wc wc--close" data-win="close" aria-label="关闭" title="关闭"></button>
             </span>
           </div>
           <div class="win__body" id="winBody">
             <nav class="rail" id="rail" aria-label="主导航">
-              <span class="rail__avatar" aria-hidden="true">J</span>
+              <span class="rail__avatar" aria-hidden="true"><img class="win__logo-ico win__logo-ico--light" src="icon-light.svg" width="28" height="28" alt=""><img class="win__logo-ico win__logo-ico--dark" src="icon-dark.svg" width="28" height="28" alt=""></span>
               <button type="button" class="rail__ico" data-page="chat" title="聊天"><span class="lic lic-message-circle"></span></button>
               <button type="button" class="rail__ico" data-page="search" title="全局搜索"><span class="lic lic-search"></span></button>
               <button type="button" class="rail__ico" data-page="translate" title="翻译"><span class="lic lic-languages"></span></button>
@@ -122,7 +122,7 @@
               <div class="sbar__search">
                 <span class="lic lic-search"></span>
                 <input id="sbarQuery" type="search" placeholder="搜索助手" autocomplete="off">
-                <button type="button" class="sbar__sort" data-sort="1" title="按名称排序"><span class="lic lic-sliders-horizontal"></span></button>
+                <button type="button" class="sbar__sort" data-sort="1" title="搜索历史"><span class="lic lic-history"></span></button>
               </div>
               <div class="sbar__tabs">
                 <button type="button" class="sbar__tab" data-tab="assistant">助手</button>
