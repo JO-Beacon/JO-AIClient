@@ -1,0 +1,53 @@
+/* Lucide 图标字体子集 —— 由 scripts/icons/gen_lucide_subset.py 生成，勿手工编辑。
+   图标按 ISC 许可证分发，声明见 licenses.html。 */
+@font-face {
+  font-family: "Lucide";
+  src: url("lucide-subset.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+.lic {
+  font-family: "Lucide";
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  line-height: 1;
+  display: inline-block;
+  vertical-align: middle;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.lic-message-circle::before { content: "\e116"; }
+.lic-message-circle-plus::before { content: "\e567"; }
+.lic-search::before { content: "\e151"; }
+.lic-languages::before { content: "\e0fe"; }
+.lic-folder::before { content: "\e0d7"; }
+.lic-monitor::before { content: "\e11d"; }
+.lic-sun::before { content: "\e178"; }
+.lic-moon::before { content: "\e11e"; }
+.lic-settings::before { content: "\e154"; }
+.lic-menu::before { content: "\e115"; }
+.lic-plus::before { content: "\e13d"; }
+.lic-paperclip::before { content: "\e12d"; }
+.lic-brain::before { content: "\e3c6"; }
+.lic-image::before { content: "\e0f6"; }
+.lic-tool-case::before { content: "\e67d"; }
+.lic-book-open::before { content: "\e05f"; }
+.lic-globe::before { content: "\e0e8"; }
+.lic-wand-2::before { content: "\e357"; }
+.lic-link::before { content: "\e102"; }
+.lic-tag::before { content: "\e17f"; }
+.lic-arrow-up::before { content: "\e04a"; }
+.lic-arrow-down::before { content: "\e042"; }
+.lic-chevron-left::before { content: "\e06e"; }
+.lic-chevron-right::before { content: "\e06f"; }
+.lic-chevron-up::before { content: "\e070"; }
+.lic-chevron-down::before { content: "\e06d"; }
+.lic-rotate-cw::before { content: "\e149"; }
+.lic-refresh-cw::before { content: "\e145"; }
+.lic-ellipsis::before { content: "\e0b6"; }
+.lic-sliders-horizontal::before { content: "\e29a"; }
+.lic-x::before { content: "\e1b2"; }

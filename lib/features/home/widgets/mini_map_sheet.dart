@@ -13,45 +13,6 @@ import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
 import '../../../utils/search_highlight.dart';
 
-Future<String?> showMiniMapSheet(
-  BuildContext context,
-  List<ChatMessage> messages, {
-  bool selecting = false,
-  Set<String>? selectedMessageIds,
-  Listenable? selectionListenable,
-  ValueChanged<String>? onToggleSelection,
-  List<ConversationBranch>? branches,
-  ConversationTree? conversationTree,
-  String? activeBranchId,
-  ValueChanged<String>? onSelectBranch,
-  Future<List<MiniMapSearchHit>> Function(String query)? onSearch,
-}) async {
-  assert(
-    !selecting || (selectedMessageIds != null && onToggleSelection != null),
-    'Mini map selection mode requires selectedMessageIds and onToggleSelection.',
-  );
-  return await showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (ctx) => _MiniMapSheet(
-      messages: messages,
-      selecting: selecting,
-      selectedMessageIds: selectedMessageIds,
-      selectionListenable: selectionListenable,
-      onToggleSelection: onToggleSelection,
-      branches: branches,
-      conversationTree: conversationTree,
-      activeBranchId: activeBranchId,
-      onSelectBranch: onSelectBranch,
-      onSearch: onSearch,
-    ),
-  );
-}
-
 /// 全屏小地图页面。路由压在聊天页上方，返回时聊天页不会被销毁。
 class MiniMapPage extends StatelessWidget {
   const MiniMapPage({

@@ -189,6 +189,20 @@ final class BusinessRepository {
     });
   }
 
+  /// 各偏好键的最近改动时刻（UTC 纪元**微秒**）；供恢复合并时判断"后改的保留"。
+  Future<Map<String, int>> preferenceUpdatedAt() async {
+    final rows = await _database
+        .customSelect(
+          'SELECT key, updated_at FROM preference_rows ORDER BY key;',
+          readsFrom: {_database.preferenceRows},
+        )
+        .get();
+    return {
+      for (final row in rows)
+        row.read<String>('key'): row.read<int>('updated_at'),
+    };
+  }
+
   Future<BusinessSnapshot> readSnapshot() =>
       _database.transaction(_readSnapshot);
 

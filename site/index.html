@@ -5,10 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JO-AIClient — 基于 Kelivo 的非官方改版 AI 聊天助手</title>
 <meta name="description" content="JO-AIClient 是一个 AI 聊天助手，基于 Kelivo 的非官方改版，按 GNU AGPL-3.0 发布。核心能力是消息级上下文树：分支创建、切换、重新生成、按树结构精确删除，分支关系与分叉锚点完整存入本地 SQLite。">
-<meta name="color-scheme" content="dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e0f10'/%3E%3Cpath d='M19 8v11a5 5 0 0 1-5 5 5 5 0 0 1-4.3-2.4' stroke='%23c8a96a' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='22.5' cy='11' r='2' fill='%23ecece6'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="styles.css">
-</head>
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="icon" type="image/svg+xml" href="icon-light.svg" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/svg+xml" href="icon-dark.svg" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)">
+<script>
+(function () {
+  try {
+    var pref = localStorage.getItem('jo-theme') || 'system';
+    var light = window.matchMedia('(prefers-color-scheme: light)').matches;
+    var effective = (pref === 'light' || (pref === 'system' && light)) ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', effective);
+    document.documentElement.setAttribute('data-theme-pref', pref);
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="styles.css?v=20261004a"><link rel="stylesheet" href="lucide-icons.css?v=20261004a"></head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
 
@@ -16,10 +31,7 @@
   <div class="container bar">
     <a class="brand" href="#top">
       <span class="brand__mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32" width="26" height="26" focusable="false">
-          <path d="M19 7v12a5.5 5.5 0 0 1-5.5 5.5A5.5 5.5 0 0 1 8.8 22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
-          <circle cx="23" cy="10.5" r="2.1" fill="currentColor"/>
-        </svg>
+        <img class="brand__ico brand__ico--light" src="icon-light.svg" width="26" height="26" alt=""><img class="brand__ico brand__ico--dark" src="icon-dark.svg" width="26" height="26" alt="">
       </span>
       <span class="brand__text">
         <span class="brand__name">JO-AIClient</span>
@@ -34,7 +46,14 @@
       <a href="#demo">交互演示</a>
     </nav>
 
-    <a class="btn btn--primary btn--sm" href="#download">下载</a>
+    <div class="bar__end">
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="主题：跟随系统" title="主题：跟随系统（点击切换）">
+        <span class="lic lic-monitor theme-toggle__ico" data-ico="system" aria-hidden="true"></span>
+        <span class="lic lic-sun theme-toggle__ico" data-ico="light" aria-hidden="true"></span>
+        <span class="lic lic-moon theme-toggle__ico" data-ico="dark" aria-hidden="true"></span>
+      </button>
+      <a class="btn btn--primary btn--sm" href="#download">下载</a>
+    </div>
   </div>
 
   <p class="disclaimer">
@@ -56,7 +75,7 @@
         <h1 class="hero__title">对话不该<br>只有一条线。</h1>
         <p class="hero__lede">
           JO-AIClient 是一个 AI 聊天助手，基于 Kelivo 的非官方改版。
-          重新生成、编辑问题、从历史消息继续对话，都会在同一位置长出新分支；
+          重新生成、编辑问题、创建消息分支，都会在同一位置长出新分支；
           分支关系与分叉锚点完整存入本地 SQLite，聊天界面默认只显示当前活动分支。
         </p>
 
@@ -77,233 +96,53 @@
 
       <!-- ---------- 产品界面示意 ---------- -->
       <div class="hero__mock">
-        <div class="mock" role="group" aria-label="JO-AIClient 对话界面示意">
-          <div class="mock__bar">
-            <span class="mock__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="mock__title">JO-AIClient — 对话</span>
-            <span class="mock__badge">界面示意</span>
+        <div class="win" id="win" role="group" aria-label="JO-AIClient 桌面版界面示意">
+          <div class="win__bar">
+            <span class="win__logo" aria-hidden="true"><img class="win__logo-ico win__logo-ico--light" src="icon-light.svg" width="16" height="16" alt=""><img class="win__logo-ico win__logo-ico--dark" src="icon-dark.svg" width="16" height="16" alt=""></span>
+            <span class="win__name">JO-AIClient</span>
+            <span class="win__ctrls">
+              <button type="button" class="wc" data-win="min" aria-label="最小化" title="最小化"></button>
+              <button type="button" class="wc wc--max" data-win="max" aria-label="最大化" title="最大化"></button>
+              <button type="button" class="wc wc--close" data-win="close" aria-label="关闭" title="关闭"></button>
+            </span>
           </div>
+          <div class="win__body" id="winBody">
+            <nav class="rail" id="rail" aria-label="主导航">
+              <span class="rail__avatar" aria-hidden="true">J</span>
+              <button type="button" class="rail__ico" data-page="chat" title="聊天"><span class="lic lic-message-circle"></span></button>
+              <button type="button" class="rail__ico" data-page="search" title="全局搜索"><span class="lic lic-search"></span></button>
+              <button type="button" class="rail__ico" data-page="translate" title="翻译"><span class="lic lic-languages"></span></button>
+              <button type="button" class="rail__ico" data-page="storage" title="存储"><span class="lic lic-folder"></span></button>
+              <span class="rail__gap"></span>
+              <button type="button" class="rail__ico" data-page="theme" title="切换主题"></button>
+              <button type="button" class="rail__ico" data-page="settings" title="设置"><span class="lic lic-settings"></span></button>
+            </nav>
 
-          <div class="mock__body">
-
-            <!-- 左：会话侧栏 -->
-            <aside class="mock__side" aria-label="会话列表示意">
-              <div class="side__brand">
-                <span class="side__mark" aria-hidden="true">J</span>
-                <span>JO-AIClient</span>
+            <aside class="sbar" aria-label="助手与话题">
+              <div class="sbar__search">
+                <span class="lic lic-search"></span>
+                <input id="sbarQuery" type="search" placeholder="搜索助手" autocomplete="off">
+                <button type="button" class="sbar__sort" data-sort="1" title="按名称排序"><span class="lic lic-sliders-horizontal"></span></button>
               </div>
-              <ul class="side__list" id="sideList">
-                <li class="side__item is-active" data-session="1">
-                  <button type="button" class="side__btn" data-q="1">
-                    <span class="side__t">用 Dart 写一个快速排序</span>
-                    <span class="side__m">3 个分支 · 刚刚</span>
-                  </button>
-                </li>
-                <li class="side__item" data-session="2">
-                  <button type="button" class="side__btn" data-q="2">
-                    <span class="side__t">重构 Flutter 状态管理方案</span>
-                    <span class="side__m">3 个分支 · 昨天</span>
-                  </button>
-                </li>
-                <li class="side__item" data-session="3">
-                  <span class="side__btn side__btn--static">
-                    <span class="side__t">对比三种排序算法</span>
-                    <span class="side__m">单链 · 3 天前</span>
-                  </span>
-                </li>
-                <li class="side__item" data-session="4">
-                  <span class="side__btn side__btn--static">
-                    <span class="side__t">整理会议纪要</span>
-                    <span class="side__m">单链 · 上周</span>
-                  </span>
-                </li>
-              </ul>
-              <p class="side__foot"><span class="dot dot--ok" aria-hidden="true"></span>SQLite · 本地存储</p>
+              <div class="sbar__tabs">
+                <button type="button" class="sbar__tab" data-tab="assistant">助手</button>
+                <button type="button" class="sbar__tab" data-tab="topic">话题</button>
+              </div>
+              <ul class="sbar__list" id="sbarList"></ul>
             </aside>
 
-            <!-- 中：对话区 -->
-            <div class="mock__chat">
-              <div class="chat__switch">
-                <span class="chat__switchlabel" id="qLabel">示例问题</span>
-                <div class="seg seg--xs" role="group" aria-labelledby="qLabel">
-                  <button type="button" class="seg__b is-on" data-q="1" aria-pressed="true">Dart 快速排序</button>
-                  <button type="button" class="seg__b" data-q="2" aria-pressed="false">状态管理重构</button>
-                </div>
-              </div>
+            <div class="sbhandle" id="sbHandle" role="separator" aria-orientation="vertical" aria-label="调整侧栏宽度"></div>
 
-              <div class="bubble bubble--user">
-                <span class="bubble__who">你</span>
-                <p class="bubble__text" id="heroQuestion">用 Dart 写一个快速排序，并解释分区逻辑。</p>
-              </div>
-
-              <div class="bubble bubble--ai">
-                <span class="bubble__who">JO-AIClient</span>
-                <div class="bubble__body" id="heroAnswer">
-                  <div class="branchpane" data-q="1" data-b="1" hidden>
-                    <pre><code>List&lt;int&gt; quickSort(List&lt;int&gt; a) {
-  if (a.length &lt;= 1) return a;
-  final pivot = a[a.length ~/ 2];
-  final lo = &lt;int&gt;[], eq = &lt;int&gt;[], hi = &lt;int&gt;[];
-  for (final x in a) {
-    if (x &lt; pivot) lo.add(x);
-    else if (x &gt; pivot) hi.add(x);
-    else eq.add(x);
-  }
-  return [...quickSort(lo), ...eq, ...quickSort(hi)];
-}</code></pre>
-                    <p>分区逻辑：取中间元素为基准，把序列切成“小于 / 等于 / 大于”三段，等于段一次落位，只递归两侧。读起来最直观，代价是每一层都新建列表。</p>
-                  </div>
-                  <div class="branchpane" data-q="1" data-b="2">
-                    <pre><code>void quickSort(List&lt;int&gt; a, [int lo = 0, int hi = -1]) {
-  hi = hi &lt; 0 ? a.length - 1 : hi;
-  if (lo &gt;= hi) return;
-  final pivot = a[hi];
-  var i = lo;
-  for (var j = lo; j &lt; hi; j++) {
-    if (a[j] &lt; pivot) {
-      final t = a[i]; a[i] = a[j]; a[j] = t; i++;
-    }
-  }
-  final t = a[i]; a[i] = a[hi]; a[hi] = t;
-  quickSort(a, lo, i - 1);
-  quickSort(a, i + 1, hi);
-}</code></pre>
-                    <p>分区逻辑（Lomuto）：以末尾元素为基准，<code>i</code> 左侧是已确认的“小于区”。扫描结束后把基准换到 <code>i</code>，此时基准已落在最终位置，左右两段各自递归。全程原地交换，没有额外列表分配。</p>
-                  </div>
-                  <div class="branchpane" data-q="1" data-b="3" hidden>
-                    <p>先给结论：生产代码里更推荐直接 <code>list.sort()</code>。如果一定要自己实现，注意三点：</p>
-                    <ul class="tight">
-                      <li><strong>基准选择</strong>：固定取末尾，在已排序输入上会退化成 O(n²)；取中位数或随机可规避。</li>
-                      <li><strong>相等元素</strong>：三路分区让等于基准的元素一次落位，重复值多的数据收益明显。</li>
-                      <li><strong>递归深度</strong>：先递归较短一侧、较长一侧改成循环，可把栈深度压到 O(log n)。</li>
-                    </ul>
-                    <p>分区做的事始终一样：把序列重排为“小于基准 | 等于基准 | 大于基准”，基准段所在位置就是它的最终位置。</p>
-                  </div>
-
-                  <div class="branchpane" data-q="2" data-b="1" hidden>
-                    <pre><code>class CounterModel extends ChangeNotifier {
-  int _value = 0;
-  int get value =&gt; _value;
-
-  void increment() {
-    _value++;
-    notifyListeners();
-  }
-}</code></pre>
-                    <p>思路：状态从 Widget 挪进 <code>ChangeNotifier</code>，Widget 只负责监听和渲染。测试直接实例化 Model 断言 <code>value</code>，不需要 <code>WidgetTester</code>。改造量最小，适合在现有代码上渐进迁移。</p>
-                  </div>
-                  <div class="branchpane" data-q="2" data-b="2" hidden>
-                    <pre><code>final counterProvider =
-    NotifierProvider&lt;CounterNotifier, int&gt;(CounterNotifier.new);
-
-class CounterNotifier extends Notifier&lt;int&gt; {
-  @override
-  int build() =&gt; 0;
-  void increment() =&gt; state++;
-}</code></pre>
-                    <p>思路：依赖关系由 provider 图声明，不再靠 <code>context</code> 层层传递，也不会在运行时才抛 <code>ProviderNotFoundException</code>。测试用 <code>ProviderContainer</code> 覆盖依赖，可以完全脱离 Widget 树验证业务逻辑。</p>
-                  </div>
-                  <div class="branchpane" data-q="2" data-b="3" hidden>
-                    <pre><code>sealed class CounterEvent {}
-class Increment extends CounterEvent {}
-
-class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
-  CounterBloc() : super(0) {
-    on&lt;Increment&gt;((_, emit) =&gt; emit(state + 1));
-  }
-}</code></pre>
-                    <p>思路：任何状态变更都必须经由事件，<code>emit</code> 序列可以用 <code>blocTest</code> 直接断言。约束最强、样板也最多，适合多人协作、需要追溯“状态是被哪个事件改的”的场景。</p>
-                  </div>
-                </div>
-
-                <div class="bubble__foot">
-                  <div class="branchctl">
-                    <button type="button" class="branchctl__b" id="heroPrev" aria-label="上一个分支">
-                      <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" focusable="false"><path d="M7.5 2 3.5 6l4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <span class="branchctl__label" id="heroBranchLabel">分支 2 / 3</span>
-                    <button type="button" class="branchctl__b" id="heroNext" aria-label="下一个分支">
-                      <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" focusable="false"><path d="M4.5 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <span class="pill">重新生成产生</span>
-                  </div>
-
-                  <div class="msgact">
-                    <button type="button" class="iconbtn" id="heroMenuBtn" aria-expanded="false" aria-controls="heroMenu" aria-label="消息操作菜单">
-                      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg>
-                    </button>
-                    <ul class="menu" id="heroMenu" hidden>
-                      <li><button type="button" data-act="regen">重新生成</button></li>
-                      <li><button type="button" data-act="delete-after">删除后续</button></li>
-                      <li><button type="button" data-act="delete-branch">删除当前分支</button></li>
-                      <li><button type="button" data-act="continue">从历史消息继续对话</button></li>
-                    </ul>
-                  </div>
-                </div>
-
-                <p class="chat__status" id="heroStatus" role="status">切换分支时，只有当前活动分支的内容会显示在对话区。</p>
-
-                <ol class="chat__steps" id="heroSteps" aria-label="当前示例问题对应的步骤">
-                  <li data-step="1"><span class="n">1</span><span class="s">首次生成回答 → 分支 1</span></li>
-                  <li data-step="2" class="is-current"><span class="n">2</span><span class="s">点击“重新生成”→ 分支 2</span></li>
-                  <li data-step="3"><span class="n">3</span><span class="s">再次“重新生成”→ 分支 3</span></li>
-                  <li data-step="4"><span class="n">4</span><span class="s">用 ◀ 分支 2 / 3 ▶ 切换，右侧消息树同步高亮</span></li>
-                </ol>
-              </div>
-            </div>
-
-            <!-- 右：消息树 -->
-            <aside class="mock__tree" aria-label="当前会话的消息树结构">
-              <h2 class="panel__h">消息树</h2>
-              <div class="tree" id="heroTree">
-                <ul>
-                  <li class="tli on-path" data-node="u1">
-                    <span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户提问</span></span>
-                    <ul>
-                      <li class="tli on-path" data-node="forkA">
-                        <span class="trow">
-                          <span class="tdot tdot--fork"></span>
-                          <span class="tlabel">分叉点 A</span>
-                          <span class="tcount">3</span>
-                        </span>
-                        <ul>
-                          <li class="tli" data-branch="1">
-                            <span class="trow"><span class="tdot"></span><span class="tlabel">分支 1</span></span>
-                            <ul><li class="tli tli--empty"><span class="trow"><span class="tlabel">无后续消息</span></span></li></ul>
-                          </li>
-                          <li class="tli is-active on-path" data-branch="2">
-                            <span class="trow"><span class="tdot"></span><span class="tlabel">分支 2</span><span class="tnow">当前</span></span>
-                            <ul>
-                              <li class="tli on-path" data-node="u2">
-                                <span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户追问</span></span>
-                                <ul>
-                                  <li class="tli on-path" data-node="forkB">
-                                    <span class="trow"><span class="tdot tdot--fork"></span><span class="tlabel">分叉点 B</span><span class="tcount">2</span></span>
-                                    <ul>
-                                      <li class="tli is-active" data-node="b2a"><span class="trow"><span class="tdot"></span><span class="tlabel">分支 1</span><span class="tnow">当前</span></span></li>
-                                      <li class="tli" data-node="b2b"><span class="trow"><span class="tdot"></span><span class="tlabel">分支 2</span></span></li>
-                                    </ul>
-                                  </li>
-                                </ul>
-                              </li>
-                            </ul>
-                          </li>
-                          <li class="tli" data-branch="3">
-                            <span class="trow"><span class="tdot"></span><span class="tlabel">分支 3</span></span>
-                            <ul><li class="tli tli--empty"><span class="trow"><span class="tlabel">无后续消息</span></span></li></ul>
-                          </li>
-                        </ul>
-                      </li>
-                    </ul>
-                  </li>
-                </ul>
-              </div>
-              <p class="panel__note">分支关系与分叉锚点持久化于 SQLite，界面默认只显示当前活动分支。</p>
-            </aside>
-
+            <div class="cchat" id="cchat" aria-label="会话示意"></div>
           </div>
         </div>
         <p class="mock__caption">示意图仅呈现布局与信息结构，非应用实际界面。对话内容为演示数据。</p>
+
+        <div class="aux">
+          <div class="aux__head"><span class="aux__tag">辅助示意</span>上下文分支</div>
+          <div class="tree" id="heroTree"></div>
+          <p class="aux__note">分支关系与分叉锚点持久化于 SQLite，界面默认只显示当前活动分支。</p>
+        </div>
       </div>
 
     </div>
@@ -324,7 +163,7 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
         <article class="card card--own">
           <h4 class="card__t">消息级上下文树</h4>
           <ul class="card__list">
-            <li>消息分支创建、切换、重新生成、从历史消息继续对话</li>
+            <li>消息分支创建、切换、重新生成、从历史消息创建分支</li>
             <li>按树结构精确删除：删单条、删后续、删当前分支、删分叉节点</li>
             <li>分支关系、分叉锚点、分支选择与活动分支历史完整存入 SQLite，聊天界面默认只显示当前活动分支</li>
             <li>上下文树完整性保护：持久化前做结构校验并生成稳定指纹，异常时保留原始数据并提供诊断入口，不静默修复</li>
@@ -335,7 +174,7 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
           <h4 class="card__t">无损导入</h4>
           <ul class="card__list">
             <li>Chatbox 全版本导入：1.22 以下走树形 JSON，1.22 起走 ZIP 备份，两条路都完整重建消息分支树，不把分叉对话线性化拍平成单链</li>
-            <li>DeepSeek 无损导入：按消息树完整重建，重新生成的备选回答与编辑历史产生的分叉全部保留，思维链、附件与联网搜索片段按原始数据保留</li>
+            <li>DeepSeek 无损导入：按完整的分支结构重建，重新生成的备选回答与编辑历史产生的分叉全部保留，思维链、附件与联网搜索片段按原始数据保留</li>
             <li>合并模式保留本地内容，覆盖模式只定点替换对应导入会话</li>
           </ul>
         </article>
@@ -385,7 +224,8 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
         <li><strong>语音服务</strong>：系统语音与多家网络 TTS、可配置 ASR、朗读音频导出</li>
         <li><strong>MCP 支持</strong>：Model Context Protocol 工具与 OAuth 授权，内置 fetch 工具</li>
         <li><strong>网络搜索</strong>：集成二十余家搜索服务，并支持部分供应商内置搜索</li>
-        <li><strong>设备本地工具</strong>：日历、屏幕使用时长（Android）、当前位置（Android）、健康数据摘要、提醒事项、天气等</li>
+        <li><strong>设备本地工具</strong>：日历、屏幕使用时长（Android）、当前位置（Android）等，按平台与授权提供</li>
+        <li><strong>Android 手机控制</strong>：在系统无障碍设置里授权后，助手可按你的明确要求读取屏幕、点击、输入、滑动、导航和打开应用；还需在对应助手里单独开启该工具</li>
         <li><strong>自动重试</strong>：可配置等待策略，界面显示倒计时</li>
         <li><strong>对话体验</strong>：会话单独指定模型、长回复分段气泡、气泡样式自定义、会话批量操作</li>
         <li><strong>记忆系统</strong>：记忆提取、管理、上下文注入与策略配置</li>
@@ -429,15 +269,15 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
       </div>
 
       <div class="notprov" aria-labelledby="notprov-h">
-        <h3 class="notprov__h" id="notprov-h">明确不提供</h3>
+        <h3 class="notprov__h" id="notprov-h">暂不提供</h3>
         <ul class="notprov__list">
           <li>
             <span class="notprov__k">iOS / macOS</span>
-            <span class="notprov__v">不支持。README 明确建议这类用户使用 Kelivo。</span>
+            <span class="notprov__v">暂无计划。README 建议这类用户使用 Kelivo。</span>
           </li>
           <li>
             <span class="notprov__k">HarmonyOS NEXT</span>
-            <span class="notprov__v">不支持。建议使用 kelivo-ohos。</span>
+            <span class="notprov__v">暂无计划。建议使用 kelivo-ohos。</span>
           </li>
           <li>
             <span class="notprov__k">赞助商栏目</span>
@@ -494,6 +334,7 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
           <ul class="dl__files">
             <li>中文安装程序</li>
             <li>免安装便携版</li>
+            <li class="dl__inc">随包附带 VC++ 运行库</li>
           </ul>
           <a class="dl__go" href="https://github.com/JO-Beacon/JO-AIClient/releases" rel="noopener">前往 Releases<span aria-hidden="true">→</span></a>
         </article>
@@ -569,10 +410,7 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
   <div class="container foot">
     <div class="foot__brand">
       <span class="brand__mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32" width="22" height="22" focusable="false">
-          <path d="M19 7v12a5.5 5.5 0 0 1-5.5 5.5A5.5 5.5 0 0 1 8.8 22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
-          <circle cx="23" cy="10.5" r="2.1" fill="currentColor"/>
-        </svg>
+        <img class="brand__ico brand__ico--light" src="icon-light.svg" width="22" height="22" alt=""><img class="brand__ico brand__ico--dark" src="icon-dark.svg" width="22" height="22" alt="">
       </span>
       <span>JO-AIClient</span>
     </div>
@@ -585,6 +423,7 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
       <a href="https://github.com/JO-Beacon/JO-AIClient/releases" rel="noopener">Releases</a>
       <a href="#features">产品能力</a>
       <a href="#kelivo">与 Kelivo 的关系</a>
+      <a href="licenses.html">第三方许可</a>
     </nav>
   </div>
 </footer>
@@ -593,6 +432,7 @@ class CounterBloc extends Bloc&lt;CounterEvent, int&gt; {
   <p class="noscript container">“交互演示”区块需要启用 JavaScript。页面其余内容（产品能力、与 Kelivo 的关系、平台下载）均可正常阅读。</p>
 </noscript>
 
-<script src="app.js" defer></script>
+<script src="app.js?v=20261004a" defer></script>
+<script src="mock.js?v=20261004a" defer></script>
 </body>
 </html>

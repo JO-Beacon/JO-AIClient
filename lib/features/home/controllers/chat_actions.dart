@@ -1117,8 +1117,8 @@ class ChatActions {
           ),
         );
     return attachmentGateError(
-      unsupportedModalities:
-          messageGenerationService.unsupportedMediaModalitiesInApiMessages(
+      unsupportedModalities: messageGenerationService
+          .unsupportedMediaModalitiesInApiMessages(
             apiMessages,
             ModelSpecResolver.instance.spec(config, modelId),
             ocrActive: settings.ocrActive,

@@ -8,13 +8,16 @@ import '../../../../utils/kimi_model_compat.dart';
 import '../../builtin_tools.dart';
 import '../../chat_api_helpers.dart';
 
-void applyChatCompletionsBuiltInTools(
+/// 返回最终用于搜索的 query，便于客户端工具的多轮请求继续沿用同一个查询。
+Object? applyChatCompletionsBuiltInTools(
   Map<String, dynamic> body, {
   required ProviderConfig config,
   required String modelId,
   required String upstreamModelId,
   Iterable<String>? configuredTools,
+  Object? searchQuery,
 }) {
+  Object? resolvedSearchQuery;
   final payload = BuiltInToolsHelper.buildChatCompletionsTools(
     cfg: config,
     modelId: modelId,
@@ -26,6 +29,34 @@ void applyChatCompletionsBuiltInTools(
   }
   for (final tool in payload.tools) {
     _appendChatTool(body, tool);
+  }
+  if (BuiltInToolsHelper.isVercelProvider(config) &&
+      payload.tools.any((tool) => tool['type'] == 'vercel:perplexity_search')) {
+    // 图片工具的结果会在后续请求里追加合成的用户消息，因此要沿用最初的查询。
+    final query = searchQuery ?? _lastUserText(body['messages']);
+    final tools = body['tools'] as List;
+    for (var index = 0; index < tools.length; index++) {
+      final rawTool = tools[index];
+      if (rawTool is! Map || rawTool['type'] != 'vercel:perplexity_search') {
+        continue;
+      }
+      final tool = Map<String, dynamic>.from(rawTool);
+      final rawConfig = tool['config'];
+      final searchConfig = rawConfig is Map
+          ? Map<String, dynamic>.from(rawConfig)
+          : <String, dynamic>{};
+      final configuredQuery = searchConfig['query'];
+      if (configuredQuery == null ||
+          (configuredQuery is String && configuredQuery.trim().isEmpty)) {
+        if (query is String && query.trim().isEmpty) {
+          throw UnsupportedError('Vercel 网关的网页搜索需要用户文本，或显式给出 config.query。');
+        }
+        searchConfig['query'] = query;
+      }
+      resolvedSearchQuery = searchConfig['query'];
+      tool['config'] = searchConfig;
+      tools[index] = tool;
+    }
   }
   // OpenRouter server-side web search replaces the legacy `web` plugin;
   // keeping both would double-charge for grounding.
@@ -43,6 +74,7 @@ void applyChatCompletionsBuiltInTools(
       body['plugins'] = plugins;
     }
   }
+  return resolvedSearchQuery;
 }
 
 void _appendChatTool(Map<String, dynamic> body, Map<String, dynamic> tool) {
@@ -837,4 +869,22 @@ void applyVendorReasoningKnobs(
       body.remove('reasoning_effort');
     }
   }
+}
+
+String _lastUserText(Object? messages) {
+  if (messages is! List) return '';
+  for (final message in messages.reversed) {
+    if (message is! Map || message['role'] != 'user') continue;
+    final content = message['content'];
+    if (content is String) return content.trim();
+    if (content is List) {
+      return [
+        for (final part in content.whereType<Map>())
+          if (part['type'] == 'text' && part['text'] is String)
+            part['text'] as String,
+      ].join('\n').trim();
+    }
+    return '';
+  }
+  return '';
 }

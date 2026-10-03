@@ -80,6 +80,37 @@ void main() {
     }
   });
 
+  test('会话生成状态必须一路传到消息卡片，否则“会中断”提示会静默失效', () async {
+    // 这条链路断过一次：MessageListView 收到了 isConversationGenerating，
+    // 却没往 ChatMessageWidget.conversationStreaming 传，于是弹窗里那句
+    // “重新生成会中断正在生成的回复”永远不会出现——弹窗还在、文案也正常，
+    // 只有这一句提醒没了，所以必须单独钉住传值这一步。
+    final listView = await File(
+      'lib/features/home/widgets/message_list_view.dart',
+    ).readAsString();
+    expect(
+      listView.contains(
+        'conversationStreaming: widget.isConversationGenerating',
+      ),
+      isTrue,
+      reason: '会话生成状态必须在构建 ChatMessageWidget 时传下去',
+    );
+    // 同一行旁边还有一处：1.2.7 基线合并把“助手头像裁剪”也一起删了。
+    expect(
+      listView.contains('assistantAvatarTransform: useAssistAvatar'),
+      isTrue,
+      reason: '助手头像裁剪必须在主聊天列表里传下去',
+    );
+    final card = await File(
+      'lib/features/chat/widgets/chat_message_widget.dart',
+    ).readAsString();
+    expect(
+      card.contains('widget.conversationStreaming'),
+      isTrue,
+      reason: '“会中断正在生成的回复”提示应由 conversationStreaming 驱动',
+    );
+  });
+
   test('重新生成确认文案说的是新建分支，而不是覆盖当前消息', () async {
     // 旧文案写“只会更新当前消息”，与“永远新建分支”的真实行为不符；
     // 这句话曾经被基线升级带回来过，所以逐语言钉住必须出现的措辞。

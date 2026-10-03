@@ -6112,6 +6112,42 @@ abstract class AppLocalizations {
   /// **'Recognizing…'**
   String get chatInputBarVoiceTranscribing;
 
+  /// No description provided for @chatInputBarVoiceAttachAudioTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop and attach as audio'**
+  String get chatInputBarVoiceAttachAudioTooltip;
+
+  /// No description provided for @chatInputBarVoiceSendAudioTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Send recording'**
+  String get chatInputBarVoiceSendAudioTooltip;
+
+  /// No description provided for @chatInputBarVoiceSavingAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving audio…'**
+  String get chatInputBarVoiceSavingAudio;
+
+  /// No description provided for @audioClipPlayTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Play audio'**
+  String get audioClipPlayTooltip;
+
+  /// No description provided for @audioClipPauseTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get audioClipPauseTooltip;
+
+  /// No description provided for @audioClipPlaybackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play this audio'**
+  String get audioClipPlaybackFailed;
+
   /// No description provided for @chatInputBarImageProcessing.
   ///
   /// In en, this message translates to:
@@ -7296,6 +7332,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Response API (/responses)'**
   String get providerDetailPageResponseApiTitle;
+
+  /// No description provided for @providerDetailPagePromptCacheKeyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Conversation Cache Key'**
+  String get providerDetailPagePromptCacheKeyTitle;
+
+  /// No description provided for @providerDetailPagePromptCacheKeyHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Adds a stable prompt_cache_key for each conversation to OpenAI-compatible requests. Enable only if your provider supports it. Custom Body values take precedence; cache hits are not guaranteed.'**
+  String get providerDetailPagePromptCacheKeyHelp;
 
   /// No description provided for @providerDetailPageAihubmixAppCodeLabel.
   ///
@@ -8862,6 +8910,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'License'**
   String get aboutPageLicense;
+
+  /// No description provided for @aboutPageOpenSourceLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Open source licenses'**
+  String get aboutPageOpenSourceLicenses;
+
+  /// No description provided for @aboutOpenSourceLicensesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No license information was found.'**
+  String get aboutOpenSourceLicensesEmpty;
 
   /// No description provided for @aboutPageCheckForUpdates.
   ///

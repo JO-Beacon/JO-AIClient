@@ -40,6 +40,7 @@ final class BusinessRestoreService {
     bool preserveExplicitEmptyInstructionList = false,
     Map<String, Object?>? entityRowIds,
     bool assumePreV3EmbeddingMigrationWhenVersionMissing = false,
+    DateTime? packageCreatedAtUtc,
   }) async {
     // 在开启写事务之前先校验并规范化。事务随后将这些不可变的
     // 导入行与其当前快照合并，同时保留双方的
@@ -54,11 +55,16 @@ final class BusinessRestoreService {
             assumePreV3EmbeddingMigrationWhenVersionMissing,
       ),
     );
+    // 本机各键的改动时刻：要在开事务之前取出（`transformSnapshot` 的回调是同步的）。
+    // 恢复期间有写栅栏（`runWithRestoreWriteFence`），不存在并发改写，因此这样读是安全的。
+    final localPreferenceUpdatedAt = await _repository.preferenceUpdatedAt();
     await _repository.transformSnapshot((current) {
       return BusinessSettingsMerger.mergeSnapshots(
         current,
         incoming,
         incomingKeys: imported.keys.toSet(),
+        localPreferenceUpdatedAt: localPreferenceUpdatedAt,
+        packageCreatedAtUtc: packageCreatedAtUtc,
       );
     }, writeReceipt: true);
   }

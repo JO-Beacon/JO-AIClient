@@ -116,11 +116,31 @@ Map<String, dynamic> applyReasoning(
   ReasoningRequest request, {
   required ReasoningTransport transport,
 }) {
+  final resolution = resolveReasoning(spec, request);
+  // Gemini / Gemma：沿用本仓库“按模型名 + 预算推算”的做法，用户没选档位时
+  // 也照发模型默认档，否则思考内容不会返回、档位也不生效。用户自定义方言优先。
+  if (transport == ReasoningTransport.geminiGenerateContent &&
+      spec.reasoning.dialect != ReasoningDialect.custom) {
+    _setThinkingConfig(
+      body,
+      _googleThinkingConfig(
+        spec.id,
+        resolution.budget,
+        off:
+            request.level == ReasoningLevel.off ||
+            resolution.requested == ReasoningLevel.off ||
+            resolution.effective == ReasoningLevel.off,
+        explicitLevel: resolution.effective == ReasoningLevel.auto
+            ? null
+            : resolution.effective,
+      ),
+    );
+    return body;
+  }
   if (!spec.supportsReasoning ||
       spec.reasoning.dialect == ReasoningDialect.none) {
     return body;
   }
-  final resolution = resolveReasoning(spec, request);
   if (resolution.effective == ReasoningLevel.auto) {
     _writeAutoSurfaceFlags(body, spec.reasoning.dialect, transport);
     return body;
@@ -321,6 +341,153 @@ void _stripDialectOwnedKeys(
   }
 }
 
+// —— 本仓库保留：Gemini / Gemma 的思考档位按“模型名 + 预算”推算 ——
+// 上游按模型规格（spec）决定发什么，遇到用户自填的模型名或尚未收录的新版本就什么都不发，
+// 结果是思考内容不返回、档位也不生效。下面沿用本仓库原有的按名字推断。
+
+bool _isGemma4Model(String modelId) {
+  return RegExp(
+    r'(^|[/:_-])gemma[-_]?4([._-]|$)',
+    caseSensitive: false,
+  ).hasMatch(modelId);
+}
+
+// 非文本 Gemini 变体不使用文本模型系列的思考协议，因此不能进入 pro/flash 分支。
+final _gemini3NonTextSuffix = RegExp(
+  r'(^|[-_/])(image|tts|live)([-._:@/]|$)',
+  caseSensitive: false,
+);
+
+// Gemini 3.x Flash Image 与 Flash-Lite Image 支持思考等级，但只有 minimal（默认）和 high。
+final _gemini3FlashImageId = RegExp(
+  r'gemini-3(?:\.\d+)?-flash(-lite)?-image([._:@/-]|$)',
+  caseSensitive: false,
+);
+
+// Gemini 3 模型族思考协议变化的版本阈值。
+const _gemini3ProMediumMinor = 1; // pro 在 3.1 增加 medium
+const _gemini3FlashModernMinor = 5; // flash 从 3.5 起默认 medium，预算上限为 64K
+const _gemini3FlashNoMinimalMinor = 7; // flash 在 3.7 移除 minimal
+
+// 设置面板提供的预算档位：1024（轻量）、16000（中等）、32000（重度）。
+const _gemini3LowBudgetCeiling = 8000;
+const _gemini3MediumBudgetCeiling = 24000;
+
+final _gemini3FlashId = RegExp(
+  r'gemini-3(?:\.(?<minor>\d+))?-flash([._:@/-]|$)',
+  caseSensitive: false,
+);
+final _gemini3ProId = RegExp(
+  r'gemini-3(?:\.(?<minor>\d+))?-pro(-preview)?([._:@/-]|$)',
+  caseSensitive: false,
+);
+final _gemini3FlashLiteId = RegExp(
+  r'gemini-3(?:\.\d+)?-flash-lite([._:@/-]|$)',
+  caseSensitive: false,
+);
+
+// 获取 Gemini 3 id 后的次版本号；普通 `gemini-3-` 为 0，其他模型返回 null。
+// 按版本匹配可让未发布的 3.x 模型继续走 Gemini 3 分支，而不是回退到 Gemini 2.x。
+int? _gemini3Minor(String modelId, RegExp family) {
+  if (_gemini3NonTextSuffix.hasMatch(modelId)) return null;
+  final match = family.firstMatch(modelId);
+  if (match == null) return null;
+  return int.tryParse(match.namedGroup('minor') ?? '0') ?? 0;
+}
+
+int? _gemini3FlashMinor(String modelId) =>
+    _gemini3Minor(modelId, _gemini3FlashId);
+
+int? _gemini3ProMinor(String modelId) => _gemini3Minor(modelId, _gemini3ProId);
+
+Map<String, dynamic> _googleThinkingConfig(
+  String modelId,
+  int? budget, {
+  required bool off,
+  ReasoningLevel? explicitLevel,
+}) {
+  if (_isGemma4Model(modelId)) {
+    // 官方开关是 thinkingLevel high/minimal。省略配置等于保持思考开启；
+    // 关闭必须发送 minimal。
+    // https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
+    if (off) {
+      return const <String, dynamic>{
+        'includeThoughts': false,
+        'thinkingLevel': 'minimal',
+      };
+    }
+    // Gemma 4 开着只有 high 一种，用户的 low/medium 不区分。
+    return const <String, dynamic>{
+      'includeThoughts': true,
+      'thinkingLevel': 'high',
+    };
+  }
+
+  if (_gemini3FlashImageId.hasMatch(modelId)) {
+    // 这里只有 minimal 和 high；轻量档位与 off 共用 minimal 下限。
+    // minimal 仍会思考，因此 off 只隐藏思考内容。
+    final level = off
+        ? 'minimal'
+        : explicitLevel?.name ??
+              (budget != null && budget >= _gemini3LowBudgetCeiling
+                  ? 'high'
+                  : 'minimal');
+    return {'includeThoughts': !off, 'thinkingLevel': level};
+  }
+
+  final proMinor = _gemini3ProMinor(modelId);
+  if (proMinor != null) {
+    // gemini-3-pro 只有 low 和 high，3.1 才增加 medium。
+    final hasMedium = proMinor >= _gemini3ProMediumMinor;
+    String level = 'high';
+    if (off) {
+      level = 'low';
+    } else if (explicitLevel != null) {
+      level = explicitLevel.name;
+    } else if (budget != null && budget > 0) {
+      if (budget < _gemini3LowBudgetCeiling) {
+        level = 'low';
+      } else if (budget < _gemini3MediumBudgetCeiling && hasMedium) {
+        level = 'medium';
+      }
+    }
+    // Gemini 3 始终思考，因此 off 表示使用最低等级但隐藏思考内容。
+    return {'includeThoughts': !off, 'thinkingLevel': level};
+  }
+
+  final flashMinor = _gemini3FlashMinor(modelId);
+  if (flashMinor != null) {
+    // Flash 在 3.7 移除 minimal，因此最低等级改为 low。
+    final lowest = flashMinor >= _gemini3FlashNoMinimalMinor
+        ? 'low'
+        : 'minimal';
+    String level = _gemini3FlashLiteId.hasMatch(modelId)
+        ? lowest
+        : (flashMinor >= _gemini3FlashModernMinor ? 'medium' : 'high');
+    if (off) {
+      level = lowest;
+    } else if (explicitLevel != null) {
+      level = explicitLevel.name;
+    } else if (budget != null && budget > 0) {
+      // 轻量（1024）-> low，中等（16000）-> medium，重度（32000）-> high。
+      if (budget < _gemini3LowBudgetCeiling) {
+        level = 'low';
+      } else if (budget < _gemini3MediumBudgetCeiling) {
+        level = 'medium';
+      } else {
+        level = 'high';
+      }
+    }
+    return {'includeThoughts': !off, 'thinkingLevel': level};
+  }
+  // Gemini 2.x 及更早版本使用 thinkingBudget。
+  if (off) return const {'includeThoughts': false};
+  return {
+    'includeThoughts': true,
+    if (budget != null && budget >= 0) 'thinkingBudget': budget,
+  };
+}
+
 void _writeDialect(
   Map<String, dynamic> body,
   ModelSpec spec,
@@ -483,7 +650,7 @@ void _writeGeminiLevel(
       : resolution.effective;
   _setThinkingConfig(body, <String, dynamic>{
     'includeThoughts': !hideThoughts,
-    'thinkingLevel': level.name.toUpperCase(),
+    'thinkingLevel': level.name.toLowerCase(),
   });
 }
 

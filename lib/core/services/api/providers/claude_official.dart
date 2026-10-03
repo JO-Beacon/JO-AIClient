@@ -1,84 +1,45 @@
+import '../../custom_request_merger.dart';
+import '../../../models/provider_oauth.dart';
+import '../../auth/claude_oauth_request.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../../../../models/provider_oauth.dart';
-import '../../../../models/token_usage.dart';
-import '../../../../providers/model_provider.dart';
-import '../../../../providers/settings_provider.dart';
-import '../../../../utils/multimodal_input_utils.dart';
-import '../../../../../utils/mcp_structured_image.dart';
-import '../../builtin_tools.dart';
-import '../../chat_api_helpers.dart';
-import '../../tool_result_content.dart';
-import '../../../model_spec/model_spec_resolver.dart';
-import '../../reasoning/reasoning_dialects.dart';
-import '../../generation/tool_loop_runner.dart';
-import '../../../auth/claude_oauth_request.dart';
-import '../../google_service_account_auth.dart';
-import '../../stream/sse_framing.dart';
-import '../../stream/stream_chunk.dart';
-import '../../stream/stream_chunk_emit.dart';
-import '../../stream/stream_chunk_ids.dart';
-import '../google/google_provider.dart'
-    show downloadRemoteAsBase64, vertexOrigin;
-import 'claude_container.dart';
-import 'claude_decoder.dart';
-import 'claude_files.dart';
-import 'claude_history.dart';
+import '../../../models/token_usage.dart';
+import '../../../models/model_spec.dart';
+import '../../../providers/settings_provider.dart';
+import '../../../utils/multimodal_input_utils.dart';
+import '../../../../utils/mcp_structured_image.dart';
+import '../builtin_tools.dart';
+import '../chat_api_helpers.dart';
+import '../native_input_attachments.dart';
+import '../tool_result_content.dart';
+import '../../model_spec/model_spec_resolver.dart';
+import '../reasoning/reasoning_dialects.dart';
+import '../generation/tool_loop_runner.dart';
+import '../stream/sse_framing.dart';
+import '../stream/stream_chunk.dart';
+import '../stream/stream_chunk_emit.dart';
+import '../stream/stream_chunk_ids.dart';
+import 'claude/claude_container.dart';
+import 'claude/claude_decoder.dart';
+import 'claude/claude_files.dart';
+import 'claude/claude_history.dart';
 
-export 'claude_history.dart'
+export 'claude/claude_history.dart'
     show
         normalizeClaudeImageMime,
         isClaudeSupportedImageMime,
         claudeToolResultContent;
 
-int claudeVertexMaxOutputTokens(String modelId) {
-  switch (modelId) {
-    case 'claude-fable-5-1':
-    case 'claude-fable-5':
-    case 'claude-opus-5':
-    case 'claude-opus-4-8':
-    case 'claude-opus-4-7':
-    case 'claude-opus-4-6':
-    case 'claude-sonnet-5':
-    case 'claude-sonnet-4-6':
-      return 128000;
-    case 'claude-opus-4-5@20251101':
-    case 'claude-sonnet-4-5@20250929':
-    case 'claude-haiku-4-5@20251001':
-    case 'claude-sonnet-4@20250514':
-      return 64000;
-    case 'claude-opus-4-1@20250805':
-    case 'claude-opus-4@20250514':
-      return 32000;
-    case 'claude-3-haiku@20240307':
-      return 8000;
-    case 'claude-3-5-sonnet@20240620':
-    case 'claude-3-5-sonnet-v2@20241022':
-      return 8192;
-    // 以下三款上游表未覆盖（本仓库的 Vertex 模型清单里有）
-    case 'claude-3-7-sonnet@20250219':
-      return 64000;
-    case 'claude-3-5-haiku@20241022':
-      return 8192;
-    case 'claude-3-opus@20240229':
-      return 4096;
-    default:
-      // 更老的模型
-      return 4096;
-  }
-}
-
-Stream<StreamChunk> sendClaudeStreamEvents(
+Stream<StreamChunk> sendClaudeStream(
   http.Client client,
   ProviderConfig config,
   String modelId,
   List<Map<String, dynamic>> messages, {
   List<String>? userImagePaths,
-  int? thinkingBudget,
   ReasoningRequest reasoning = ReasoningRequest.auto,
   double? temperature,
   double? topP,
@@ -93,22 +54,20 @@ Stream<StreamChunk> sendClaudeStreamEvents(
   StreamRoundRunner? retryRound,
 }) async* {
   final upstreamModelId = apiModelId(config, modelId);
-  final isVertex = config.vertexAI == true;
-  // 端点和请求头在各工具轮次之间保持不变。
+  // Endpoint and headers (constant across rounds)
   final base = config.baseUrl.endsWith('/')
       ? config.baseUrl.substring(0, config.baseUrl.length - 1)
       : config.baseUrl;
-  final url = isVertex
-      ? _vertexClaudeUrl(config, upstreamModelId, stream: stream)
-      : Uri.parse('$base/messages');
+  final url = Uri.parse('$base/messages');
 
   final skipRedactedThinkingBlocks = BuiltInToolsHelper.isOpenRouterProvider(
     config,
   );
   final replayServerToolBlocks =
-      !isVertex && BuiltInToolsHelper.isOfficialAnthropicEndpoint(config);
+      BuiltInToolsHelper.isOfficialAnthropicEndpoint(config) ||
+      BuiltInToolsHelper.isVercelProvider(config);
 
-  // 取出 system prompt（Anthropic 用顶层的 `system` 字段）
+  // Extract system prompt (Anthropic uses top-level `system`)
   String systemPrompt = '';
   final nonSystemMessages = <Map<String, dynamic>>[];
   for (final m in messages) {
@@ -120,8 +79,8 @@ Stream<StreamChunk> sendClaudeStreamEvents(
       }
       continue;
     }
-    // 变换过程中保留 media-paths；它们不会出现在最终发给 Anthropic 的
-    // 请求体里（角色与内容在下面重建）。
+    // Keep media-paths through transform; they are not forwarded in the
+    // final Anthropic request body (we rebuild role/content below).
     nonSystemMessages.add(
       Map<String, dynamic>.from(m)
         ..remove(multimodalInternalRevisionIdKey)
@@ -130,24 +89,25 @@ Stream<StreamChunk> sendClaudeStreamEvents(
     );
   }
 
-  final canImageInput = effectiveModelInfo(
-    config,
-    modelId,
-  ).input.contains(Modality.image);
+  final canImageInput = ModelSpecResolver.instance
+      .spec(config, modelId)
+      .input
+      .contains(Modality.image);
   final history = ClaudeHistory(
     replayServerToolBlocks: replayServerToolBlocks,
     skipRedactedThinkingBlocks: skipRedactedThinkingBlocks,
     skipImageParsing: skipImageParsing,
     canImageInput: canImageInput,
+    nativeInputs: NativeInputAttachments(
+      config: config,
+      spec: ModelSpecResolver.instance.spec(config, modelId),
+      protocol: NativeInputProtocol.claude,
+    ),
     userImagePaths: userImagePaths,
-    // Vertex 不接受 URL 图片源，远程媒体必须先下载再内联为 base64。
-    remoteMediaBase64: isVertex
-        ? (url) => downloadRemoteAsBase64(client, config, url)
-        : null,
   );
   final initialMessages = await history.build(nonSystemMessages);
 
-  // 把 OpenAI 风格的 tools 映射成 Anthropic 的 custom tools（客户端工具）
+  // Map OpenAI-style tools to Anthropic custom tools (client tools)
   List<Map<String, dynamic>>? anthropicTools;
   if (tools != null && tools.isNotEmpty) {
     anthropicTools = [];
@@ -168,15 +128,16 @@ Stream<StreamChunk> sendClaudeStreamEvents(
     }
   }
 
-  // 汇总最终的 tools 列表：客户端工具 ＋ 服务端工具 ＋ 内置 web_search
+  // Collect final tools list: client + server + built-in web_search
   final List<Map<String, dynamic>> allTools = [];
   if (anthropicTools != null && anthropicTools.isNotEmpty) {
     allTools.addAll(anthropicTools);
   }
-  // Anthropic 会拒绝 `tools` 里出现两个同名条目，而 MCP 服务器完全可以
-  // 暴露一个叫 `web_search`／`web_fetch`／`code_execution` 的工具。客户端
-  // 工具是调用方按名字点名要的，所以与之同名的托管条目会被丢弃，而不是
-  // 一起发出去。
+  // Anthropic rejects a `tools` array holding two entries of the same name, and
+  // an MCP server is free to expose one called `web_search`, `web_fetch`, or
+  // `code_execution`. The client tools are the ones the caller asked for by
+  // name, so a hosted entry that collides with one is dropped instead of sent
+  // alongside it.
   final claimedToolNames = <String>{
     for (final t in allTools) (t['name'] ?? '').toString(),
   };
@@ -194,15 +155,25 @@ Stream<StreamChunk> sendClaudeStreamEvents(
       }
     }
   }
-  // 工具类调用（生成标题／摘要）只该注入搜索；在这类调用里跑托管 fetch
-  // 或容器，既不合约定也会产生计费。
-  final builtIns = builtInSearchOnly && !isVertex
+  // Utility calls (title / summary generation) only want search injected; a
+  // hosted fetch or container run on one of those is both off-contract and
+  // billed.
+  final builtIns = builtInSearchOnly
       ? builtInTools(
           config,
           modelId,
         ).where((name) => name == BuiltInToolNames.search).toSet()
       : builtInTools(config, modelId);
   if (builtIns.contains(BuiltInToolNames.search)) {
+    if (BuiltInToolsHelper.isVercelProvider(config) &&
+        !BuiltInToolsHelper.supportsBuiltInSearchForModel(
+          cfg: config,
+          modelId: modelId,
+        )) {
+      throw UnsupportedError(
+        'Vercel Messages native web search requires an Anthropic model.',
+      );
+    }
     Map<String, dynamic> ws = const <String, dynamic>{};
     try {
       final ov = config.modelOverrides[modelId];
@@ -235,19 +206,6 @@ Stream<StreamChunk> sendClaudeStreamEvents(
       entry['user_location'] = (ws['user_location'] as Map)
           .cast<String, dynamic>();
     }
-    // 本仓库自有：web_search 的 20260209 版本依赖 code execution 才能执行
-    // 搜索片段，缺失时服务端会拒绝该工具组合。
-    //
-    // ⛔ 上游已改成另一套做法：把标记名（20260209）映射成实际发送的
-    // `web_search_20260318`（见 builtin_tools 的 claudeSearchToolTypeDynamic），
-    // 那套不需要补这个工具。本仓库的 claudeBuiltInSearchToolType 仍直接发
-    // 20260209，且搜索结果版本的说明写在用户可见文案里，所以这段必须保留。
-    if (searchToolType == 'web_search_20260209') {
-      addHostedTool(<String, dynamic>{
-        'type': 'code_execution_20250825',
-        'name': 'code_execution',
-      });
-    }
     addHostedTool(entry);
   }
   for (final entry in BuiltInToolsHelper.claudeServerToolEntries(
@@ -258,18 +216,19 @@ Stream<StreamChunk> sendClaudeStreamEvents(
     addHostedTool(entry);
   }
 
-  // 客户端工具用 `input_schema` 声明，Anthropic 托管工具用 `type` 声明。
-  // 解码器要靠后者才能识别被降级的区块。
+  // Client tools are declared by `input_schema`, the Anthropic-hosted ones by
+  // `type`. The decoder needs the latter to recognise a downgraded block.
   final declaredServerToolNames = <String>{
     for (final t in allTools)
       if (t['input_schema'] == null && (t['type'] ?? '').toString().isNotEmpty)
         (t['name'] ?? '').toString(),
   }..remove('');
-  // `container` 参数只有和用到它的工具同时出现时才被接受。
+  // The `container` parameter is only accepted alongside the tool that uses it.
   final hasCodeExecution = declaredServerToolNames.contains('code_execution');
-  // 消息构建器依据同一个判定从提示词里省略掉的数据文件，改为上传到容器。
-  // 要让 `container_upload` 被接受，这个工具必须在本次请求里；而工具类
-  // 调用则永远不会声明它。
+  // The data files the message builder left out of the prompt, on the
+  // strength of the same predicate, go up to the container instead. The tool
+  // has to be in this request for a `container_upload` to be accepted, and a
+  // utility call never declares it.
   final uploadsDataFiles =
       hasCodeExecution &&
       BuiltInToolsHelper.sendsDataFilesToSandbox(
@@ -278,25 +237,20 @@ Stream<StreamChunk> sendClaudeStreamEvents(
         clientTools: tools ?? const [],
       );
 
-  // 请求头在各轮次之间保持不变。
-  final vertexToken = isVertex ? await _vertexAccessToken(config) : null;
+  // Headers (constant across rounds)
   final baseHeaders = customHeaders(
     config,
     modelId,
     baseHeaders: <String, String>{
+      'x-api-key': effectiveApiKey(config),
+      'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
       'Accept': stream ? 'text/event-stream' : 'application/json',
-      if (isVertex && vertexToken != null && vertexToken.isNotEmpty)
-        'Authorization': 'Bearer $vertexToken',
-      if (isVertex && (config.projectId ?? '').trim().isNotEmpty)
-        'X-Goog-User-Project': config.projectId!.trim(),
-      if (!isVertex) 'x-api-key': effectiveApiKey(config),
-      if (!isVertex) 'anthropic-version': '2023-06-01',
     },
     assistantHeaders: extraHeaders,
   );
 
-  // 跨轮次维持的会话内容
+  // Running conversation across rounds
   List<Map<String, dynamic>> convo = List<Map<String, dynamic>>.from(
     initialMessages,
   );
@@ -304,11 +258,12 @@ Stream<StreamChunk> sendClaudeStreamEvents(
   var streamRound = 0;
   var pendingCalls = <EmitToolCall>[];
   var lastAssistantBlocks = <Map<String, dynamic>>[];
-  // 在本次回合的每一轮之间传递 —— 客户端工具之后、pause 之后都算 —— 并
-  // 在每轮之后存下来，好让下一个回合也从这个容器继续。
+  // Carried through every round of this turn — after a client tool, after a
+  // pause — and stored after each so the next turn resumes in it too.
   ClaudeContainerRef? container = history.storedContainer;
-  // 本回合目前为止的每一个响应；每轮之后都存到消息上，好让这个回合能按
-  // 它当时的响应序列重放。没有工具调用的回合只靠文本重放，不存东西。
+  // Every response of this turn so far, stored against the message after each
+  // so the turn replays as the responses it was. A turn without a tool call
+  // replays from its text alone and stores nothing.
   final turnResponses = <List<Map<String, dynamic>>>[];
   Stream<StreamChunk> recordTurn(List<Map<String, dynamic>> response) async* {
     turnResponses.add(response);
@@ -318,8 +273,9 @@ Stream<StreamChunk> sendClaudeStreamEvents(
         payload: encodeClaudeTurn(turnResponses),
       );
     }
-    // 现在就存到本回合的消息上（而不是等到最后 —— 被取消的回合永远走不到
-    // 最后），好让下一个回合能在同一个容器里继续。
+    // Stored against this turn's message so the next turn can resume in the
+    // same container — now rather than at the end, which a cancelled turn
+    // never reaches.
     if (hasCodeExecution && container != null) {
       yield ProviderArtifact(
         kind: claudeContainerArtifactKind,
@@ -333,11 +289,13 @@ Stream<StreamChunk> sendClaudeStreamEvents(
   final nonStreamText = StringBuffer();
   var pauseTurn = false;
 
-  // 沿用中的容器只收它还没见过的文件；新建的容器（没存过，或存的那个已
-  // 过期）则收下用户附带的全部文件。两种情况下上传都挂在最后一条用户消息
-  // 上，每个文件只传一次。本回合要用到、却传不上去的文件，会在发出任何请求
-  // 之前让本回合失败；若是更早回合的文件，则改为上报那一次的问题，免得很久
-  // 以前丢的一个附件把整段对话终结掉。
+  // A container the conversation goes on using gets the files it has not
+  // seen; a fresh one — none stored, or the stored one found expired — gets
+  // every file the user attached. Either way the uploads ride the last user
+  // message, and each file goes once. A file this turn is about that cannot
+  // go up fails the turn before any request is made; an earlier turn's is
+  // reported in its place instead, so one lost attachment from long ago does
+  // not end the conversation.
   final uploadedPaths = <String>{};
   final turnFileUris = {for (final doc in history.turnDataFiles) doc.uri};
   Future<void> uploadDataFiles() async {
@@ -381,43 +339,40 @@ Stream<StreamChunk> sendClaudeStreamEvents(
   yield* runProviderToolRounds(
     retryRound: retryRound,
     sendRound: () async* {
-      // 每轮单独准备请求体
       totalUsage = null;
       final spec = ModelSpecResolver.instance.spec(config, modelId);
       final body = <String, dynamic>{
-        if (!isVertex) 'model': upstreamModelId,
-        if (isVertex) 'anthropic_version': 'vertex-2023-10-16',
+        'model': upstreamModelId,
         'max_tokens': maxTokens ?? spec.maxOutput ?? 64000,
-        if (systemPrompt.isNotEmpty) 'system': systemPrompt,
-        'messages': convo,
-        'stream': stream,
-        if (!isVertex && config.claudePromptCachingEnabled == true)
+        if (config.claudePromptCachingEnabled == true)
           'cache_control': ProviderConfig.claudePromptCacheControl(
             config.claudePromptCachingTtl,
           ),
+        if (systemPrompt.isNotEmpty) 'system': systemPrompt,
+        'messages': convo,
+        'stream': stream,
         if (temperature != null) 'temperature': temperature,
         if (topP != null) 'top_p': topP,
         if (allTools.isNotEmpty) 'tools': allTools,
         if (allTools.isNotEmpty) 'tool_choice': {'type': 'auto'},
         if (hasCodeExecution && container != null) 'container': container!.id,
       };
-      // 推理与采样由 ModelSpec 方言决定；自定义 body 随后合并，用户设置优先。
       applyReasoning(
         body,
         spec,
         reasoning,
         transport: ReasoningTransport.anthropicMessages,
       );
+      final resolution = resolveReasoning(spec, reasoning);
       applySamplingPolicy(
         body,
         spec,
-        resolveReasoning(spec, reasoning),
+        resolution,
         transport: ReasoningTransport.anthropicMessages,
       );
+      // Custom body keys win over the reasoning dialect.
       final extraClaude = customBody(config, modelId, assistantBody: extraBody);
-      if (extraClaude.isNotEmpty) {
-        body.addAll(extraClaude);
-      }
+      CustomRequestMerger.applyBody(body, extraClaude);
       applyAnthropicMessagesProtocolConstraints(body);
 
       http.Request buildRequest() {
@@ -430,8 +385,8 @@ Stream<StreamChunk> sendClaudeStreamEvents(
       var response = await client.send(buildRequest());
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final errorBody = await response.stream.bytesToString();
-        // 存下来的容器可能从上一回合起就过期了；丢掉它，让这一轮开一个
-        // 新的。
+        // A stored container can have expired since the last turn; forget
+        // it and let this round start a fresh one.
         final staleContainer =
             body.containsKey('container') &&
             isClaudeStaleContainerError(response.statusCode, errorBody);
@@ -453,17 +408,16 @@ Stream<StreamChunk> sendClaudeStreamEvents(
       lastAssistantBlocks = [];
       pauseTurn = false;
 
-      // 非流式路径：解析完整 JSON、处理 tool_use，需要时继续循环。
+      // Non-streaming path: parse full JSON, handle tool_use, then continue loop if needed.
       if (!stream) {
         final txt = await decodeUtf8Stream(response.stream);
         final obj = jsonDecode(txt) as Map;
-        // 用量
+        // Usage
         try {
           final u = (obj['usage'] as Map?)?.cast<String, dynamic>();
           if (u != null) {
-            totalUsage = (totalUsage ?? const TokenUsage()).merge(
-              claudeUsageFromMap(u),
-            );
+            final next = claudeUsageFromMap(u);
+            if (next.hasReportedTokens) totalUsage = next.asSnapshot();
           }
         } catch (_) {}
         container =
@@ -483,9 +437,9 @@ Stream<StreamChunk> sendClaudeStreamEvents(
             }
           } else if (type == 'thinking' ||
               (type == 'redacted_thinking' && !skipRedactedThinkingBlocks)) {
-            // 为工具调用的续轮原样保留 thinking 区块。开启思考时，下一次
-            // 请求必须以一条 thinking／redacted_thinking 区块开头的助手
-            // 消息收尾。
+            // Preserve thinking blocks unmodified for tool-use continuation.
+            // When thinking is enabled, the next request must include the last assistant
+            // message starting with a thinking/redacted_thinking block.
             try {
               assistantBlocks.add(
                 Map<String, dynamic>.from(it.cast<String, dynamic>()),
@@ -511,8 +465,8 @@ Stream<StreamChunk> sendClaudeStreamEvents(
             }
           } else if (type == 'server_tool_use' ||
               type.endsWith('_tool_result')) {
-            // 托管调用及其结果属于模型自己的这一轮：续轮里丢掉其中任何
-            // 一个都会被拒绝。
+            // The hosted call and its result are the model's own turn: a
+            // continuation round that drops either is rejected.
             try {
               assistantBlocks.add(
                 Map<String, dynamic>.from(it.cast<String, dynamic>()),
@@ -530,14 +484,11 @@ Stream<StreamChunk> sendClaudeStreamEvents(
             }
           }
         }
-        // 续轮会把这些发出去，所以它们要和重放历史一样过一遍清理；存下来
-        // 的那份保持完整。
+        // The continuation round sends these, so they go through the same
+        // sanitising as replayed history; the stored copy stays whole.
         lastAssistantBlocks = history.sanitize(assistantBlocks);
         nonStreamText.write(joinedTextOfBlocks(assistantBlocks));
         final decoder = ClaudeStreamDecoder(
-          decodeToolName: config.oauthProvider == OAuthProvider.claude
-              ? decodeClaudeOAuthToolName
-              : null,
           skipRedactedThinkingBlocks: skipRedactedThinkingBlocks,
           serverToolNames: declaredServerToolNames,
           sourceId: 'round-${streamRound++}',
@@ -549,8 +500,8 @@ Stream<StreamChunk> sendClaudeStreamEvents(
         }
         yield* recordTurn(assistantBlocks);
         if (toolUses.isEmpty) {
-          // 超出轮次上限的托管工具会请求续跑，而前面没有需要先回答的
-          // 客户端工具。
+          // A hosted tool that ran past the turn limit asks to be resumed,
+          // with no client tool to answer first.
           pauseTurn = (obj['stop_reason'] ?? '').toString() == 'pause_turn';
         }
         if (toolUses.isNotEmpty && onToolCall != null) {
@@ -577,8 +528,9 @@ Stream<StreamChunk> sendClaudeStreamEvents(
         sourceId: 'round-${streamRound++}',
       );
       final executedToolIds = <String>{};
-      // 下载与流并行进行：在这里 await 一次，会让 SSE 事件在那段时间里
-      // 无人读取，工具之后的文本也会一直冻住。
+      // Downloads run alongside the stream: awaiting one here would leave the
+      // SSE events unread, and the text after the tool frozen, for as long as
+      // the file takes.
       final downloads = <Future<GeneratedFile?>>[];
       var streamCompleted = false;
 
@@ -589,8 +541,9 @@ Stream<StreamChunk> sendClaudeStreamEvents(
           for (final chunk in decoded.chunks) {
             yield chunk;
             if (chunk is ServerToolEnd) {
-              // 代码执行上报的是它写了什么，给的是卡片用不上的 id；所以
-              // 这里把字节取回来，由消息自己承载文件。
+              // Code execution reports what it wrote as ids the card cannot do
+              // anything with, so the bytes are fetched here and the message
+              // carries the file itself.
               for (final fileId in claudeGeneratedFileIds(chunk.output)) {
                 if (!downloadedFileIds.add(fileId)) continue;
                 downloads.add(
@@ -637,9 +590,9 @@ Stream<StreamChunk> sendClaudeStreamEvents(
         }
         streamCompleted = true;
       } finally {
-        // 在这一步停下的回合（被取消，或遇到带内错误）仍然会让下载跑完，
-        // 而不是把它们脚下的客户端关掉；这些下载写出来的东西没有消息可归，
-        // 因此随后会被删掉。
+        // A turn that stops here — cancelled, or on an in-band error — still
+        // sees its downloads out rather than closing the client under them;
+        // what they wrote has no message to go to, so it is removed again.
         final files = await Future.wait(downloads);
         if (!streamCompleted) {
           for (final file in files) {
@@ -663,8 +616,8 @@ Stream<StreamChunk> sendClaudeStreamEvents(
       totalUsage = usage ?? totalUsage;
       container = decoder.container ?? container;
 
-      // 续轮会原样发出这些，所以它们要和重放历史一样过一遍清理 —— 存下来
-      // 的那份保持完整。
+      // The continuation round sends these as they are, so they go through the
+      // same sanitising as replayed history — the stored copy stays whole.
       lastAssistantBlocks = history.sanitize(assistantBlocks);
       yield* recordTurn(assistantBlocks);
       if (decoder.clientTools.isEmpty) {
@@ -747,29 +700,4 @@ Stream<StreamChunk> sendClaudeStreamEvents(
     },
     usageOf: () => totalUsage,
   );
-}
-
-Uri _vertexClaudeUrl(
-  ProviderConfig config,
-  String modelId, {
-  required bool stream,
-}) {
-  final location = (config.location ?? 'us-central1').trim();
-  final projectId = (config.projectId ?? '').trim();
-  final origin = vertexOrigin(config, location);
-  final endpoint = stream ? 'streamRawPredict' : 'rawPredict';
-  return Uri.parse(
-    '$origin/v1/projects/$projectId/locations/$location/'
-    'publishers/anthropic/models/$modelId:$endpoint',
-  );
-}
-
-Future<String?> _vertexAccessToken(ProviderConfig config) async {
-  final json = (config.serviceAccountJson ?? '').trim();
-  if (json.isEmpty) {
-    // 兼容把临时 OAuth token 直接填入 apiKey 的配置。
-    final key = effectiveApiKey(config).trim();
-    return key.isEmpty ? null : key;
-  }
-  return GoogleServiceAccountAuth.getAccessTokenFromJson(json);
 }

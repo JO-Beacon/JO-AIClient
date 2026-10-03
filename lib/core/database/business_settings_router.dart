@@ -585,6 +585,7 @@ final class BusinessSettingsRouter {
           booleans: const {
             'enabled',
             'useResponseApi',
+            'promptCacheKeyEnabled',
             'vertexAI',
             'proxyEnabled',
             'multiKeyEnabled',

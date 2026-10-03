@@ -558,4 +558,76 @@ void main() {
     expect(merged, isNot(contains('pinned_chat_ids')));
     expect(merged['theme_mode_v1'], 'light');
   });
+
+  group('后改的保留：备份更晚才用备份值', () {
+    BusinessSnapshot snapshot(Map<String, Object> prefs) =>
+        BusinessSnapshot(entities: const {}, preferences: prefs);
+
+    final earlier = DateTime.utc(2026, 10, 3, 12);
+    final later = DateTime.utc(2026, 10, 3, 13);
+
+    test('本机已有、备份严格更晚 → 用备份值', () {
+      final merged = BusinessSettingsMerger.mergeSnapshots(
+        snapshot({'theme_mode_v1': 'light'}),
+        snapshot({'theme_mode_v1': 'dark'}),
+        incomingKeys: const {'theme_mode_v1'},
+        localPreferenceUpdatedAt: {
+          'theme_mode_v1': earlier.microsecondsSinceEpoch,
+        },
+        packageCreatedAtUtc: later,
+      );
+
+      expect(merged.preferences['theme_mode_v1'], 'dark');
+    });
+
+    test('本机已有、备份更早 → 保留本机（不把现值倒退）', () {
+      final merged = BusinessSettingsMerger.mergeSnapshots(
+        snapshot({'theme_mode_v1': 'light'}),
+        snapshot({'theme_mode_v1': 'dark'}),
+        incomingKeys: const {'theme_mode_v1'},
+        localPreferenceUpdatedAt: {
+          'theme_mode_v1': later.microsecondsSinceEpoch,
+        },
+        packageCreatedAtUtc: earlier,
+      );
+
+      expect(merged.preferences['theme_mode_v1'], 'light');
+    });
+
+    test('时刻并列 → 保留本机', () {
+      final merged = BusinessSettingsMerger.mergeSnapshots(
+        snapshot({'theme_mode_v1': 'light'}),
+        snapshot({'theme_mode_v1': 'dark'}),
+        incomingKeys: const {'theme_mode_v1'},
+        localPreferenceUpdatedAt: {
+          'theme_mode_v1': later.microsecondsSinceEpoch,
+        },
+        packageCreatedAtUtc: later,
+      );
+
+      expect(merged.preferences['theme_mode_v1'], 'light');
+    });
+
+    test('本机没有这个键 → 补缺，用备份值', () {
+      final merged = BusinessSettingsMerger.mergeSnapshots(
+        snapshot(const {}),
+        snapshot({'theme_mode_v1': 'dark'}),
+        incomingKeys: const {'theme_mode_v1'},
+        localPreferenceUpdatedAt: const {},
+        packageCreatedAtUtc: later,
+      );
+
+      expect(merged.preferences['theme_mode_v1'], 'dark');
+    });
+
+    test('调用方没提供时间（旧路径）→ 维持本机优先', () {
+      final merged = BusinessSettingsMerger.mergeSnapshots(
+        snapshot({'theme_mode_v1': 'light'}),
+        snapshot({'theme_mode_v1': 'dark'}),
+        incomingKeys: const {'theme_mode_v1'},
+      );
+
+      expect(merged.preferences['theme_mode_v1'], 'light');
+    });
+  });
 }

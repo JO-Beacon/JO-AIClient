@@ -62,7 +62,7 @@ void main() {
       expect(merged, {'X-Conversation-Id': 'conversation-123'});
     });
 
-    test('shallow merges body and parses configured string values', () {
+    test('deep merges body and parses configured string values', () {
       final merged = CustomRequestMerger.mergeBody(
         assistant: const {
           'shared': 'assistant',
@@ -84,7 +84,12 @@ void main() {
       expect(merged['shared'], 'model');
       expect(merged['assistantOnly'], 3);
       expect(merged['providerOnly'], isTrue);
-      expect(merged['nested'], {'model': true});
+      // 深合并：同一嵌套对象里的键逐级合并，助手级与供应商级的键不得被模型级顶掉。
+      expect(merged['nested'], {
+        'assistant': true,
+        'provider': true,
+        'model': true,
+      });
       expect(merged, containsPair('nullable', null));
     });
   });

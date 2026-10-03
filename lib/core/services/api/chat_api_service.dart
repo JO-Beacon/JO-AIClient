@@ -24,8 +24,9 @@ import 'stream/stream_chunk.dart';
 import 'stream/stream_chunk_handler.dart';
 // `normalizeClaudeImageMime` 等符号由 claude_provider 转出（见它的 export 块），
 // 这里不再重复导入 claude_history。
-import 'providers/claude/claude_provider.dart';
-import 'providers/google/google_provider.dart';
+import 'providers/claude_official.dart';
+import 'providers/google_gemini.dart';
+import 'providers/google_vertex.dart';
 import 'providers/openai/openai_provider.dart';
 import 'providers/zhipu_layout_parsing.dart';
 import 'providers/openai_images.dart';
@@ -59,10 +60,6 @@ class ChatApiService {
   @visibleForTesting
   static String normalizeClaudeImageMimeForTest(String mime) =>
       normalizeClaudeImageMime(mime);
-
-  @visibleForTesting
-  static int claudeVertexMaxOutputTokensForTest(String modelId) =>
-      claudeVertexMaxOutputTokens(modelId);
 
   @visibleForTesting
   static bool isLongCatHostForTest(String baseUrl) => isLongCatHost(baseUrl);
@@ -174,10 +171,12 @@ class ChatApiService {
       } else {
         copy[multimodalInternalMediaPathsKey] = keptRefs;
       }
-      copy.remove(multimodalInternalRevisionIdKey);
-      copy.remove(multimodalInternalDocumentPathsKey);
-      copy.remove(multimodalInternalClaudeContainerKey);
-      copy.remove(multimodalInternalClaudeTurnKey);
+      // 这里只管媒体。文档引用、修订 ID、Claude 容器／回合记录都保留：是否
+      // 原生发送由模型规格决定，内部字段由各 provider 自己清理（上游同此）。
+      // 尤其 Claude 的"回合记录"里放着原始的服务端工具块，丢了它回放就只能
+      // 按通用工具调用重建，形状与工具名都会变。
+      //
+      // 上下文分段是例外：除本函数外没有别处清理，必须在这里去掉。
       copy.remove(kelivoContextSegmentsKey);
       // 内容放平是图片专用的（丢掉 markdown 图片）；只剔音频时不能放平，
       // 否则正文里的图片部件会被误删。
@@ -387,6 +386,7 @@ class ChatApiService {
                 ),
           extraHeaders: sessionHeaders,
           extraBody: textOnly ? null : extraBody,
+          conversationId: conversationId,
           stream: stream,
           allowImagesApiRouting: allowImagesApiRouting,
           ocrActive: ocrActive,
@@ -409,6 +409,7 @@ class ChatApiService {
 
   static Stream<StreamChunk> _sendMessageStreamEventsOnce({
     required ProviderConfig config,
+    String? conversationId,
     required String modelId,
     required List<Map<String, dynamic>> messages,
     List<String>? userImagePaths,
@@ -511,6 +512,7 @@ class ChatApiService {
           config,
           modelId,
           safeMessages,
+          conversationId: conversationId,
           userImagePaths: safeUserImagePaths,
           thinkingBudget: thinkingBudget,
           reasoning: reasoning ?? ReasoningRequest.auto,
@@ -565,14 +567,32 @@ class ChatApiService {
         config,
       );
       try {
-        if (useClaudeEvents) {
-          yield* sendClaudeStreamEvents(
+        if (isVertexClaude) {
+          yield* sendGoogleVertexClaudeStream(
+            client: client,
+            config: config,
+            modelId: modelId,
+            messages: safeMessages,
+            userImagePaths: safeUserImagePaths,
+            reasoning: reasoning ?? ReasoningRequest.auto,
+            temperature: temperature,
+            topP: topP,
+            maxTokens: maxTokens,
+            tools: tools,
+            onToolCall: onToolCall,
+            extraHeaders: extraHeaders,
+            extraBody: extraBody,
+            stream: stream,
+            skipImageParsing: skipImageParsing,
+            retryRound: retryRound,
+          );
+        } else if (kind == ProviderKind.claude) {
+          yield* sendClaudeStream(
             client,
             config,
             modelId,
             safeMessages,
             userImagePaths: safeUserImagePaths,
-            thinkingBudget: thinkingBudget,
             reasoning: reasoning ?? ReasoningRequest.auto,
             temperature: temperature,
             topP: topP,
@@ -586,14 +606,33 @@ class ChatApiService {
             skipImageParsing: skipImageParsing,
             retryRound: retryRound,
           );
-        } else {
-          yield* sendGoogleStreamEvents(
+        } else if (config.vertexAI == true) {
+          yield* sendGoogleVertexStream(
             client,
             config,
             modelId,
             safeMessages,
             userImagePaths: safeUserImagePaths,
-            thinkingBudget: thinkingBudget,
+            reasoning: reasoning ?? ReasoningRequest.auto,
+            temperature: temperature,
+            topP: topP,
+            maxTokens: maxTokens,
+            tools: tools,
+            onToolCall: onToolCall,
+            extraHeaders: extraHeaders,
+            extraBody: extraBody,
+            stream: stream,
+            skipImageParsing: skipImageParsing,
+            retryRound: retryRound,
+          );
+        } else {
+          yield* sendGoogleGeminiStream(
+            client,
+            config,
+            modelId,
+            safeMessages,
+            userImagePaths: safeUserImagePaths,
+            reasoning: reasoning ?? ReasoningRequest.auto,
             temperature: temperature,
             topP: topP,
             maxTokens: maxTokens,

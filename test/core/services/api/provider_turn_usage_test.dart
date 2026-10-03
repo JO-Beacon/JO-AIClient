@@ -5,8 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:Kelivo/core/providers/settings_provider.dart';
-import 'package:Kelivo/core/services/api/providers/claude/claude_provider.dart';
-import 'package:Kelivo/core/services/api/providers/google/google_provider.dart';
+import 'package:Kelivo/core/services/api/providers/claude_official.dart';
+import 'package:Kelivo/core/services/api/providers/google_vertex.dart';
+import 'package:Kelivo/core/services/api/providers/google_gemini.dart';
 import 'package:Kelivo/core/services/api/providers/openai/openai_provider.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk_handler.dart';
 
@@ -236,11 +237,14 @@ void main() {
             );
             // 本仓库把 Vertex-Claude 的分流放在调用方，因此这里直接走
             // Claude 入口（与生产的路由一致）。
+            // 上游把 Vertex-Claude 拆成独立入口，这里按 transport 选。
             final send = openai
                 ? sendOpenAIStream
-                : transport == 'claude' || transport == 'vertex'
-                ? sendClaudeStreamEvents
-                : sendGoogleStreamEvents;
+                : transport == 'claude'
+                ? sendClaudeStream
+                : transport == 'vertex'
+                ? sendGoogleVertexStream
+                : sendGoogleGeminiStream;
             final chunks = await send(
               client,
               config,

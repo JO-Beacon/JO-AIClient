@@ -128,7 +128,12 @@ void main() {
       expect(windowsInstaller, contains('Excludes: "jo_kelivo.exe"'));
 
       final linuxWorkflow = _read('.github/workflows/build-linux.yml');
-      expect('Name=JO-AIClient'.allMatches(linuxWorkflow), hasLength(2));
+      final appImageScript = _read('tool/build_appimage.sh');
+      // 桌面入口有两处：DEB 的（仍在工作流里）与 AppImage 的。
+      // 2026-10-03 起 AppImage 的打包连 .desktop 一起移进脚本（上游同形），
+      // 所以两处分别断言，覆盖面不变。
+      expect('Name=JO-AIClient'.allMatches(linuxWorkflow), hasLength(1));
+      expect('Name=JO-AIClient'.allMatches(appImageScript), hasLength(1));
       expect(
         linuxWorkflow,
         contains('Description: JO-AIClient Linux application'),

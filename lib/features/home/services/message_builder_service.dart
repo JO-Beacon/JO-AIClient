@@ -70,6 +70,11 @@ const MemoryPrefixResolution _noMemoryPrefix = (
 /// 因此如果没有按次请求作用域记录，每条消息看起来都会像第一条，
 /// 并重复注入同一快照。
 class MemoryInjectionPass {
+  MemoryInjectionPass({this.retainedSnapshotCarriers});
+
+  /// 本次请求真正保留的记忆快照载体。为 null 时按已存历史判断。
+  final Set<String>? retainedSnapshotCarriers;
+
   /// 本次请求中收到记忆块的修订 ID。
   final Set<String> snapshotCarriers = <String>{};
 
@@ -705,7 +710,12 @@ class MessageBuilderService {
       return ChatInputData(text: text.trim(), imagePaths: mediaPaths);
     }
     final images = <String>[];
-    final docs = <DocumentAttachment>[];
+    final docs = [
+      for (final ref in parseInternalDocumentRefs(
+        message[multimodalInternalDocumentPathsKey],
+      ))
+        DocumentAttachment(path: ref.uri, fileName: ref.name, mime: ref.mime),
+    ];
     for (final ref in mediaRefs) {
       final path = ref.uri;
       final mime = (ref.mime != null && ref.mime!.trim().isNotEmpty)
@@ -743,6 +753,7 @@ class MessageBuilderService {
     Conversation? conversation,
     List<ChatMessage>? sourceMessages,
     bool sandboxDataFiles = false,
+    bool nativePdfInput = false,
     Map<String, AttachmentInfo> workspaceAttachments = const {},
   }) {
     final ocrActive =
@@ -768,6 +779,7 @@ class MessageBuilderService {
       final mediaPaths = <String>{};
       for (final document in parsed.documents) {
         final mime = _effectiveAttachmentMime(document);
+        if (nativePdfInput && isPdfMime(mime)) continue;
         if (isVideoMime(mime) || isAudioMime(mime)) {
           final path = document.path.trim();
           if (path.isNotEmpty) mediaPaths.add(path);
@@ -800,6 +812,7 @@ class MessageBuilderService {
     Conversation? conversation,
     List<ChatMessage>? sourceMessages,
     bool sandboxDataFiles = false,
+    bool nativePdfInput = false,
     Map<String, AttachmentInfo> workspaceAttachments = const {},
 
     /// 预览模式：读冻结提示词、解析记忆，但不跑 OCR、不提取文档、不写 extras。
@@ -836,9 +849,37 @@ class MessageBuilderService {
         if (isPersistedUserMessage(message))
           (message[internalRevisionIdKey] ?? '').toString().trim(),
     ];
-    final frozenPrompts = _repo == null
+    final storedPrompts = _repo == null
         ? null
         : await _repo!.getMessagePrompts(persistedRevisionIds);
+
+    // 原生发 PDF 时，它的提取正文和一起冻结的记忆快照都不再算数，
+    // 因此要在做记忆注入之前先决定哪些冻结正文留用。
+    final nativePdfRevisionIds = <String>{};
+    if (nativePdfInput) {
+      for (final message in apiMessages) {
+        if (!isPersistedUserMessage(message)) continue;
+        final revisionId = message[internalRevisionIdKey].toString().trim();
+        final chatMessage = _resolveChatMessage(
+          revisionId: revisionId,
+          conversation: conversation,
+          sourceMessages: sourceMessages,
+        );
+        final input = chatMessage != null
+            ? parseInputFromMessage(chatMessage)
+            : parseInputFromApiMap(message);
+        if (input.documents.any(
+          (d) => isPdfMime(_effectiveAttachmentMime(d)),
+        )) {
+          nativePdfRevisionIds.add(revisionId);
+        }
+      }
+    }
+    final frozenPrompts = {
+      if (storedPrompts != null)
+        for (final entry in storedPrompts.entries)
+          if (!nativePdfRevisionIds.contains(entry.key)) entry.key: entry.value,
+    };
 
     // 只为仍需生成（尚未冻结）的消息预取 OCR。
     OcrPrepareSession? ocrSession;
@@ -850,7 +891,7 @@ class MessageBuilderService {
         final revisionId = (message[internalRevisionIdKey] ?? '')
             .toString()
             .trim();
-        if (frozenPrompts?.containsKey(revisionId) ?? false) continue;
+        if (frozenPrompts.containsKey(revisionId)) continue;
         final revisionForParse = revisionId;
         final chatForParse = _resolveChatMessage(
           revisionId: revisionForParse,
@@ -942,7 +983,12 @@ class MessageBuilderService {
       }
     }
 
-    final injectionPass = MemoryInjectionPass();
+    final injectionPass = MemoryInjectionPass(
+      retainedSnapshotCarriers: {
+        for (final entry in frozenPrompts.entries)
+          if (entry.value.carriesMemorySnapshot) entry.key,
+      },
+    );
 
     // 真正由记忆注入产生的修订 ID。绝不能仅凭文本形态判断：
     // 用户若从上下文日志里粘贴了一段快照，那段文本属于用户自己的消息，
@@ -962,15 +1008,32 @@ class MessageBuilderService {
       final parsedUser = chatMessageForParts != null
           ? parseInputFromMessage(chatMessageForParts)
           : parseInputFromApiMap(apiMessages[i]);
+      final hasNativePdf = nativePdfRevisionIds.contains(revisionId);
       final hasWorkspaceDocuments = parsedUser.documents.any(
-        (d) => workspaceAttachments.containsKey(d.path),
+        (d) =>
+            workspaceAttachments.containsKey(d.path) &&
+            !(nativePdfInput && isPdfMime(_effectiveAttachmentMime(d))),
       );
       // 本地工作区已经持有这些文档。不要再把它们额外
       // 上传到提供方的代码执行沙盒。
       if (hasWorkspaceDocuments) {
-        final remaining = parseInternalDocumentRefs(
-          apiMessages[i][multimodalInternalDocumentPathsKey],
-        ).where((ref) => !workspaceAttachments.containsKey(ref.uri)).toList();
+        final remaining =
+            parseInternalDocumentRefs(
+                  apiMessages[i][multimodalInternalDocumentPathsKey],
+                )
+                .where(
+                  (ref) =>
+                      !workspaceAttachments.containsKey(ref.uri) ||
+                      (nativePdfInput &&
+                          isPdfMime(
+                            resolveMediaAttachmentMime(
+                              explicitMime: ref.mime,
+                              fileName: ref.name,
+                              path: ref.uri,
+                            ),
+                          )),
+                )
+                .toList();
         if (remaining.isEmpty) {
           apiMessages[i].remove(multimodalInternalDocumentPathsKey);
         } else {
@@ -1069,7 +1132,7 @@ class MessageBuilderService {
 
       // 仅复用仍绑定当前消息语义的冻结 promptContent（§8.3）。旧版本
       // 记录没有 sourceContentHash，或消息 parts 已被覆盖编辑时，走重建路径。
-      final existing = frozenPrompts?[revisionId];
+      final existing = frozenPrompts[revisionId];
       final currentSourceHash = chatMessageForParts?.semanticContentHash;
       // 切换沙盒只影响尚未发送的附件，不能改写已经发送过的历史内容。
       if (existing != null &&
@@ -1107,6 +1170,8 @@ class MessageBuilderService {
       final filePrompts = StringBuffer();
       var leftToSandbox = false;
       for (final d in parsedUser.documents) {
+        final effectiveMime = _effectiveAttachmentMime(d);
+        if (nativePdfInput && isPdfMime(effectiveMime)) continue;
         final local = workspaceAttachments[d.path];
         if (local != null) {
           leftToSandbox = true;
@@ -1117,7 +1182,6 @@ class MessageBuilderService {
           );
           continue;
         }
-        final effectiveMime = _effectiveAttachmentMime(d);
         if (isVideoMime(effectiveMime) || isAudioMime(effectiveMime)) {
           continue;
         }
@@ -1138,7 +1202,7 @@ class MessageBuilderService {
       }
 
       String merged = (filePrompts.toString() + cleanedUser).trim();
-      var canFreezePrompt = !previewOnly && !leftToSandbox;
+      var canFreezePrompt = !previewOnly && !leftToSandbox && !hasNativePdf;
 
       if (!previewOnly && ocrActive && ocrHandler != null) {
         final ocrTargets = parsedUser.imagePaths
@@ -1614,11 +1678,14 @@ class MessageBuilderService {
       if (revisionId.isEmpty || revisionId == currentMessageId) continue;
       historyUserIds.add(revisionId);
     }
+    final retainedCarriers = pass?.retainedSnapshotCarriers;
     final hasSnapshot =
         historyUserIds.any(
           (id) => pass?.snapshotCarriers.contains(id) ?? false,
         ) ||
-        await repo.anyPromptCarriesMemorySnapshot(historyUserIds);
+        (retainedCarriers != null
+            ? historyUserIds.any(retainedCarriers.contains)
+            : await repo.anyPromptCarriesMemorySnapshot(historyUserIds));
 
     // 关键：在任何写入之前与先前哈希比较（附录 §6）。
     // 先写入会使 currentHash == injectedMemoryHash，之后再也检测不到变化。

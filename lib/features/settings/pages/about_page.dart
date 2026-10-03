@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:Kelivo/theme/app_font_weights.dart';
 
+import 'open_source_licenses_page.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -239,7 +240,8 @@ class _AboutPageState extends State<AboutPage> {
                 context,
                 svgAsset: 'assets/icons/github.svg',
                 label: l10n.aboutPageGithub,
-                onTap: () => _openUrl('https://github.com/JO-Beacon/JO-AIClient'),
+                onTap: () =>
+                    _openUrl('https://github.com/JO-Beacon/JO-AIClient'),
               ),
               _iosDivider(context),
               _iosNavRow(
@@ -248,6 +250,19 @@ class _AboutPageState extends State<AboutPage> {
                 label: l10n.aboutPageLicense,
                 onTap: () => _openUrl(
                   'https://github.com/JO-Beacon/JO-AIClient/blob/main/LICENSE',
+                ),
+              ),
+              _iosDivider(context),
+              // 随包分发的第三方组件（Flutter 框架、各依赖包）的许可证与版权声明
+              _iosNavRow(
+                context,
+                icon: Lucide.BookOpenText,
+                label: l10n.aboutPageOpenSourceLicenses,
+                // 用本应用自己的 iOS 风格页面，不用 Material 的 showLicensePage。
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const OpenSourceLicensesPage(),
+                  ),
                 ),
               ),
             ],

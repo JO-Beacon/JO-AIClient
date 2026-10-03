@@ -15,7 +15,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../core/providers/model_provider.dart';
 import '../../../core/providers/assistant_provider.dart';
-import '../../model/widgets/model_detail_sheet.dart';
+import '../../model/pages/model_spec_edit_page.dart';
 import '../../model/widgets/model_select_sheet.dart';
 import '../widgets/share_provider_sheet.dart';
 import '../widgets/provider_group_picker_sheet.dart';
@@ -66,6 +66,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
   final _saJsonCtrl = TextEditingController();
   bool _enabled = true;
   bool _useResp = false; // openai
+  bool _promptCacheKeyEnabled = false; // openai
   bool _vertexAI = false; // google
   bool _showApiKey = false; // 切换可见性
   bool _multiKeyEnabled = false; // 单/多 key 模式
@@ -101,6 +102,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     _baseCtrl.text = _cfg.baseUrl;
     _pathCtrl.text = _cfg.chatPath ?? '/chat/completions';
     _useResp = _cfg.useResponseApi ?? false;
+    _promptCacheKeyEnabled = _cfg.promptCacheKeyEnabled;
     _vertexAI = _cfg.vertexAI ?? false;
     _locationCtrl.text = _cfg.location ?? '';
     _projectCtrl.text = _cfg.projectId ?? '';
@@ -225,66 +227,64 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           Tooltip(
             message: l10n.providerDetailPageDeleteProviderTooltip,
             child: _TactileIconButton(
-                icon: Lucide.Trash2,
-                color: cs.error,
-                semanticLabel: l10n.providerDetailPageDeleteProviderTooltip,
-                size: 22,
-                onTap: () async {
-                  final assistantProvider = context.read<AssistantProvider>();
-                  final settings = context.read<SettingsProvider>();
-                  final chatService = context.read<ChatService>();
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: Text(l10n.providerDetailPageDeleteProviderTitle),
-                      content: Text(
-                        l10n.providerDetailPageDeleteProviderContent,
+              icon: Lucide.Trash2,
+              color: cs.error,
+              semanticLabel: l10n.providerDetailPageDeleteProviderTooltip,
+              size: 22,
+              onTap: () async {
+                final assistantProvider = context.read<AssistantProvider>();
+                final settings = context.read<SettingsProvider>();
+                final chatService = context.read<ChatService>();
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text(l10n.providerDetailPageDeleteProviderTitle),
+                    content: Text(l10n.providerDetailPageDeleteProviderContent),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: Text(l10n.providerDetailPageCancelButton),
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(false),
-                          child: Text(l10n.providerDetailPageCancelButton),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(true),
-                          child: Text(
-                            l10n.providerDetailPageDeleteButton,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: Text(
+                          l10n.providerDetailPageDeleteButton,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
                           ),
                         ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    // 清除引用此供应商的助手级模型选择
-                    try {
-                      for (final a in assistantProvider.assistants) {
-                        if (a.chatModelProvider == widget.keyName) {
-                          await assistantProvider.updateAssistant(
-                            a.copyWith(clearChatModel: true),
-                          );
-                        }
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  // 清除引用此供应商的助手级模型选择
+                  try {
+                    for (final a in assistantProvider.assistants) {
+                      if (a.chatModelProvider == widget.keyName) {
+                        await assistantProvider.updateAssistant(
+                          a.copyWith(clearChatModel: true),
+                        );
                       }
-                    } catch (_) {}
+                    }
+                  } catch (_) {}
 
-                    // 移除供应商配置及相关选择或置顶
-                    await chatService.clearConversationModelOverrides(
-                      providerKey: widget.keyName,
-                    );
-                    await settings.removeProviderConfig(widget.keyName);
-                    if (!context.mounted) return;
-                    showAppSnackBar(
-                      context,
-                      message: l10n.providerDetailPageProviderDeletedSnackbar,
-                      type: NotificationType.success,
-                    );
-                    Navigator.of(context).maybePop();
-                  }
-                },
-              ),
+                  // 移除供应商配置及相关选择或置顶
+                  await chatService.clearConversationModelOverrides(
+                    providerKey: widget.keyName,
+                  );
+                  await settings.removeProviderConfig(widget.keyName);
+                  if (!context.mounted) return;
+                  showAppSnackBar(
+                    context,
+                    message: l10n.providerDetailPageProviderDeletedSnackbar,
+                    type: NotificationType.success,
+                  );
+                  Navigator.of(context).maybePop();
+                }
+              },
             ),
+          ),
           const SizedBox(width: 12),
         ],
       ),
@@ -978,6 +978,20 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                   value: _aihubmixAppCodeEnabled,
                   onChanged: (v) {
                     setState(() => _aihubmixAppCodeEnabled = v);
+                    _save();
+                  },
+                ),
+              ),
+            if (_kind == ProviderKind.openai && !_cfg.isOAuth)
+              _iosRowWithHelp(
+                context,
+                label: l10n.providerDetailPagePromptCacheKeyTitle,
+                helpText: l10n.providerDetailPagePromptCacheKeyHelp,
+                trailing: IosSwitch(
+                  value: _promptCacheKeyEnabled,
+                  semanticLabel: l10n.providerDetailPagePromptCacheKeyTitle,
+                  onChanged: (value) {
+                    setState(() => _promptCacheKeyEnabled = value);
                     _save();
                   },
                 ),
@@ -2015,6 +2029,9 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
       useResponseApi: _kind == ProviderKind.openai
           ? _useResp
           : old.useResponseApi,
+      promptCacheKeyEnabled: _kind == ProviderKind.openai
+          ? _promptCacheKeyEnabled
+          : old.promptCacheKeyEnabled,
       vertexAI: _kind == ProviderKind.google ? _vertexAI : old.vertexAI,
       location: _kind == ProviderKind.google
           ? _locationCtrl.text.trim()
@@ -2248,7 +2265,8 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                   padding: compact ? iconButtonPadding : textButtonPadding,
                   colorScheme: cs,
                   onTap: () async {
-                    await showCreateModelSheet(
+                    // 统一走模型规格表单（支持三档类型，含图片）
+                    await showCreateModelSpecPage(
                       context,
                       providerKey: widget.keyName,
                     );
@@ -3881,10 +3899,10 @@ class _ModelCard extends StatelessWidget {
                     semanticLabel: l10n.providerDetailPageEditTooltip,
                     haptics: false,
                     onTap: () async {
-                      await showModelDetailSheet(
+                      await showModelSpecEditPage(
                         context,
                         providerKey: providerKey,
-                        modelId: modelId,
+                        modelKey: modelId,
                       );
                     },
                   ),

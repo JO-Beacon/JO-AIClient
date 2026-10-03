@@ -1,4 +1,5 @@
 import '../../../core/models/model_spec.dart';
+import 'package:Kelivo/core/services/model_spec/model_spec_resolver.dart';
 import 'context_usage_service.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
@@ -377,6 +378,9 @@ class MessageGenerationService {
       conversation: conversation,
       sourceMessages: messages,
       previewOnly: true,
+      nativePdfInput: ModelSpecResolver.instance
+          .spec(packed.cfg, modelId)
+          .supportsPdfInput,
     );
     return ContextAssemblyPreview.fromApiMessages(
       apiMessages: packed.apiMessages,
@@ -464,6 +468,9 @@ class MessageGenerationService {
     final workspaceAttachments = packed.workspaceAttachments;
     final cfg = packed.cfg;
 
+    final nativePdfInput = ModelSpecResolver.instance
+        .spec(cfg, modelId)
+        .supportsPdfInput;
     final sandboxDataFiles = BuiltInToolsHelper.sendsDataFilesToSandbox(
       cfg: cfg,
       modelId: modelId,
@@ -489,6 +496,7 @@ class MessageGenerationService {
               conversation: currentConversation,
               sourceMessages: messages,
               sandboxDataFiles: sandboxDataFiles,
+              nativePdfInput: nativePdfInput,
               workspaceAttachments: localAttachments,
             )
         ? processingMessageId
@@ -506,6 +514,7 @@ class MessageGenerationService {
             conversation: currentConversation,
             sourceMessages: messages,
             sandboxDataFiles: sandboxDataFiles,
+            nativePdfInput: nativePdfInput,
             workspaceAttachments: localAttachments,
           );
     } on AttachmentRequiresWorkspace catch (e) {
@@ -930,7 +939,9 @@ Iterable<({String mime, String uri})> _mediaRefsInApiMessages(
     )) {
       final explicit = ref.mime?.trim() ?? '';
       yield (
-        mime: explicit.isNotEmpty ? explicit : inferMediaMimeFromSource(ref.uri),
+        mime: explicit.isNotEmpty
+            ? explicit
+            : inferMediaMimeFromSource(ref.uri),
         uri: ref.uri,
       );
     }

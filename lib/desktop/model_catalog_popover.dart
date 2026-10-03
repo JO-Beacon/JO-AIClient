@@ -67,7 +67,8 @@ class _ModelCatalogPopoverOverlay extends StatefulWidget {
       _ModelCatalogPopoverOverlayState();
 }
 
-class _ModelCatalogPopoverOverlayState extends State<_ModelCatalogPopoverOverlay>
+class _ModelCatalogPopoverOverlayState
+    extends State<_ModelCatalogPopoverOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fadeIn;

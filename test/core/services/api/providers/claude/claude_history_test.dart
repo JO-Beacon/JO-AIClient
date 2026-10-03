@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_history.dart';
+import 'package:Kelivo/core/services/api/native_input_attachments.dart';
+import 'package:Kelivo/core/providers/settings_provider.dart';
+import 'package:Kelivo/core/services/model_spec/model_spec_resolver.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_role_normalizer.dart';
 import 'package:Kelivo/core/utils/multimodal_input_utils.dart';
 
@@ -10,11 +13,27 @@ void _resetPlaceholderConfig() {
   ClaudeFirstTurnPlaceholderConfig.text = claudeFirstTurnPlaceholder;
 }
 
+NativeInputAttachments _nativeInputs() {
+  final cfg = ProviderConfig(
+    id: 'anthropic',
+    name: 'Anthropic',
+    enabled: true,
+    apiKey: 'test-key',
+    baseUrl: 'https://api.anthropic.com',
+  );
+  return NativeInputAttachments(
+    config: cfg,
+    spec: ModelSpecResolver.instance.spec(cfg, 'claude-sonnet-4'),
+    protocol: NativeInputProtocol.claude,
+  );
+}
+
 void main() {
   test(
     'replays hosted server tool blocks without an orphan tool result',
     () async {
       final history = ClaudeHistory(
+        nativeInputs: _nativeInputs(),
         replayServerToolBlocks: true,
         skipRedactedThinkingBlocks: false,
       );
@@ -69,6 +88,7 @@ void main() {
     'drops a dangling hosted call when its result was never recorded',
     () async {
       final history = ClaudeHistory(
+        nativeInputs: _nativeInputs(),
         replayServerToolBlocks: true,
         skipRedactedThinkingBlocks: false,
       );
@@ -108,6 +128,7 @@ void main() {
 
   test('replays multiple recorded responses around a client result', () async {
     final history = ClaudeHistory(
+      nativeInputs: _nativeInputs(),
       replayServerToolBlocks: true,
       skipRedactedThinkingBlocks: false,
     );
@@ -152,6 +173,7 @@ void main() {
       ClaudeFirstTurnPlaceholderConfig.enabled = true;
       addTearDown(_resetPlaceholderConfig);
       final history = ClaudeHistory(
+        nativeInputs: _nativeInputs(),
         replayServerToolBlocks: true,
         skipRedactedThinkingBlocks: false,
       );
@@ -177,6 +199,7 @@ void main() {
     ClaudeFirstTurnPlaceholderConfig.enabled = true;
     addTearDown(_resetPlaceholderConfig);
     final history = ClaudeHistory(
+      nativeInputs: _nativeInputs(),
       replayServerToolBlocks: true,
       skipRedactedThinkingBlocks: false,
     );

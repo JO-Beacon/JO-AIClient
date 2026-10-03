@@ -2605,6 +2605,12 @@ class _MessageListViewState extends State<MessageListView> {
           ? (assistant?.name ?? 'Assistant')
           : null,
       assistantAvatar: useAssistAvatar ? (assistant?.avatar ?? '') : null,
+      // 下面两行是本仓库私有参数，1.2.7 基线合并（98ce1ac）时被整段删掉过，
+      // 造成「助手头像裁剪」与「重新生成时的中断提醒」双双静默失效：
+      // 界面不报错、文案也在，只是功能悄悄没了。两处都有测试钉住。
+      assistantAvatarTransform: useAssistAvatar
+          ? assistant?.avatarTransform
+          : null,
       showUserAvatar: presentation.showUserAvatar,
       showTokenStats: presentation.showTokenStats,
       canDeleteMessageAndFollowing: canDeleteMessageAndFollowing,
@@ -2613,6 +2619,7 @@ class _MessageListViewState extends State<MessageListView> {
           (widget.isPinnedIndicatorActive &&
               (message.id == widget.pinnedStreamingMessageId)),
       retryStatus: retryStatus,
+      conversationStreaming: widget.isConversationGenerating,
       reasoningText: (message.role == 'assistant') ? (r?.text ?? '') : null,
       reasoningExpanded: (message.role == 'assistant')
           ? (r?.expanded ?? false)

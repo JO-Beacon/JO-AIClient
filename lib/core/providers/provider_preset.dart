@@ -24,6 +24,7 @@ abstract final class ProviderPreset {
     'Zhipu AI',
     'Grok',
     'ByteDance',
+    'Vercel',
   ];
 
   /// 预设的显示名；只有几个厂商有本地化名字，其余直接用键名。

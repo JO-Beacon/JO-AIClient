@@ -124,7 +124,8 @@ Future<void> showShareProviderSheet(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               // 始终使用白色背景，确保深色模式下可见
-                              color: Colors.white, // color-gate: ignore（QR 可扫描性）
+                              color:
+                                  Colors.white, // color-gate: ignore（QR 可扫描性）
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: cs.outlineVariant.withValues(alpha: 0.2),

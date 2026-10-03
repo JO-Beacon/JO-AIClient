@@ -35,6 +35,7 @@ Future<Map<String, dynamic>> _readJsonBody(HttpRequest request) async {
 Future<List<Map<String, dynamic>>> _collectToolOnlyContinuationRequests({
   required bool useEvents,
   bool deepSeek = true,
+  Map<String, dynamic> modelOverrides = const <String, dynamic>{},
 }) async {
   final requests = <Map<String, dynamic>>[];
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -98,8 +99,9 @@ Future<List<Map<String, dynamic>>> _collectToolOnlyContinuationRequests({
     baseUrl: baseUrl,
     providerType: ProviderKind.openai,
     modelOverrides: {
-      modelId: const {
+      modelId: {
         'abilities': ['tool'],
+        ...modelOverrides,
       },
     },
   );
@@ -441,6 +443,42 @@ void main() {
               message['role'] == 'assistant' && message['tool_calls'] is List,
         );
         expect(assistantToolMessage.containsKey('reasoning_content'), isFalse);
+      });
+
+      test('工具续写的推理写进规格声明的回放字段'
+          '(${useEvents ? 'event pipeline' : 'legacy pipeline'})', () async {
+        // 契约测试：规格声明的回放字段就是出站请求里那个键。
+        // 注意两点：
+        // 1. 必须校验请求里**全部** assistant 消息（用 firstWhere 只取第一条会漏掉工具续写新建的那条）。
+        // 2. 这条测试**无法区分** `_buildAssistantToolCallMessage` 里那段"参数 vs 写死"的差异——
+        //    请求组装时会做一次归一（把 reasoning_content / reasoning 映射到规格字段并删掉
+        //    reasoning_content，见 chat_completions_api.dart 该分支），把写死的值改回来。
+        //    它钉的是最终可观察的契约，不是那处形状对齐的护栏。
+        final requests = await _collectToolOnlyContinuationRequests(
+          useEvents: useEvents,
+          modelOverrides: const {
+            'reasoning': {'replay': 'toolTurns', 'replayField': 'reasoning'},
+          },
+        );
+
+        expect(requests, hasLength(2));
+        final messages = (requests[1]['messages'] as List).cast<Map>();
+        final assistants = messages
+            .where((message) => message['role'] == 'assistant')
+            .toList();
+        expect(assistants, isNotEmpty);
+        for (final assistant in assistants) {
+          expect(
+            assistant.containsKey('reasoning_content'),
+            isFalse,
+            reason: '规格声明回放到 reasoning，不得写死 reasoning_content：$assistant',
+          );
+        }
+        expect(
+          assistants.any((assistant) => assistant.containsKey('reasoning')),
+          isTrue,
+          reason: '工具续写的助手消息应带上 reasoning',
+        );
       });
     }
 

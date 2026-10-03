@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:Kelivo/core/services/api/native_input_attachments.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,18 @@ import 'package:Kelivo/core/services/workspace/workspace_tools_service.dart';
 import 'package:Kelivo/utils/mcp_structured_image.dart';
 
 import 'support/collect_generation.dart';
+
+final _nativeInputs = NativeInputAttachments(
+  config: ProviderConfig(
+    id: 'test',
+    enabled: true,
+    name: 'test',
+    apiKey: '',
+    baseUrl: 'https://api.example.com/v1',
+  ),
+  spec: ModelSpec(id: 'test', displayName: 'test'),
+  protocol: NativeInputProtocol.chatCompletions,
+);
 
 enum _Api { chat, responses, claude, vertexClaude, gemini, gemini3 }
 
@@ -564,6 +577,7 @@ void main() {
         uri,
       ).writeAsBytes(img.encodePng(img.Image(width: 2, height: 2)));
       final messages = await buildOpenAIChatCompletionMessages(
+        nativeInputs: _nativeInputs,
         [
           {
             'role': 'tool',

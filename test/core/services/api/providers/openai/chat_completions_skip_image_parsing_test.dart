@@ -1,11 +1,26 @@
 import 'package:Kelivo/core/services/api/providers/openai/chat_completions_api.dart';
+import 'package:Kelivo/core/services/api/native_input_attachments.dart';
+import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/models/model_spec.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+final _nativeInputs = NativeInputAttachments(
+  config: ProviderConfig(
+    id: 'test',
+    enabled: true,
+    name: 'test',
+    apiKey: '',
+    baseUrl: 'https://api.example.com/v1',
+  ),
+  spec: ModelSpec(id: 'test', displayName: 'test'),
+  protocol: NativeInputProtocol.chatCompletions,
+);
 
 void main() {
   test('skipImageParsing leaves markdown images as plain text', () async {
     const raw = 'see ![x](data:image/png;base64,abc) later';
     final messages = await buildOpenAIChatCompletionMessages(
+      nativeInputs: _nativeInputs,
       [
         <String, dynamic>{'role': 'user', 'content': raw},
       ],
@@ -23,6 +38,7 @@ void main() {
   test('markdown images are extracted when parsing is enabled', () async {
     const raw = 'see ![x](data:image/png;base64,abc) later';
     final messages = await buildOpenAIChatCompletionMessages(
+      nativeInputs: _nativeInputs,
       [
         <String, dynamic>{'role': 'user', 'content': raw},
       ],
@@ -46,6 +62,7 @@ void main() {
     () async {
       const raw = 'doc ![pic](https://example.invalid/pic.jpg) end';
       final messages = await buildOpenAIChatCompletionMessages(
+        nativeInputs: _nativeInputs,
         [
           <String, dynamic>{'role': 'user', 'content': raw},
         ],

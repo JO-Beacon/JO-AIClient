@@ -1,3 +1,9 @@
+/// Gemini 3 (AI Studio + Vertex) allows built-in tools to coexist with
+/// `function_declarations`. Earlier generations mutually exclude them.
+bool supportsMixedBuiltInAndFunctionTools(String upstreamModelId) {
+  return upstreamModelId.toLowerCase().contains('gemini-3');
+}
+
 bool shouldAttachGeminiFunctionCallingConfig(List<Map<String, dynamic>> tools) {
   for (final tool in tools) {
     if (!tool.containsKey('function_declarations')) continue;
@@ -7,7 +13,7 @@ bool shouldAttachGeminiFunctionCallingConfig(List<Map<String, dynamic>> tools) {
   return false;
 }
 
-/// [tools] 是否同时包含内置工具和非空的 function_declarations。
+/// Whether [tools] contains both built-in tools and non-empty function_declarations.
 bool hasBuiltInAndFunctionDeclarations(List<Map<String, dynamic>> tools) {
   bool hasBuiltIn = false;
   bool hasFuncDecls = false;
@@ -25,12 +31,16 @@ bool hasBuiltInAndFunctionDeclarations(List<Map<String, dynamic>> tools) {
   return hasBuiltIn && hasFuncDecls;
 }
 
-/// 为 Gemini API 请求构建 `toolConfig` map。
+/// Builds the `toolConfig` map for Gemini API requests.
 ///
-/// 内置工具与自定义工具组合时的 Gemini 3：
-///   - VALIDATED 模式（服务端工具调用不支持 AUTO）；includeServerSideToolInvocations: true
+/// Gemini 3 with combined built-in + custom tools:
+///   - VALIDATED mode (AUTO not supported with server-side tool invocations)
+///   - includeServerSideToolInvocations: true
 ///
-/// 其他包含 function_declarations 的情况：AUTO 模式（现有行为）。无需 toolConfig 时返回 null。
+/// All other cases with function_declarations:
+///   - AUTO mode (existing behavior)
+///
+/// Returns null if no toolConfig is needed.
 Map<String, dynamic>? buildGeminiToolConfig({
   required List<Map<String, dynamic>> tools,
   required bool isGemini3,

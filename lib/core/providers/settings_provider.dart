@@ -6073,6 +6073,8 @@ class ProviderConfig {
   // Anthropic/OpenRouter Claude 针对稳定系统提示词的提示词缓存。
   final bool? claudePromptCachingEnabled;
   final String? claudePromptCachingTtl;
+  // 仅 OpenAI：把会话 ID 作为 prompt_cache_key 发出去，提高缓存命中。
+  final bool promptCacheKeyEnabled;
 
   static const String claudePromptCachingTtl5m = '5m';
   static const String claudePromptCachingTtl1h = '1h';
@@ -6117,6 +6119,7 @@ class ProviderConfig {
     this.providerType,
     this.chatPath,
     this.useResponseApi,
+    this.promptCacheKeyEnabled = false,
     this.vertexAI,
     this.location,
     this.projectId,
@@ -6159,6 +6162,7 @@ class ProviderConfig {
     ProviderKind? providerType,
     String? chatPath,
     bool? useResponseApi,
+    bool? promptCacheKeyEnabled,
     bool? vertexAI,
     String? location,
     String? projectId,
@@ -6198,6 +6202,7 @@ class ProviderConfig {
     providerType: providerType ?? this.providerType,
     chatPath: chatPath ?? this.chatPath,
     useResponseApi: useResponseApi ?? this.useResponseApi,
+    promptCacheKeyEnabled: promptCacheKeyEnabled ?? this.promptCacheKeyEnabled,
     vertexAI: vertexAI ?? this.vertexAI,
     location: location ?? this.location,
     projectId: projectId ?? this.projectId,
@@ -6246,6 +6251,7 @@ class ProviderConfig {
     'providerType': providerType?.name,
     'chatPath': chatPath,
     'useResponseApi': useResponseApi,
+    'promptCacheKeyEnabled': promptCacheKeyEnabled,
     'vertexAI': vertexAI,
     'location': location,
     'projectId': projectId,
@@ -6300,6 +6306,7 @@ class ProviderConfig {
         : null,
     chatPath: json['chatPath'] as String?,
     useResponseApi: json['useResponseApi'] as bool?,
+    promptCacheKeyEnabled: json['promptCacheKeyEnabled'] as bool? ?? false,
     vertexAI: json['vertexAI'] as bool?,
     location: json['location'] as String?,
     projectId: json['projectId'] as String?,
@@ -6406,6 +6413,8 @@ class ProviderConfig {
     if (k.contains('tensdaq')) return 'https://tensdaq-api.x-aio.com/v1';
     if (k.contains('kelivoin')) return 'https://text.pollinations.ai/openai';
     if (k.contains('openrouter')) return 'https://openrouter.ai/api/v1';
+    if (k.contains('vercel')) return 'https://ai-gateway.vercel.sh/v1';
+    if (k.contains('vercel')) return 'https://ai-gateway.vercel.sh/v1';
     if (k.contains('aihubmix')) return 'https://aihubmix.com/v1';
     if (RegExp(r'qwen|aliyun|dashscope').hasMatch(k)) {
       return 'https://dashscope.aliyuncs.com/compatible-mode/v1';
@@ -6497,7 +6506,7 @@ class ProviderConfig {
           apiKeys: const [],
           keyManagement: const KeyManagementConfig(),
           aihubmixAppCodeEnabled: false,
-          balanceEnabled: _defaultBalanceEnabled(key),
+          balanceEnabled: false,
           balanceApiPath: _defaultBalanceApiPath(key),
           balanceResultPath: _defaultBalanceResultPath(key),
           claudePromptCachingEnabled: false,
@@ -6506,7 +6515,8 @@ class ProviderConfig {
         return ProviderConfig(
           id: key,
           enabled: defaultEnabled(key),
-          name: displayName ?? key,
+          name:
+              displayName ?? (lowerKey == 'vercel' ? 'Vercel AI Gateway' : key),
           apiKey: '',
           baseUrl: _defaultBase(key),
           providerType: ProviderKind.openai,
@@ -6523,7 +6533,7 @@ class ProviderConfig {
           apiKeys: const [],
           keyManagement: const KeyManagementConfig(),
           aihubmixAppCodeEnabled: lowerKey.contains('aihubmix'),
-          balanceEnabled: _defaultBalanceEnabled(key),
+          balanceEnabled: false,
           balanceApiPath: _defaultBalanceApiPath(key),
           balanceResultPath: _defaultBalanceResultPath(key),
           claudePromptCachingEnabled: false,
@@ -6555,14 +6565,5 @@ class ProviderConfig {
       return 'data.available_balance';
     }
     return 'data.total_usage';
-  }
-
-  static bool _defaultBalanceEnabled(String key) {
-    final k = key.toLowerCase();
-    return k.contains('aihubmix') ||
-        k.contains('deepseek') ||
-        k.contains('openrouter') ||
-        k.contains('vercel') ||
-        RegExp(r'kimi|moonshot|月之暗面').hasMatch(k);
   }
 }

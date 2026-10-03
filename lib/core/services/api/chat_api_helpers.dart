@@ -9,7 +9,6 @@ import '../../providers/model_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/api_key_manager.dart';
 import '../../utils/multimodal_input_utils.dart';
-import '../../utils/openai_model_compat.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import '../logging/flutter_logger.dart';
 import '../model_override_payload_parser.dart';
@@ -44,8 +43,7 @@ const String _aihubmixAppCode = 'ZKRT3588';
 /// 实例覆盖配置指定 `apiModelId` 时用于外发请求和供应商判断，否则使用逻辑 `modelId`。
 String apiModelId(ProviderConfig cfg, String modelId) {
   try {
-    final ov = _modelOverride(cfg, modelId);
-    return resolveApiModelIdOverride(ov, modelId);
+    return ModelSpecResolver.instance.spec(cfg, modelId).apiModelId ?? modelId;
   } catch (_) {}
   return modelId;
 }
@@ -193,34 +191,38 @@ Future<ParsedTextAndImages> parseTextAndImages(
       buf.write(fence);
       i += 3;
       // 跳过开围栏行剩余内容（语言标签等）。
-      while (i < raw.length && raw[i] != '\n') {
-        buf.write(raw[i]);
-        i++;
+      final openNl = raw.indexOf('\n', i);
+      if (openNl < 0) {
+        buf.write(raw.substring(i));
+        i = raw.length;
+        continue;
       }
+      buf.write(raw.substring(i, openNl + 1));
+      i = openNl + 1;
       // 推进到行首匹配的闭合围栏。
-      bool closed = false;
       while (i < raw.length) {
-        if (raw[i] == '\n') {
-          buf.write(raw[i]);
-          i++;
-          if (raw.startsWith(fence, i)) {
-            buf.write(fence);
-            i += 3;
-            // 跳过闭合围栏行的尾随内容。
-            while (i < raw.length && raw[i] != '\n') {
-              buf.write(raw[i]);
-              i++;
-            }
-            closed = true;
-            break;
+        if (raw.startsWith(fence, i)) {
+          buf.write(fence);
+          i += 3;
+          // 跳过闭合围栏行的尾随内容。
+          final closeNl = raw.indexOf('\n', i);
+          if (closeNl < 0) {
+            buf.write(raw.substring(i));
+            i = raw.length;
+          } else {
+            buf.write(raw.substring(i, closeNl));
+            i = closeNl;
           }
-        } else {
-          buf.write(raw[i]);
-          i++;
+          break;
         }
-      }
-      if (!closed) {
-        // 围栏未闭合，剩余文本已经按原样写入。
+        final lineNl = raw.indexOf('\n', i);
+        if (lineNl < 0) {
+          buf.write(raw.substring(i));
+          i = raw.length;
+          break;
+        }
+        buf.write(raw.substring(i, lineNl + 1));
+        i = lineNl + 1;
       }
       continue;
     }
@@ -235,19 +237,13 @@ Future<ParsedTextAndImages> parseTextAndImages(
       buf.write(openTicks);
       i += tickLen;
       // 推进到匹配的闭合反引号序列。
-      bool closedTick = false;
-      while (i < raw.length) {
-        if (raw.startsWith(openTicks, i)) {
-          buf.write(openTicks);
-          i += tickLen;
-          closedTick = true;
-          break;
-        }
-        buf.write(raw[i]);
-        i++;
-      }
-      if (!closedTick) {
-        // 行内代码未闭合，内容已经按原样写入。
+      final close = raw.indexOf(openTicks, i);
+      if (close < 0) {
+        buf.write(raw.substring(i));
+        i = raw.length;
+      } else {
+        buf.write(raw.substring(i, close + tickLen));
+        i = close + tickLen;
       }
       continue;
     }
@@ -663,202 +659,9 @@ Map<String, dynamic> cleanSchemaForGemini(
   return result;
 }
 
-bool shouldParseMarkdownImages(String raw, {bool skipImageParsing = false}) {
+bool shouldParseMarkdownImages(String raw, {required bool skipImageParsing}) {
   if (skipImageParsing) return false;
-  return RegExp(r'!\[[^\]]*\]\([^)]+\)').hasMatch(raw);
-}
-
-const String geminiDummyThoughtSignature =
-    'context_engineering_is_the_way_to_go';
-final RegExp _geminiThoughtSigComment = RegExp(
-  r'<!--\s*gemini_thought_signatures:(.*?)-->',
-  dotAll: true,
-);
-
-final class GeminiSignatureMeta {
-  const GeminiSignatureMeta({
-    required this.cleanedText,
-    this.textKey,
-    this.textValue,
-    this.images = const <Map<String, dynamic>>[],
-  });
-
-  final String cleanedText;
-  final String? textKey;
-  final dynamic textValue;
-  final List<Map<String, dynamic>> images;
-
-  bool get hasText => (textKey ?? '').isNotEmpty && textValue != null;
-  bool get hasImages => images.isNotEmpty;
-  bool get hasAny => hasText || hasImages;
-}
-
-GeminiSignatureMeta extractGeminiThoughtMeta(String raw) {
-  final match = _geminiThoughtSigComment.firstMatch(raw);
-  if (match == null) return GeminiSignatureMeta(cleanedText: raw);
-  try {
-    final data = (jsonDecode((match.group(1) ?? '').trim()) as Map)
-        .cast<String, dynamic>();
-    String? textKey;
-    dynamic textValue;
-    final text = data['text'];
-    if (text is Map) {
-      textKey = (text['k'] ?? text['key'])?.toString();
-      textValue = text['v'] ?? text['val'];
-      if (textKey?.trim().isEmpty == true) textKey = null;
-    }
-    final images = <Map<String, dynamic>>[];
-    final imageList = data['images'];
-    if (imageList is List) {
-      for (final item in imageList) {
-        if (item is! Map) continue;
-        final key = (item['k'] ?? item['key'])?.toString() ?? '';
-        final value = item['v'] ?? item['val'];
-        if (key.isNotEmpty && value != null) images.add({'k': key, 'v': value});
-      }
-    }
-    return GeminiSignatureMeta(
-      cleanedText: raw.replaceRange(match.start, match.end, '').trimRight(),
-      textKey: textKey,
-      textValue: textValue,
-      images: images,
-    );
-  } catch (_) {
-    return GeminiSignatureMeta(cleanedText: raw);
-  }
-}
-
-String buildGeminiThoughtSigComment({
-  String? textKey,
-  dynamic textValue,
-  List<Map<String, dynamic>> imageSigs = const <Map<String, dynamic>>[],
-}) {
-  final images = imageSigs
-      .where(
-        (item) =>
-            (item['k'] ?? '').toString().isNotEmpty && item.containsKey('v'),
-      )
-      .toList();
-  final hasText = (textKey ?? '').isNotEmpty && textValue != null;
-  if (!hasText && images.isEmpty) return '';
-  final payload = <String, dynamic>{
-    if (hasText) 'text': {'k': textKey, 'v': textValue},
-    if (images.isNotEmpty) 'images': images,
-  };
-  return '\n<!-- gemini_thought_signatures:${jsonEncode(payload)} -->';
-}
-
-void applyGeminiThoughtSignatures(
-  GeminiSignatureMeta meta,
-  List<Map<String, dynamic>> parts, {
-  bool attachDummyWhenMissing = false,
-}) {
-  if (meta.hasAny) {
-    if (meta.hasText) {
-      for (final part in parts) {
-        if (part.containsKey('text')) {
-          part[meta.textKey!] = meta.textValue;
-          break;
-        }
-      }
-    }
-    if (meta.hasImages) {
-      var index = 0;
-      for (final part in parts) {
-        if (index >= meta.images.length) break;
-        if (part.containsKey('inline_data') || part.containsKey('inlineData')) {
-          final signature = meta.images[index++];
-          final key = (signature['k'] ?? '').toString();
-          if (key.isNotEmpty && signature['v'] != null) {
-            part[key] = signature['v'];
-          }
-        }
-      }
-    }
-  } else if (attachDummyWhenMissing) {
-    var inlineFound = false;
-    var textTagged = false;
-    for (final part in parts) {
-      final hasText = part.containsKey('text');
-      final hasInline =
-          part.containsKey('inline_data') || part.containsKey('inlineData');
-      if (!hasInline) continue;
-      inlineFound = true;
-      part.putIfAbsent('thoughtSignature', () => geminiDummyThoughtSignature);
-      if (hasText && !textTagged) textTagged = true;
-    }
-    if (inlineFound && !textTagged) {
-      for (final part in parts) {
-        if (part.containsKey('text')) {
-          part.putIfAbsent(
-            'thoughtSignature',
-            () => geminiDummyThoughtSignature,
-          );
-          break;
-        }
-      }
-    }
-  }
-}
-
-String collectThoughtSigCommentFromParts(List<dynamic> parts) {
-  String? textKey;
-  dynamic textValue;
-  final images = <Map<String, dynamic>>[];
-  for (final part in parts) {
-    if (part is! Map) continue;
-    String? key;
-    dynamic value;
-    if (part.containsKey('thoughtSignature')) {
-      key = 'thoughtSignature';
-      value = part['thoughtSignature'];
-    } else if (part.containsKey('thought_signature')) {
-      key = 'thought_signature';
-      value = part['thought_signature'];
-    }
-    final hasInline =
-        part['inlineData'] is Map ||
-        part['inline_data'] is Map ||
-        part['fileData'] is Map ||
-        part['file_data'] is Map;
-    // 与流式解码器同一条判据：认 `text` 这个键，不要求正文非空。
-    // 内置工具轮次先返回的 toolCall／toolResponse part 没有该键，自然被跳过；
-    // Gemini 3 正文为空但带签名的尾部 part 则会被正确收下。
-    final isTextPart =
-        part.containsKey('text') &&
-        !hasInline &&
-        part['thought'] != true &&
-        part['functionCall'] is! Map;
-    if (isTextPart && key != null && value != null && textKey == null) {
-      textKey = key;
-      textValue = value;
-    }
-    if (hasInline && key != null && value != null) {
-      images.add({'k': key, 'v': value});
-    }
-  }
-  return buildGeminiThoughtSigComment(
-    textKey: textKey,
-    textValue: textValue,
-    imageSigs: images,
-  );
-}
-
-List<String> extractYouTubeUrls(String text) {
-  final regex = RegExp(
-    r'(https?://(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/|embed/)|youtu\.be/)[a-zA-Z0-9_-]+(?:[?&][^\s<>()]*)?)',
-    caseSensitive: false,
-  );
-  final result = <String>[];
-  final seen = <String>{};
-  for (final match in regex.allMatches(text)) {
-    var url = (match.group(1) ?? '').trim();
-    while (url.isNotEmpty && '.,;:!?)"]}'.contains(url[url.length - 1])) {
-      url = url.substring(0, url.length - 1);
-    }
-    if (url.isNotEmpty && seen.add(url)) result.add(url);
-  }
-  return result;
+  return raw.contains('![') && raw.contains('](');
 }
 
 class ImageRef {

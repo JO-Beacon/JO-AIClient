@@ -11,7 +11,7 @@ import '../../../core/providers/assistant_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../icons/lucide_adapter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'model_detail_sheet.dart';
+import '../pages/model_spec_edit_page.dart';
 import '../../provider/pages/provider_detail_page.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/brand_assets.dart';
@@ -1430,10 +1430,10 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
           onTap: () =>
               Navigator.of(context).pop(ModelSelection(m.providerKey, m.id)),
           onLongPress: () async {
-            await showModelDetailSheet(
+            await showModelSpecEditPage(
               context,
               providerKey: m.providerKey,
-              modelId: m.id,
+              modelKey: m.id,
             );
             if (mounted) {
               _isLoading = true;

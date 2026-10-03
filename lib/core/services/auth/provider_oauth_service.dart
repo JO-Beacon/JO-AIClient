@@ -392,6 +392,7 @@ class ProviderOAuthService extends ChangeNotifier {
         existing: overrides[model.id],
         model: model,
         reasoning: oauthDiscoveredReasoning(provider, row),
+        contextWindow: _oauthContextWindow(row),
         extra: {
           if (provider == OAuthProvider.kimi)
             'oauthProtocol': kimiOAuthProtocol(row),
@@ -523,6 +524,7 @@ Map<String, dynamic> mergeOAuthModelOverride({
   required Object? existing,
   required ModelSpec model,
   ReasoningSpecOverride? reasoning,
+  int? contextWindow,
   Map<String, dynamic> extra = const {},
 }) {
   final current = existing is Map
@@ -538,6 +540,7 @@ Map<String, dynamic> mergeOAuthModelOverride({
         output: List<Modality>.from(model.output),
         abilities: List<ModelAbility>.from(model.abilities),
         reasoning: _mergeReasoningOverride(current.reasoning, reasoning),
+        contextWindow: contextWindow,
         extra: nextExtra,
       )
       .toJson();
@@ -609,12 +612,21 @@ String? _oauthDefaultLevel(Map<String, dynamic> row) {
   return null;
 }
 
+int? _oauthContextWindow(Map<String, dynamic> row) {
+  final value = oauthNumber(row['context_window']);
+  if (value == null || value <= 0 || value != value.truncateToDouble()) {
+    return null;
+  }
+  return value.toInt();
+}
+
 ModelSpec _oauthDiscoveredSpec(ModelSpec resolved, Map<String, dynamic> row) {
   final imageIn =
       row['supports_image_in'] == true ||
       (row['input_modalities'] as List? ?? const []).contains('image');
   final support = oauthRowReasoningSupport(row);
   return resolved.copyWith(
+    contextWindow: _oauthContextWindow(row),
     input: <Modality>[...resolved.input, if (imageIn) Modality.image],
     abilities: <ModelAbility>[
       ...resolved.abilities.where(
@@ -627,14 +639,28 @@ ModelSpec _oauthDiscoveredSpec(ModelSpec resolved, Map<String, dynamic> row) {
 }
 
 class _OAuthModelInfo extends ModelSpec {
+  // 上游没有这层包装，它直接把发现出的完整规格交出去。这里把 ModelSpec 的
+  // 全部字段转发过去，避免"账号登录发现的模型"丢掉目录里给的参数。
   _OAuthModelInfo({required this.row, required ModelSpec base})
     : super(
         id: base.id,
+        apiModelId: base.apiModelId,
         displayName: base.displayName,
         type: base.type,
         input: base.input,
         output: base.output,
         abilities: base.abilities,
+        reasoning: base.reasoning,
+        sampling: base.sampling,
+        contextWindow: base.contextWindow,
+        maxOutput: base.maxOutput,
+        pricing: base.pricing,
+        headers: base.headers,
+        body: base.body,
+        builtInTools: base.builtInTools,
+        dynamicWebSearch: base.dynamicWebSearch,
+        remoteImageUrls: base.remoteImageUrls,
+        promptCacheControl: base.promptCacheControl,
       );
   final Map<String, dynamic> row;
 }

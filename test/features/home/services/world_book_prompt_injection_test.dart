@@ -677,7 +677,10 @@ void main() {
           'content': 'TOP',
         });
         expect(messages[messages.length - 2]['content'], contains('BOTTOM'));
-        expect(withoutTags(messages.last), {'role': 'user', 'content': 'hello'});
+        expect(withoutTags(messages.last), {
+          'role': 'user',
+          'content': 'hello',
+        });
       });
     },
   );

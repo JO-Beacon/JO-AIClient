@@ -49,6 +49,8 @@ final class BusinessSettingsMerger {
     BusinessSnapshot existing,
     BusinessSnapshot incoming, {
     required Set<String> incomingKeys,
+    Map<String, int>? localPreferenceUpdatedAt,
+    DateTime? packageCreatedAtUtc,
   }) {
     final effectiveIncomingKeys = <String>{...incomingKeys};
     if (incoming.preferences.containsKey(_activeIdsByAssistantKey)) {
@@ -141,11 +143,34 @@ final class BusinessSettingsMerger {
           imported as String,
         );
       } else {
-        preferences.putIfAbsent(key, () => imported);
+        // 本机**没有**这个键 → 补缺（与原行为一致）；
+        // 本机**有**这介键 → **后改的保留**：仅当备份这个键的时刻（= 本包导出时刻）
+        // **严格晚于**本机该键的改动时刻时，才采用备份值。
+        // 拿不到时间时维持原行为（本机优先）——不引入无声替换。
+        final absentLocally = !preferences.containsKey(key);
+        if (absentLocally ||
+            _incomingPreferenceIsNewer(
+              localMicros: localPreferenceUpdatedAt?[key],
+              packageCreatedAtUtc: packageCreatedAtUtc,
+            )) {
+          preferences[key] = imported;
+        }
       }
     }
 
     return BusinessSnapshot(entities: entities, preferences: preferences);
+  }
+
+  /// 备份是否严格比本机更新：两侧时间都要有，且备份更晚。
+  ///
+  /// 本机侧是本键的 `updated_at`（微秒），备份侧是本包的导出时刻；
+  /// 一一列不可比、缺任一侧时不采用备份值（保持本机优先的原行为）。
+  static bool _incomingPreferenceIsNewer({
+    required int? localMicros,
+    required DateTime? packageCreatedAtUtc,
+  }) {
+    if (localMicros == null || packageCreatedAtUtc == null) return false;
+    return packageCreatedAtUtc.toUtc().microsecondsSinceEpoch > localMicros;
   }
 
   static List<BusinessEntityValue> _mergeAssistants(

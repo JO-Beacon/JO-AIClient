@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.os.StatFs
 import android.provider.DocumentsContract
+import android.webkit.MimeTypeMap
 import android.provider.OpenableColumns
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
@@ -20,6 +21,13 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.OutputStream
 import java.util.concurrent.Executors
+import java.util.Locale
+
+/** 保存对话框的 MIME 类型：Dart 未指定时按扩展名推断。 */
+internal fun fileSaveMimeType(fileName: String): String =
+    MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(File(fileName).extension.lowercase(Locale.ROOT))
+        ?: "application/octet-stream"
 
 class MainActivity : FlutterActivity() {
     private val kelivo get() = application as KelivoApplication
@@ -195,9 +203,9 @@ class MainActivity : FlutterActivity() {
         fileSaveChannel?.setMethodCallHandler(null)
         deviceStorageChannel?.setMethodCallHandler(null)
         highRefreshRate.dispose()
-        pendingSaveResult?.error("cancelled", "The file picker was closed.", null)
-        pendingSaveResult = null
-        pendingSaveSourcePath = null
+        finishPendingSave(pendingSaveResult) {
+            it.error("cancelled", "The file picker was closed.", null)
+        }
         val stream = pendingWritableStream
         val uri = pendingWritableUri
         if (stream != null && uri != null) {
@@ -247,7 +255,7 @@ class MainActivity : FlutterActivity() {
         }
 
         val args = arguments as? Map<*, *>
-        val rawSourcePath = args?.get("sourcePath")?.toString()?.trim().orEmpty()
+        val rawSourcePath = (args?.get("sourcePath") as? String).orEmpty()
         if (rawSourcePath.isEmpty()) {
             result.error("invalid_args", "Missing sourcePath.", null)
             return
@@ -259,10 +267,10 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val suggestedFileName = args?.get("fileName")?.toString()?.trim().takeUnless { it.isNullOrEmpty() }
+        val suggestedFileName = (args?.get("fileName") as? String).takeUnless { it.isNullOrEmpty() }
             ?: sourceFile.name
         val mimeType = args?.get("mimeType")?.toString()?.trim().takeUnless { it.isNullOrEmpty() }
-            ?: DEFAULT_DOCUMENT_MIME_TYPE
+            ?: fileSaveMimeType(sourceFile.name)
 
         pendingSaveResult = result
         pendingSaveSourcePath = sourceFile.absolutePath
@@ -276,10 +284,7 @@ class MainActivity : FlutterActivity() {
             }
             startActivityForResult(intent, CREATE_DOCUMENT_REQUEST_CODE)
         } catch (e: ActivityNotFoundException) {
-            pendingSaveResult = null
-            pendingSaveSourcePath = null
-            pendingSaveFileName = null
-            result.error("launch_failed", e.message, null)
+            finishPendingSave(result) { it.error("launch_failed", e.message, null) }
         }
     }
 
@@ -297,7 +302,7 @@ class MainActivity : FlutterActivity() {
         }
 
         val mimeType = args?.get("mimeType")?.toString()?.trim().takeUnless { it.isNullOrEmpty() }
-            ?: DEFAULT_DOCUMENT_MIME_TYPE
+            ?: fileSaveMimeType(fileName)
         pendingSaveResult = result
         pendingDirectWrite = true
         pendingSaveFileName = fileName
@@ -309,10 +314,7 @@ class MainActivity : FlutterActivity() {
             }
             startActivityForResult(intent, CREATE_DOCUMENT_REQUEST_CODE)
         } catch (e: ActivityNotFoundException) {
-            pendingSaveResult = null
-            pendingDirectWrite = false
-            pendingSaveFileName = null
-            result.error("launch_failed", e.message, null)
+            finishPendingSave(result) { it.error("launch_failed", e.message, null) }
         }
     }
 
@@ -427,14 +429,25 @@ class MainActivity : FlutterActivity() {
         return cleanupError
     }
 
+    // 所有调用都在主线程。先把这次请求登记清掉再回复，这样取消、完成或
+    // 迟到的后台线程都不会重复回复同一个请求。
+    private fun finishPendingSave(
+        expected: MethodChannel.Result?,
+        reply: (MethodChannel.Result) -> Unit,
+    ) {
+        if (expected == null || pendingSaveResult !== expected) return
+        pendingSaveResult = null
+        pendingSaveSourcePath = null
+        pendingSaveFileName = null
+        pendingDirectWrite = false
+        reply(expected)
+    }
+
     private fun handleSaveDestination(destUri: Uri?) {
         val result = pendingSaveResult ?: return
         if (pendingDirectWrite) {
-            pendingSaveResult = null
-            pendingDirectWrite = false
             if (destUri == null) {
-                pendingSaveFileName = null
-                result.success(null)
+                finishPendingSave(result) { it.success(null) }
                 return
             }
             try {
@@ -443,7 +456,7 @@ class MainActivity : FlutterActivity() {
                     ?: throw IllegalStateException("Unable to open destination file.")
                 pendingWritableStream = ParcelFileDescriptor.AutoCloseOutputStream(descriptor)
                 writableFileState = WritableFileState.OPEN
-                result.success(true)
+                finishPendingSave(result) { it.success(true) }
             } catch (e: Exception) {
                 try {
                     DocumentsContract.deleteDocument(contentResolver, destUri)
@@ -451,19 +464,15 @@ class MainActivity : FlutterActivity() {
                     // 保留导致目标文件打不开的那个错误。
                 }
                 pendingWritableUri = null
-                pendingSaveFileName = null
-                result.error("open_failed", e.message, null)
+                finishPendingSave(result) { it.error("open_failed", e.message, null) }
             }
             return
         }
         val sourcePath = pendingSaveSourcePath
         val suggestedFileName = pendingSaveFileName
 
-        if (destUri == null || sourcePath.isNullOrBlank()) {
-            pendingSaveResult = null
-            pendingSaveSourcePath = null
-            pendingSaveFileName = null
-            result.success(false)
+        if (destUri == null || sourcePath.isNullOrEmpty()) {
+            finishPendingSave(result) { it.success(false) }
             return
         }
 
@@ -476,18 +485,10 @@ class MainActivity : FlutterActivity() {
                 } ?: throw IllegalStateException("Unable to open destination stream.")
                 renameAutoAppendedZip(destUri, suggestedFileName)
 
-                runOnUiThread {
-                    pendingSaveResult = null
-                    pendingSaveSourcePath = null
-                    pendingSaveFileName = null
-                    result.success(true)
-                }
+                runOnUiThread { finishPendingSave(result) { it.success(true) } }
             } catch (e: Exception) {
                 runOnUiThread {
-                    pendingSaveResult = null
-                    pendingSaveSourcePath = null
-                    pendingSaveFileName = null
-                    result.error("save_failed", e.message, null)
+                    finishPendingSave(result) { it.error("save_failed", e.message, null) }
                 }
             }
         }.start()

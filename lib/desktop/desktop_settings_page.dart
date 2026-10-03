@@ -37,8 +37,8 @@ import 'dart:io' show Directory, File, Platform;
 import 'add_provider_dialog.dart' show showDesktopAddProviderDialog;
 import 'import_provider_dialog.dart' show showDesktopImportProviderDialog;
 import 'model_catalog_popover.dart' show showDesktopModelCatalogPopover;
-import 'model_edit_dialog.dart'
-    show showDesktopCreateModelDialog, showDesktopModelEditDialog;
+import 'model_spec_edit_dialog.dart'
+    show showDesktopCreateModelSpecDialog, showDesktopModelSpecEditDialog;
 // 使用统一模型选择器（桌面平台使用桌面对话框）
 import '../features/model/widgets/model_select_sheet.dart'
     show showModelSelector;

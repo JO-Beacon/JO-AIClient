@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第三方许可与声明 — JO-AIClient</title>
+<meta name="description" content="JO-AIClient 官网与客户端使用的第三方组件、图标与商标声明。">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="icon" type="image/svg+xml" href="icon-light.svg" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/svg+xml" href="icon-dark.svg" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)">
+<script>
+(function () {
+  try {
+    var pref = localStorage.getItem('jo-theme') || 'system';
+    var light = window.matchMedia('(prefers-color-scheme: light)').matches;
+    var effective = (pref === 'light' || (pref === 'system' && light)) ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', effective);
+    document.documentElement.setAttribute('data-theme-pref', pref);
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="styles.css?v=20261004a"><link rel="stylesheet" href="lucide-icons.css?v=20261004a"></head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="brand" href="index.html">
+      <span class="brand__mark" aria-hidden="true">
+        <img class="brand__ico brand__ico--light" src="icon-light.svg" width="26" height="26" alt=""><img class="brand__ico brand__ico--dark" src="icon-dark.svg" width="26" height="26" alt="">
+      </span>
+      <span class="brand__text">
+        <span class="brand__name">JO-AIClient</span>
+        <span class="brand__repo">JO-Beacon/JO-AIClient</span>
+      </span>
+    </a>
+
+    <div class="bar__end">
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="主题：跟随系统" title="主题：跟随系统（点击切换）">
+        <span class="lic lic-monitor theme-toggle__ico" data-ico="system"></span>
+        <span class="lic lic-sun theme-toggle__ico" data-ico="light"></span>
+        <span class="lic lic-moon theme-toggle__ico" data-ico="dark"></span>
+      </button>
+      <a class="btn btn--primary btn--sm" href="index.html">返回首页</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="section">
+    <div class="container">
+      <h1 class="sec-title">第三方许可与声明</h1>
+      <p class="sec-sub">本页列出 JO-AIClient 官网与客户端使用的第三方组件、图标与商标声明，供遵守各许可证与商标规范之用。</p>
+
+      <div class="licsec">
+        <h2 class="licsec__h">1. 本项目许可</h2>
+        <p class="licsec__p">JO-AIClient 是基于 <a href="https://github.com/Chevey339/kelivo" rel="noopener">Kelivo</a> 的非官方改版，按 <strong>GNU AGPL-3.0</strong> 发布，完整条款见仓库的 <a href="https://github.com/JO-Beacon/JO-AIClient/blob/main/LICENSE" rel="noopener">LICENSE</a>。原项目版权归原作者及贡献者所有；本改版不代表原版作者发布、维护或背书。本网站与客户端同属该仓库，同样按 AGPL-3.0 发布，源码公开可获取。</p>
+      </div>
+
+      <div class="licsec">
+        <h2 class="licsec__h">2. 图标：Lucide</h2>
+        <p class="licsec__p">本网站首屏的界面示意图与客户端界面均使用 <a href="https://lucide.dev" rel="noopener">Lucide</a> 图标集。网站以子集字体形式内嵌，仅包含实际用到的字形，由 <code>scripts/icons/gen_lucide_subset.py</code> 从依赖包生成；客户端通过 <code>lucide_icons_flutter</code> 使用同一套字形。</p>
+        <p class="licsec__p">下面保留 Lucide 的完整许可证文本（含来自 Feather 项目的部分图标所适用的 MIT 条款）。</p>
+        <pre class="lictext">ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+---
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre>
+      </div>
+
+      <div class="licsec">
+        <h2 class="licsec__h">3. 供应商名称与标识</h2>
+        <p class="licsec__p">客户端界面中会出现第三方 AI 供应商的名称与标识，仅用于标明“当前使用的是哪一家供应商”（指示性使用），不用于标识 JO-AIClient 自身的商品或服务，也不暗示任何隶属、赞助或背书关系。JO-AIClient 与上述供应商之间不存在隶属关系。相关名称与标识的权利归各自权利人所有；如需在其他场景使用，请遵循该权利人的品牌规范。</p>
+      </div>
+
+      <div class="licsec">
+        <h2 class="licsec__h">4. 客户端第三方组件</h2>
+        <p class="licsec__p">客户端由 Flutter 构建，随包分发的第三方组件（Flutter 框架、各 Dart 与平台依赖包等）的许可证与版权声明，可在应用内「设置 → 关于 → 开放源代码许可」中查看。</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container foot">
+    <div class="foot__brand">
+      <span class="brand__mark" aria-hidden="true">
+        <img class="brand__ico brand__ico--light" src="icon-light.svg" width="22" height="22" alt=""><img class="brand__ico brand__ico--dark" src="icon-dark.svg" width="22" height="22" alt="">
+      </span>
+      <span>JO-AIClient</span>
+    </div>
+    <p class="foot__line">
+      一个 AI 聊天助手，基于 Kelivo 的非官方改版，按 GNU AGPL-3.0 发布。
+      不代表原版作者发布、维护或背书。原项目版权归原作者及贡献者所有。
+    </p>
+    <nav class="foot__nav" aria-label="页脚导航">
+      <a href="index.html">首页</a>
+      <a href="https://github.com/JO-Beacon/JO-AIClient" rel="noopener">仓库 JO-Beacon/JO-AIClient</a>
+      <a href="https://github.com/JO-Beacon/JO-AIClient/blob/main/LICENSE" rel="noopener">AGPL-3.0 全文</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  var mql = window.matchMedia('(prefers-color-scheme: light)');
+  var order = ['system', 'light', 'dark'];
+  function readPref() { try { return localStorage.getItem('jo-theme') || 'system'; } catch (e) { return 'system'; } }
+  function label(pref) { return pref === 'light' ? '浅色' : (pref === 'dark' ? '深色' : '跟随系统'); }
+  function apply(pref, animate) {
+    var eff = (pref === 'light' || (pref === 'system' && mql.matches)) ? 'light' : 'dark';
+    root.setAttribute('data-theme-pref', pref);
+    if (animate) { root.classList.add('theme-anim'); void root.offsetWidth; window.setTimeout(function () { root.classList.remove('theme-anim'); }, 340); }
+    root.setAttribute('data-theme', eff);
+    btn.setAttribute('aria-label', '主题：' + label(pref));
+    btn.setAttribute('title', '主题：' + label(pref) + '（点击切换）');
+  }
+  btn.addEventListener('click', function () {
+    var next = order[(order.indexOf(readPref()) + 1) % order.length];
+    try { localStorage.setItem('jo-theme', next); } catch (e) {}
+    apply(next, true);
+  });
+  mql.addEventListener('change', function () { if (readPref() === 'system') apply('system', true); });
+  apply(readPref(), false);
+})();
+</script>
+</body>
+</html>

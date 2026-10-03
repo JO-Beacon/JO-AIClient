@@ -4,32 +4,38 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../../../../models/token_usage.dart';
-import '../../../../providers/model_provider.dart';
-import '../../../../providers/settings_provider.dart';
-import '../../../../utils/multimodal_input_utils.dart';
-import '../../../../../utils/app_directories.dart';
-import '../../../../../utils/markdown_media_sanitizer.dart';
-import '../../../../../utils/mcp_structured_image.dart';
-import '../../../../../utils/sandbox_path_resolver.dart';
-import '../../builtin_tools.dart';
-import '../../chat_api_helpers.dart';
-import '../../tool_result_content.dart';
-import '../../../model_spec/model_spec_resolver.dart';
-import '../../gemini_tool_config.dart';
-import '../../generation/tool_loop_runner.dart';
-import '../../google_service_account_auth.dart';
-import '../../stream/sse_framing.dart';
-import '../../stream/stream_chunk.dart';
-import '../../stream/stream_chunk_emit.dart';
-import '../../stream/stream_chunk_ids.dart';
-import 'google_decoder.dart';
+import '../../custom_request_merger.dart';
+import '../../../models/token_usage.dart';
+import '../../../providers/model_provider.dart';
+import '../../../providers/settings_provider.dart';
+import '../../../utils/multimodal_input_utils.dart';
+import '../../../../utils/app_directories.dart';
+import '../../../../utils/markdown_media_sanitizer.dart';
+import '../../../../utils/mcp_structured_image.dart';
+import '../../../../utils/sandbox_path_resolver.dart';
+import '../builtin_tools.dart';
+import '../chat_api_helpers.dart';
+import '../native_input_attachments.dart';
+import '../tool_result_content.dart';
+import '../../model_spec/model_spec_resolver.dart';
+import '../gemini_tool_config.dart';
+import '../reasoning/reasoning_dialects.dart';
+import '../generation/tool_loop_runner.dart';
+import '../google_service_account_auth.dart';
+import '../stream/sse_framing.dart';
+import '../stream/stream_chunk.dart';
+import '../stream/stream_chunk_emit.dart';
+import '../stream/stream_chunk_ids.dart';
+import 'google/google_decoder.dart';
 
-/// 构建 Gemini 工具数组，处理 Gemini 3 共存规则与 2.x 互斥规则。
+import 'google_gemini.dart';
+import 'google_vertex.dart';
+
+/// Builds the Gemini tools array, handling Gemini 3 coexistence vs 2.x mutual exclusion.
 ///
-/// Gemini 3 允许内置工具与 function_declarations（MCP）共存；Gemini 2.x 及更早版本中
-/// code_execution 互斥，search/url_context 不能与 MCP 同时使用。
-List<Map<String, dynamic>> buildGeminiToolsArray({
+/// Gemini 3: built-in tools can coexist with function_declarations (MCP).
+/// Gemini 2.x and below: code_execution is exclusive; search/url_context exclude MCP.
+List<Map<String, dynamic>> _buildGeminiToolsArray({
   required Set<String> builtIns,
   required bool allowCoexistence,
   List<Map<String, dynamic>>? geminiTools,
@@ -66,152 +72,6 @@ List<Map<String, dynamic>> buildGeminiToolsArray({
   return toolsArr;
 }
 
-bool _isGemma4Model(String modelId) {
-  return RegExp(
-    r'(^|[/:_-])gemma[-_]?4([._-]|$)',
-    caseSensitive: false,
-  ).hasMatch(modelId);
-}
-
-// 非文本 Gemini 变体不使用文本模型系列的思考协议，因此不能进入 pro/flash 分支。
-// 在这里提前排除也能避免下面模型族正则的 `-` 终止符吞掉后缀。
-final _gemini3NonTextSuffix = RegExp(
-  r'(^|[-_/])(image|tts|live)([-._:@/]|$)',
-  caseSensitive: false,
-);
-
-// Gemini 3.x Flash Image 和 Flash-Lite Image 支持思考等级，但只有 minimal（默认）和 high。
-// 其他图片模型（包括旧版 gemini-3-pro-image）继续使用原始预算分支。
-final _gemini3FlashImageId = RegExp(
-  r'gemini-3(?:\.\d+)?-flash(-lite)?-image([._:@/-]|$)',
-  caseSensitive: false,
-);
-
-// Gemini 3 模型族思考协议变化的版本阈值，集中命名便于后续版本调整。
-const _gemini3ProMediumMinor = 1; // pro 在 3.1 增加 medium
-const _gemini3FlashModernMinor = 5; // flash 从 3.5 起默认 medium，预算上限为 64K
-const _gemini3FlashNoMinimalMinor = 7; // flash 在 3.7 移除 minimal
-
-// 设置面板提供的预算档位：1024（轻量）、16000（中等）、32000（重度）。
-const _gemini3LowBudgetCeiling = 8000;
-const _gemini3MediumBudgetCeiling = 24000;
-
-final _gemini3FlashId = RegExp(
-  r'gemini-3(?:\.(?<minor>\d+))?-flash([._:@/-]|$)',
-  caseSensitive: false,
-);
-final _gemini3ProId = RegExp(
-  r'gemini-3(?:\.(?<minor>\d+))?-pro(-preview)?([._:@/-]|$)',
-  caseSensitive: false,
-);
-final _gemini3FlashLiteId = RegExp(
-  r'gemini-3(?:\.\d+)?-flash-lite([._:@/-]|$)',
-  caseSensitive: false,
-);
-
-// 获取 Gemini 3 id 后的次版本号；普通 `gemini-3-` 为 0，其他模型返回 null。
-// 按版本匹配可让未发布的 3.x 模型继续走 Gemini 3 分支，而不是回退到 Gemini 2.x。
-int? _gemini3Minor(String modelId, RegExp family) {
-  if (_gemini3NonTextSuffix.hasMatch(modelId)) return null;
-  final match = family.firstMatch(modelId);
-  if (match == null) return null;
-  return int.tryParse(match.namedGroup('minor') ?? '0') ?? 0;
-}
-
-int? _gemini3FlashMinor(String modelId) =>
-    _gemini3Minor(modelId, _gemini3FlashId);
-
-int? _gemini3ProMinor(String modelId) => _gemini3Minor(modelId, _gemini3ProId);
-
-bool _isGemini3TextModel(String modelId) {
-  return modelId.contains(
-    RegExp(r'gemini-3(?:\.\d+)?-(?!pro-image)', caseSensitive: false),
-  );
-}
-
-bool _shouldOmitGeminiSamplingParams(String modelId) {
-  return _isGemini3TextModel(modelId);
-}
-
-Map<String, dynamic> _googleThinkingConfig(
-  String upstreamModelId,
-  int? budget,
-) {
-  final off = isOff(budget);
-  if (_isGemma4Model(upstreamModelId)) {
-    // 官方开关是 thinkingLevel high/minimal。省略配置等于保持思考开启；
-    // 关闭必须发送 minimal。
-    // https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
-    if (off) {
-      return const <String, dynamic>{
-        'includeThoughts': false,
-        'thinkingLevel': 'minimal',
-      };
-    }
-    return const <String, dynamic>{
-      'includeThoughts': true,
-      'thinkingLevel': 'high',
-    };
-  }
-
-  if (_gemini3FlashImageId.hasMatch(upstreamModelId)) {
-    // 这里只有 minimal 和 high；轻量档位与 off 共用 minimal 下限。
-    // minimal 仍会思考，因此 off 只隐藏思考内容。
-    final level = !off && budget != null && budget >= _gemini3LowBudgetCeiling
-        ? 'high'
-        : 'minimal';
-    return {'includeThoughts': !off, 'thinkingLevel': level};
-  }
-
-  final proMinor = _gemini3ProMinor(upstreamModelId);
-  if (proMinor != null) {
-    // gemini-3-pro 只有 low 和 high，3.1 才增加 medium。
-    final hasMedium = proMinor >= _gemini3ProMediumMinor;
-    String level = 'high';
-    if (off) {
-      level = 'low';
-    } else if (budget != null && budget > 0) {
-      if (budget < _gemini3LowBudgetCeiling) {
-        level = 'low';
-      } else if (budget < _gemini3MediumBudgetCeiling && hasMedium) {
-        level = 'medium';
-      }
-    }
-    // Gemini 3 始终思考，因此 off 表示使用最低等级但隐藏思考内容。
-    return {'includeThoughts': !off, 'thinkingLevel': level};
-  }
-
-  final flashMinor = _gemini3FlashMinor(upstreamModelId);
-  if (flashMinor != null) {
-    // Flash 在 3.7 移除 minimal，因此最低等级改为 low。
-    final lowest = flashMinor >= _gemini3FlashNoMinimalMinor
-        ? 'low'
-        : 'minimal';
-    String level = _gemini3FlashLiteId.hasMatch(upstreamModelId)
-        ? lowest
-        : (flashMinor >= _gemini3FlashModernMinor ? 'medium' : 'high');
-    if (off) {
-      level = lowest;
-    } else if (budget != null && budget > 0) {
-      // 轻量（1024）-> low，中等（16000）-> medium，重度（32000）-> high。
-      if (budget < _gemini3LowBudgetCeiling) {
-        level = 'low';
-      } else if (budget < _gemini3MediumBudgetCeiling) {
-        level = 'medium';
-      } else {
-        level = 'high';
-      }
-    }
-    return {'includeThoughts': !off, 'thinkingLevel': level};
-  }
-  // Gemini 2.x 及更早版本使用 thinkingBudget。
-  if (off) return {'includeThoughts': false};
-  return {
-    'includeThoughts': true,
-    if (budget != null && budget >= 0) 'thinkingBudget': budget,
-  };
-}
-
 Map<String, dynamic>? _googleToolMetadata(Map<String, dynamic> message) {
   final metadata = message['metadata'];
   if (metadata is! Map) return null;
@@ -227,7 +87,7 @@ Map<String, dynamic>? _googleFunctionCallPartFromToolCall(Map toolCall) {
     if (google is Map) {
       final part = google['part'];
       if (part is Map && part['functionCall'] is Map) {
-        // 使用可变副本，调用方可能需要补写思考签名。
+        // Mutable copy: callers may need to backfill a thought signature.
         return Map<String, dynamic>.from(part);
       }
     }
@@ -250,8 +110,29 @@ Map<String, dynamic>? _googleFunctionCallPartFromToolCall(Map toolCall) {
   return part;
 }
 
-/// Gemini 3 会校验重放模型回合的首个 functionCall 分片必须携带思考签名；缺失时整个请求失败。
-/// 对没有持久化原始签名的旧历史或非流式响应，使用文档规定的占位签名保持兼容。
+/// The thought signatures a history message carries: the stored artifact
+/// under [multimodalInternalGeminiThoughtSignatureKey], or — for messages
+/// saved before the artifact existed — the comment still embedded in its text.
+GeminiSignatureMeta _geminiHistoryMeta(Map<String, dynamic> msg) {
+  final fromText = extractGeminiThoughtMeta((msg['content'] ?? '').toString());
+  return decodeGeminiThoughtSignature(
+        msg[multimodalInternalGeminiThoughtSignatureKey],
+        cleanedText: fromText.cleanedText,
+      ) ??
+      fromText;
+}
+
+/// A history message's text without any legacy signature comment.
+String _geminiHistoryText(Map<String, dynamic> msg) =>
+    extractGeminiThoughtMeta((msg['content'] ?? '').toString()).cleanedText;
+
+/// Gemini 3 requires at least one functionCall part of a replayed model turn
+/// to carry a thought signature (it signs only the first call of a parallel
+/// batch); none at all fails the whole request with "Function call is missing
+/// a thought_signature in functionCall parts".
+/// When the original signature was not persisted (legacy history, non-streaming
+/// responses), fall back to the documented placeholder so old conversations
+/// keep working.
 void _ensureGeminiFunctionCallThoughtSig(List<Map<String, dynamic>> parts) {
   for (final part in parts) {
     if (part['functionCall'] is! Map) continue;
@@ -261,7 +142,7 @@ void _ensureGeminiFunctionCallThoughtSig(List<Map<String, dynamic>> parts) {
     if (!hasSig) {
       part['thoughtSignature'] = geminiDummyThoughtSignature;
     }
-    return; // 只校验第一个 functionCall 分片。
+    return; // One signed functionCall satisfies the check.
   }
 }
 
@@ -317,28 +198,15 @@ List<Map<String, dynamic>> _googleApiContents(
 Map<String, dynamic>? _googleApiPart(Map part) {
   final out = Map<String, dynamic>.from(part);
   out.remove('id');
-  // 部分中转会发出无签名的空文本块，但回放时又拒绝它。
-  // 保留签名与其他字段的 part 即便文本为空也照常保留。
+  // Some relays emit unsigned empty text chunks but reject them on replay.
+  // Keep signatures and any other part fields intact, even with empty text.
   if (out.length == 1 && out['text'] == '') return null;
   return out;
 }
 
-bool _shouldRequestGoogleThoughts(
-  ProviderConfig config,
-  String modelId,
-  ModelSpec effective,
-) {
-  if (effective.abilities.contains(ModelAbility.reasoning)) return true;
-  final kind = ProviderConfig.classify(
-    config.id,
-    explicitType: config.providerType,
-  );
-  if (kind != ProviderKind.google) return false;
-  return apiModelId(config, modelId).toLowerCase().contains('gemini');
-}
-
-/// Gemini 会在没有 candidates 的帧中通过 `promptFeedback.blockReason` 报告提示级拦截。
-/// 将其作为流错误抛出，而不是当作空的正常完成。
+/// Gemini reports prompt-level blocks (safety filters etc.) in-band as
+/// `promptFeedback.blockReason` on a frame without candidates; surface those
+/// as a stream error instead of an empty "normal" completion.
 void _throwIfGeminiPromptBlocked(String data) {
   if (!data.contains('blockReason')) return;
   Object? decoded;
@@ -362,7 +230,10 @@ void _throwIfGeminiPromptBlocked(String data) {
   );
 }
 
-/// 输出内容过滤会以这些 `finishReason` 值结束候选并关闭流；否则生成中途拦截会看起来像短回复。
+/// Output-side content filtering ends the candidate with one of these
+/// `finishReason` values and then closes the stream like a regular
+/// completion, so a mid-generation block would otherwise just look like a
+/// short reply.
 const Set<String> _geminiBlockedFinishReasons = {
   'SAFETY',
   'RECITATION',
@@ -372,7 +243,8 @@ const Set<String> _geminiBlockedFinishReasons = {
   'IMAGE_SAFETY',
 };
 
-/// 将候选级内容过滤（例如 `finishReason: SAFETY`）作为流错误抛出，避免截断输出被正常持久化。
+/// Surfaces candidate-level content filtering (`finishReason: SAFETY` etc.)
+/// as a stream error so truncated output is not persisted as a normal finish.
 void _throwIfGeminiCandidateBlocked(String data) {
   if (!data.contains('finishReason')) return;
   Object? decoded;
@@ -397,13 +269,13 @@ void _throwIfGeminiCandidateBlocked(String data) {
   }
 }
 
-Stream<StreamChunk> sendGoogleStreamEvents(
+Stream<StreamChunk> sendGoogleStream(
   http.Client client,
   ProviderConfig config,
   String modelId,
   List<Map<String, dynamic>> messages, {
   List<String>? userImagePaths,
-  int? thinkingBudget,
+  ReasoningRequest reasoning = ReasoningRequest.auto,
   double? temperature,
   double? topP,
   int? maxTokens,
@@ -415,15 +287,42 @@ Stream<StreamChunk> sendGoogleStreamEvents(
   bool skipImageParsing = false,
   StreamRoundRunner? retryRound,
 }) async* {
+  // Check for Vertex AI Claude models (prefix "claude-")
+  // If it's a Claude model on Vertex, route to special handling
+  if ((config.vertexAI == true) &&
+      modelId.toLowerCase().startsWith('claude-')) {
+    yield* sendGoogleVertexClaudeStream(
+      client: client,
+      config: config,
+      modelId: modelId,
+      messages: messages,
+      userImagePaths: userImagePaths,
+      reasoning: reasoning,
+      temperature: temperature,
+      topP: topP,
+      maxTokens: maxTokens,
+      tools: tools,
+      onToolCall: onToolCall,
+      extraHeaders: extraHeaders,
+      extraBody: extraBody,
+      stream: stream,
+      skipImageParsing: skipImageParsing,
+      retryRound: retryRound,
+    );
+    return;
+  }
+
   final upstreamModelId = apiModelId(config, modelId);
-  final bool isGemini3 = upstreamModelId.toLowerCase().contains('gemini-3');
-  final bool persistGeminiThoughtSigs = isGemini3;
+  final bool mixedBuiltInAndFunctionTools =
+      supportsMixedBuiltInAndFunctionTools(upstreamModelId);
   final builtIns = builtInTools(config, modelId);
   final enableYoutube = builtIns.contains(BuiltInToolNames.youtube);
-  // 解析模型有效能力（包含模型覆盖配置）。
-  final effective = effectiveModelInfo(config, modelId);
-  final isReasoning = _shouldRequestGoogleThoughts(config, modelId, effective);
-  // 非流式路径使用 generateContent。
+  // Effective model features (includes user overrides)
+  final effective = ModelSpecResolver.instance.spec(config, modelId);
+  final bool persistGeminiThoughtSigs =
+      effective.reasoning.replay != ReasoningReplayPolicy.none;
+  final wantsImageOutput = effective.output.contains(Modality.image);
+  // Non-streaming path: use generateContent
   if (!stream) {
     final isVertex = config.vertexAI == true;
     final base = config.baseUrl.endsWith('/')
@@ -439,7 +338,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       url = '$base/models/$upstreamModelId:generateContent';
     }
 
-    // 将系统消息提取到 systemInstruction（Google Gemini API 推荐格式）。
+    // Extract system messages into systemInstruction (Google Gemini API best practice)
     String systemPrompt = '';
     final contents = <Map<String, dynamic>>[];
     for (int i = 0; i < messages.length; i++) {
@@ -465,9 +364,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       }
       if (roleRaw == 'assistant' && msg['tool_calls'] is List) {
         final parts = <Map<String, dynamic>>[];
-        final raw = extractGeminiThoughtMeta(
-          (msg['content'] ?? '').toString(),
-        ).cleanedText;
+        final raw = _geminiHistoryText(msg);
         if (raw.trim().isNotEmpty && raw.trim() != '\n\n') {
           parts.add({'text': raw});
         }
@@ -482,9 +379,16 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         if (parts.isNotEmpty) contents.add({'role': 'model', 'parts': parts});
         continue;
       }
-      final isLast = i == messages.length - 1;
+      final isLast = i == messages.lastIndexWhere((m) => m['role'] == 'user');
       final parts = <Map<String, dynamic>>[];
-      final meta = extractGeminiThoughtMeta((msg['content'] ?? '').toString());
+      parts.addAll(
+        await NativeInputAttachments(
+          config: config,
+          spec: effective,
+          protocol: NativeInputProtocol.gemini,
+        ).build(msg, userPaths: isLast ? userImagePaths : null),
+      );
+      final meta = _geminiHistoryMeta(msg);
       final raw = meta.cleanedText;
       final seenSources = <String>{};
       String normalizeSrc(String src) {
@@ -496,7 +400,9 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         }
       }
 
-      // 只做语义媒体检测，不识别自定义附件标记；附件来自结构化媒体路径、userImagePaths 或 Markdown 图片。
+      // Semantic media detection only - custom attachment markers are not
+      // recognized. Attachments arrive via structured media-path keys /
+      // userImagePaths, plus Markdown ![](...).
       final hasMarkdownImages = shouldParseMarkdownImages(
         raw,
         skipImageParsing: skipImageParsing,
@@ -504,17 +410,18 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       final internalMediaRefs = parseInternalMediaRefs(
         msg[multimodalInternalMediaPathsKey],
       );
-      // 消费用户与 assistant 历史消息中注入的媒体引用。
+      // Consume injected media refs for user and assistant history turns.
       final hasInternalMedia = internalMediaRefs.isNotEmpty;
       final hasAttachedImages =
           isLast && role == 'user' && (userImagePaths?.isNotEmpty == true);
       if (hasMarkdownImages || hasAttachedImages || hasInternalMedia) {
         final parsed = await parseTextAndImages(
           raw,
-          // Gemini API 目前无法直接拉取远程 http(s) 图片。
+          // Gemini API 目前无法直接拉取远程 http(s) 图片
           allowRemoteImages: false,
           allowLocalImages: true,
           keepRemoteMarkdownText: true,
+          skipImageParsing: skipImageParsing,
         );
         if (parsed.text.isNotEmpty) parts.add({'text': parsed.text});
         for (final ref in parsed.images) {
@@ -550,6 +457,13 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         if (supplementalRefs.isNotEmpty) {
           for (final mediaRef in supplementalRefs) {
             final p = mediaRef.uri;
+            final inputMime = mimeForInternalMediaRef(mediaRef);
+            if (role == 'user' &&
+                (isAudioMime(inputMime) ||
+                    isVideoMime(inputMime) ||
+                    isPdfMime(inputMime))) {
+              continue;
+            }
             final normalized = normalizeSrc(p);
             if (!seenSources.add(normalized)) continue;
             if (p.startsWith('data:')) {
@@ -576,11 +490,12 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       } else {
         if (raw.isNotEmpty) parts.add({'text': raw});
       }
-      // 按 Gemini 官方 API 格式将 YouTube URL 注入为 file_data，仅处理本次请求最后一条用户消息。
+      // YouTube URL ingestion as file_data parts (Gemini official API)
+      // Only inject on the last user message of this request.
       if (role == 'user' && isLast && enableYoutube) {
         final urls = extractYouTubeUrls(raw);
         for (final u in urls) {
-          // Vertex AI 的 file_data 需要 mime_type。
+          // Vertex AI requires mime_type for file_data
           if (isVertex) {
             parts.add({
               'file_data': {'file_uri': u, 'mime_type': 'video/*'},
@@ -602,7 +517,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       contents.add({'role': role, 'parts': parts});
     }
 
-    // 将 OpenAI 风格工具映射为 Gemini functionDeclarations（MCP）。
+    // Map OpenAI-style tools to Gemini functionDeclarations (MCP)
     List<Map<String, dynamic>>? geminiTools;
     if (tools != null && tools.isNotEmpty) {
       final decls = <Map<String, dynamic>>[];
@@ -652,27 +567,22 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       assistantHeaders: extraHeaders,
     );
 
-    final toolsArr = buildGeminiToolsArray(
+    final toolsArr = _buildGeminiToolsArray(
       builtIns: builtIns,
-      allowCoexistence: isGemini3,
+      allowCoexistence: mixedBuiltInAndFunctionTools,
       geminiTools: geminiTools,
     );
     final geminiToolConfig = buildGeminiToolConfig(
       tools: toolsArr,
-      isGemini3: isGemini3 && !isVertex,
+      isGemini3: mixedBuiltInAndFunctionTools && !isVertex,
     );
 
-    final thinkingConfig = isReasoning
-        ? _googleThinkingConfig(upstreamModelId, thinkingBudget)
-        : const <String, dynamic>{};
-    final defaultMaxOutputTokens = ModelSpecResolver.instance
-        .spec(config, modelId)
-        .maxOutput;
-    final omitSamplingParams = _shouldOmitGeminiSamplingParams(upstreamModelId);
     final generationConfig = <String, dynamic>{
-      if (maxTokens ?? defaultMaxOutputTokens case final resolvedMaxTokens?)
+      if (maxTokens ?? effective.maxOutput case final resolvedMaxTokens?)
         'maxOutputTokens': resolvedMaxTokens,
-      if (thinkingConfig.isNotEmpty) 'thinkingConfig': thinkingConfig,
+      if (temperature != null) 'temperature': temperature,
+      if (topP != null) 'topP': topP,
+      if (wantsImageOutput) 'responseModalities': ['TEXT', 'IMAGE'],
     };
 
     Map<String, dynamic> baseBody = {
@@ -683,15 +593,27 @@ Stream<StreamChunk> sendGoogleStreamEvents(
             {'text': systemPrompt},
           ],
         },
-      if (!omitSamplingParams && temperature != null)
-        'temperature': temperature,
-      if (!omitSamplingParams && topP != null) 'topP': topP,
       if (generationConfig.isNotEmpty) 'generationConfig': generationConfig,
       if (toolsArr.isNotEmpty) 'tools': toolsArr,
       if (geminiToolConfig != null) 'toolConfig': geminiToolConfig,
     };
+    final spec = effective;
+    applyReasoning(
+      baseBody,
+      spec,
+      reasoning,
+      transport: ReasoningTransport.geminiGenerateContent,
+    );
+    final resolution = resolveReasoning(spec, reasoning);
+    applySamplingPolicy(
+      baseBody,
+      spec,
+      resolution,
+      transport: ReasoningTransport.geminiGenerateContent,
+    );
+    // Custom body keys win over the reasoning dialect.
     final extraG = customBody(config, modelId, assistantBody: extraBody);
-    if (extraG.isNotEmpty) baseBody.addAll(extraG);
+    CustomRequestMerger.applyBody(baseBody, extraG);
 
     TokenUsage? totalUsage;
     List<Map<String, dynamic>> currentContents =
@@ -704,7 +626,6 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     yield* runProviderToolRounds(
       retryRound: retryRound,
       sendRound: () async* {
-        // 每轮请求开始前清空上一轮用量，避免 usageOf 取回旧值。
         totalUsage = null;
         pendingCalls = [];
         lastParts = [];
@@ -725,9 +646,8 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         try {
           final u = (obj['usageMetadata'] as Map?)?.cast<String, dynamic>();
           if (u != null) {
-            totalUsage = (totalUsage ?? const TokenUsage()).merge(
-              googleUsageFromMetadata(u),
-            );
+            final next = googleUsageFromMetadata(u);
+            if (next.hasReportedTokens) totalUsage = next.asSnapshot();
           }
         } catch (_) {}
         final candidates = (obj['candidates'] as List?) ?? const <dynamic>[];
@@ -775,7 +695,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
           ];
           return;
         }
-        // provider 托管的代码执行使用 ServerTool*，不使用 ToolCallResult。
+        // Provider-hosted code execution stays on ServerTool*, not ToolCallResult.
         var codeExecIdx = 0;
         for (final p in parts) {
           if (p is! Map) continue;
@@ -830,12 +750,16 @@ Stream<StreamChunk> sendGoogleStreamEvents(
             totalTokens: totalUsage?.totalTokens ?? 0,
           );
         }
-        var contentStr = buf.toString();
+        lastText = buf.toString();
         if (persistGeminiThoughtSigs) {
-          final metaComment = collectThoughtSigCommentFromParts(parts);
-          if (metaComment.isNotEmpty) contentStr += metaComment;
+          final signature = collectGeminiThoughtSignatureFromParts(parts);
+          if (signature.isNotEmpty) {
+            yield ProviderArtifact(
+              kind: geminiThoughtSignatureArtifactKind,
+              payload: signature,
+            );
+          }
         }
-        lastText = contentStr;
       },
       takeCalls: () => pendingCalls,
       continueWithoutCalls: () => false,
@@ -890,7 +814,8 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     return;
   }
 
-  // 通过带 alt=sse 的 :streamGenerateContent 实现 SSE 流式响应，并按 Vertex/Gemini 构建端点。
+  // Implement SSE streaming via :streamGenerateContent with alt=sse
+  // Build endpoint per Vertex vs Gemini
   String baseUrl;
   if (config.vertexAI == true &&
       (config.location?.isNotEmpty == true) &&
@@ -906,14 +831,14 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     baseUrl = '$base/models/$upstreamModelId:streamGenerateContent';
   }
 
-  // 构建 alt=sse 查询参数。
+  // Build query with alt=sse
   final uriBase = Uri.parse(baseUrl);
   final qp = Map<String, String>.from(uriBase.queryParameters);
   qp['alt'] = 'sse';
   final uri = uriBase.replace(queryParameters: qp);
   final isVertex = config.vertexAI == true;
 
-  // 将系统消息提取到 systemInstruction（Google Gemini API 推荐格式）。
+  // Extract system messages into systemInstruction (Google Gemini API best practice)
   String systemPrompt = '';
   final contents = <Map<String, dynamic>>[];
   for (int i = 0; i < messages.length; i++) {
@@ -939,9 +864,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     }
     if (roleRaw == 'assistant' && msg['tool_calls'] is List) {
       final parts = <Map<String, dynamic>>[];
-      final raw = extractGeminiThoughtMeta(
-        (msg['content'] ?? '').toString(),
-      ).cleanedText;
+      final raw = _geminiHistoryText(msg);
       if (raw.trim().isNotEmpty && raw.trim() != '\n\n') {
         parts.add({'text': raw});
       }
@@ -954,9 +877,16 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       if (parts.isNotEmpty) contents.add({'role': 'model', 'parts': parts});
       continue;
     }
-    final isLast = i == messages.length - 1;
+    final isLast = i == messages.lastIndexWhere((m) => m['role'] == 'user');
     final parts = <Map<String, dynamic>>[];
-    final meta = extractGeminiThoughtMeta((msg['content'] ?? '').toString());
+    parts.addAll(
+      await NativeInputAttachments(
+        config: config,
+        spec: effective,
+        protocol: NativeInputProtocol.gemini,
+      ).build(msg, userPaths: isLast ? userImagePaths : null),
+    );
+    final meta = _geminiHistoryMeta(msg);
     final raw = meta.cleanedText;
     final seenSources = <String>{};
     String normalizeSrc(String src) {
@@ -968,12 +898,18 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       }
     }
 
-    // 仅在存在媒体时解析图片；只做语义媒体检测，不识别自定义附件标记。
-    final hasMarkdownImages = shouldParseMarkdownImages(raw);
+    // Only parse images if there are images to process.
+    // Semantic media detection only - custom attachment markers are not
+    // recognized. Attachments arrive via structured media-path keys /
+    // userImagePaths, plus Markdown ![](...).
+    final hasMarkdownImages = shouldParseMarkdownImages(
+      raw,
+      skipImageParsing: skipImageParsing,
+    );
     final internalMediaRefs = parseInternalMediaRefs(
       msg[multimodalInternalMediaPathsKey],
     );
-    // 消费用户与 assistant 历史消息中注入的媒体引用。
+    // Consume injected media refs for user and assistant history turns.
     final hasInternalMedia = internalMediaRefs.isNotEmpty;
     final hasAttachedImages =
         isLast && role == 'user' && (userImagePaths?.isNotEmpty == true);
@@ -981,13 +917,14 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     if (hasMarkdownImages || hasAttachedImages || hasInternalMedia) {
       final parsed = await parseTextAndImages(
         raw,
-        // Gemini API 目前无法直接拉取远程 http(s) 图片。
+        // Gemini API 目前无法直接拉取远程 http(s) 图片
         allowRemoteImages: false,
         allowLocalImages: true,
         keepRemoteMarkdownText: true,
+        skipImageParsing: skipImageParsing,
       );
       if (parsed.text.isNotEmpty) parts.add({'text': parsed.text});
-      // 处理从当前消息文本中提取的图片。
+      // Images extracted from this message's text
       for (final ref in parsed.images) {
         final normalized = normalizeSrc(ref.src);
         if (!seenSources.add(normalized)) continue;
@@ -1000,7 +937,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
               'inline_data': {'mime_type': mime, 'data': b64},
             });
           } else {
-            // data URL 格式异常时回退为普通文本。
+            // If malformed data URL, include as plain text fallback
             parts.add({'text': ref.src});
           }
         } else if (ref.kind == 'path') {
@@ -1011,7 +948,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
             'inline_data': {'mime_type': mime, 'data': b64},
           });
         } else {
-          // Gemini 官方 API 不会在这里抓取 http(s) 远程 URL，保留简短引用文本。
+          // Remote URL: Gemini official API doesn't fetch http(s) here; keep short reference
           parts.add({'text': '(image) ${ref.src}'});
         }
       }
@@ -1023,6 +960,13 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       if (supplementalRefs.isNotEmpty) {
         for (final mediaRef in supplementalRefs) {
           final p = mediaRef.uri;
+          final inputMime = mimeForInternalMediaRef(mediaRef);
+          if (role == 'user' &&
+              (isAudioMime(inputMime) ||
+                  isVideoMime(inputMime) ||
+                  isPdfMime(inputMime))) {
+            continue;
+          }
           final normalized = normalizeSrc(p);
           if (!seenSources.add(normalized)) continue;
           if (p.startsWith('data:')) {
@@ -1042,20 +986,21 @@ Stream<StreamChunk> sendGoogleStreamEvents(
               'inline_data': {'mime_type': mime, 'data': b64},
             });
           } else {
-            // http URL 的回退引用文本。
+            // http url fallback reference text
             parts.add({'text': '(image) $p'});
           }
         }
       }
     } else {
-      // 没有图片时使用简单文本内容。
+      // No images, use simple text content
       if (raw.isNotEmpty) parts.add({'text': raw});
     }
-    // 按 Gemini 官方 API 将 YouTube URL 注入为 file_data，仅处理本次请求最后一条用户消息。
+    // YouTube URL ingestion as file_data parts (Gemini official API)
+    // Only inject on the last user message of this request.
     if (role == 'user' && isLast && enableYoutube) {
       final urls = extractYouTubeUrls(raw);
       for (final u in urls) {
-        // Vertex AI 的 file_data 需要 mime_type。
+        // Vertex AI requires mime_type for file_data
         if (isVertex) {
           parts.add({
             'file_data': {'file_uri': u, 'mime_type': 'video/*'},
@@ -1077,11 +1022,10 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     contents.add({'role': role, 'parts': parts});
   }
 
-  final wantsImageOutput = effective.output.contains(Modality.image);
   bool expectImage = wantsImageOutput;
   bool receivedImage = false;
 
-  // 将 OpenAI 风格工具映射为 Gemini functionDeclarations（MCP）。
+  // Map OpenAI-style tools to Gemini functionDeclarations (MCP)
   List<Map<String, dynamic>>? geminiTools;
   if (tools != null && tools.isNotEmpty) {
     final decls = <Map<String, dynamic>>[];
@@ -1097,7 +1041,8 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         if (desc.isNotEmpty) 'description': desc,
       };
       if (params != null) {
-        // Google Gemini 要求严格符合 JSON Schema，修复缺少 items 字段的数组属性。
+        // Google Gemini requires strict JSON Schema compliance
+        // Fix array properties that are missing 'items' field
         final cleanedParams = cleanSchemaForGemini(
           params,
           stringEnumOnly: true,
@@ -1112,22 +1057,22 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       ];
     }
   }
-  final toolsArr = buildGeminiToolsArray(
+  final toolsArr = _buildGeminiToolsArray(
     builtIns: builtIns,
-    allowCoexistence: isGemini3,
+    allowCoexistence: mixedBuiltInAndFunctionTools,
     geminiTools: geminiTools,
   );
   final geminiToolConfig = buildGeminiToolConfig(
     tools: toolsArr,
-    isGemini3: isGemini3 && !isVertex,
+    isGemini3: mixedBuiltInAndFunctionTools && !isVertex,
   );
 
-  // 为多轮工具调用维护滚动会话。
+  // Maintain a rolling conversation for multi-round tool calls
   List<Map<String, dynamic>> convo = List<Map<String, dynamic>>.from(contents);
   TokenUsage? usage;
   int totalTokens = 0;
 
-  // 累积各流式轮次中的内置搜索引用。
+  // Accumulate built-in search citations across stream rounds
   final List<Map<String, dynamic>> builtinCitations = <Map<String, dynamic>>[];
   int malformedResponseRetryCount = 0;
   var streamRound = 0;
@@ -1139,36 +1084,18 @@ Stream<StreamChunk> sendGoogleStreamEvents(
   yield* runProviderToolRounds(
     retryRound: retryRound,
     sendRound: () async* {
-      // 每轮请求开始前清空上一轮用量，避免 usageOf 取回旧值。
       usage = null;
       totalTokens = 0;
       pendingCalls = [];
       lastRoundCalls = [];
       lastRoundModelParts = [];
       retryMalformed = false;
-      final defaultMaxOutputTokens = ModelSpecResolver.instance
-          .spec(config, modelId)
-          .maxOutput;
-      final omitSamplingParams = _shouldOmitGeminiSamplingParams(
-        upstreamModelId,
-      );
       final gen = <String, dynamic>{
-        if (!omitSamplingParams && temperature != null)
-          'temperature': temperature,
-        if (!omitSamplingParams && topP != null) 'topP': topP,
-        if (maxTokens ?? defaultMaxOutputTokens case final resolvedMaxTokens?)
+        if (temperature != null) 'temperature': temperature,
+        if (topP != null) 'topP': topP,
+        if (maxTokens ?? effective.maxOutput case final resolvedMaxTokens?)
           'maxOutputTokens': resolvedMaxTokens,
-        // 模型配置为输出图片时启用 IMAGE+TEXT 模态。
         if (wantsImageOutput) 'responseModalities': ['TEXT', 'IMAGE'],
-        if (isReasoning)
-          ...() {
-            final thinkingConfig = _googleThinkingConfig(
-              upstreamModelId,
-              thinkingBudget,
-            );
-            if (thinkingConfig.isEmpty) return const <String, dynamic>{};
-            return {'thinkingConfig': thinkingConfig};
-          }(),
       };
       final body = <String, dynamic>{
         'contents': convo,
@@ -1208,10 +1135,23 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         assistantHeaders: extraHeaders,
       );
       request.headers.addAll(headers);
+      final spec = effective;
+      applyReasoning(
+        body,
+        spec,
+        reasoning,
+        transport: ReasoningTransport.geminiGenerateContent,
+      );
+      final resolution = resolveReasoning(spec, reasoning);
+      applySamplingPolicy(
+        body,
+        spec,
+        resolution,
+        transport: ReasoningTransport.geminiGenerateContent,
+      );
+      // Custom body keys win over the reasoning dialect.
       final extra = customBody(config, modelId, assistantBody: extraBody);
-      if (extra.isNotEmpty) {
-        body.addAll(extra);
-      }
+      CustomRequestMerger.applyBody(body, extra);
       body['contents'] = _googleApiContents(convo);
       request.body = jsonEncode(body);
 
@@ -1224,7 +1164,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       final sse = resp.stream.transform(utf8.decoder);
       final sourceId = 'round-${streamRound++}';
       final decoder = GoogleStreamDecoder(
-        isGemini3: isGemini3,
+        isGemini3: mixedBuiltInAndFunctionTools,
         persistThoughtSigs: persistGeminiThoughtSigs,
         expectImage: expectImage,
         receivedImage: receivedImage,
@@ -1268,8 +1208,9 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       await for (final event in parseSseEventStrings(sse)) {
         final data = event.data;
         if (data.isEmpty) continue;
-        // Gemini 可能在 2xx 流中内嵌错误、提示级拦截或候选级内容过滤结束信号；
-        // 必须先抛出，避免被下面的异常分片保护逻辑吞掉。
+        // Gemini can deliver {"error":{code,message,status}}, a prompt-level
+        // block, or a candidate-level content-filter finish in-band on a 2xx
+        // stream; raise before the malformed-chunk guard below can swallow it.
         throwIfInBandStreamError(data);
         _throwIfGeminiPromptBlocked(data);
         _throwIfGeminiCandidateBlocked(data);
@@ -1363,7 +1304,8 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       final responseImageThoughtSigs = decoder.imageThoughtSigs;
 
       if (retryMalformedResponse) {
-        // 这是暂时性的模型生成失败；不把异常候选加入会话，原样重试当前轮次一次。
+        // This is a transient model-generation failure, so retry the unchanged
+        // round once without adding the malformed candidate to conversation.
         if (malformedResponseRetryCount == 0) {
           malformedResponseRetryCount++;
           retryMalformed = true;
@@ -1374,7 +1316,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
         );
       }
 
-      // 刷出尚未转成 Image* 事件的缓存内联图片。
+      // Flush any buffered inline image that never became Image* events.
       if (!decoder.emittedImageEvents) {
         final pendingImage = await takeBufferedImageMarkdown();
         if (pendingImage.isNotEmpty) {
@@ -1394,19 +1336,17 @@ Stream<StreamChunk> sendGoogleStreamEvents(
       }
 
       if (calls.isEmpty) {
-        // 没有工具调用，本轮完成；引用已经由 decoder 发出。
+        // No tool calls; this round finished. Citations already left the decoder.
         if (persistGeminiThoughtSigs) {
-          final metaComment = buildGeminiThoughtSigComment(
+          final signature = encodeGeminiThoughtSignature(
             textKey: responseTextThoughtSigKey,
             textValue: responseTextThoughtSigVal,
             imageSigs: responseImageThoughtSigs,
           );
-          if (metaComment.isNotEmpty) {
-            yield* emitDelta(
-              ids: StreamChunkIds(sourceId),
-              content: metaComment,
-              usage: usage,
-              totalTokens: totalTokens,
+          if (signature.isNotEmpty) {
+            yield ProviderArtifact(
+              kind: geminiThoughtSignatureArtifactKind,
+              payload: signature,
             );
           }
         }
@@ -1433,7 +1373,7 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     onToolCall: onToolCall,
     append: (executed) async {
       if (retryMalformed) return;
-      if (isGemini3) {
+      if (mixedBuiltInAndFunctionTools) {
         convo.add({'role': 'model', 'parts': lastRoundModelParts});
         final responseParts = <Map<String, dynamic>>[];
         for (final c in lastRoundCalls) {
@@ -1515,78 +1455,4 @@ Stream<StreamChunk> sendGoogleStreamEvents(
     ),
     usageOf: () => usage,
   );
-}
-
-Future<String?> maybeVertexAccessToken(ProviderConfig cfg) async {
-  if (cfg.vertexAI != true) return null;
-  final jsonStr = (cfg.serviceAccountJson ?? '').trim();
-  if (jsonStr.isEmpty) {
-    // 兼容把临时 OAuth token 直接填入 apiKey 的配置。
-    final key = effectiveApiKey(cfg).trim();
-    return key.isEmpty ? null : key;
-  }
-  return GoogleServiceAccountAuth.getAccessTokenFromJson(jsonStr);
-}
-
-Future<String> downloadRemoteAsBase64(
-  http.Client client,
-  ProviderConfig config,
-  String url,
-) async {
-  final uri = Uri.parse(url);
-  final request = http.Request('GET', uri);
-  if (config.vertexAI == true && shouldAttachVertexMediaAuth(uri)) {
-    final token = await maybeVertexAccessToken(config);
-    if (token != null && token.isNotEmpty) {
-      request.headers['Authorization'] = 'Bearer $token';
-    }
-    final projectId = (config.projectId ?? '').trim();
-    if (projectId.isNotEmpty) {
-      request.headers['X-Goog-User-Project'] = projectId;
-    }
-  }
-  final response = await client.send(request);
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    final body = await response.stream.bytesToString();
-    throw HttpException('HTTP ${response.statusCode}: $body');
-  }
-  final bytes = await response.stream.fold<List<int>>(<int>[], (all, chunk) {
-    all.addAll(chunk);
-    return all;
-  });
-  return base64Encode(bytes);
-}
-
-bool shouldAttachVertexMediaAuth(Uri uri) {
-  if (uri.scheme.toLowerCase() != 'https') return false;
-  final host = uri.host.trim().toLowerCase();
-  return host == 'googleapis.com' ||
-      host.endsWith('.googleapis.com') ||
-      host == 'googleusercontent.com' ||
-      host.endsWith('.googleusercontent.com') ||
-      host == 'storage.cloud.google.com';
-}
-
-/// 官方 Vertex 主机跟随 [loc]（global、`us` / `eu` 多区域，或单区域）；
-/// 自定义的 [ProviderConfig.baseUrl]（测试、网关）则原样作为 origin。
-String vertexOrigin(ProviderConfig config, String loc) {
-  final raw = config.baseUrl.trim();
-  final host = (Uri.tryParse(raw)?.host ?? '').toLowerCase();
-  // 把 Gemini 供应商切到 Vertex 后仍带着 Gemini API 的 baseUrl。
-  final official =
-      host.isEmpty ||
-      host == 'generativelanguage.googleapis.com' ||
-      host == 'aiplatform.googleapis.com' ||
-      host.endsWith('-aiplatform.googleapis.com') ||
-      RegExp(r'^aiplatform\.[a-z]+\.rep\.googleapis\.com$').hasMatch(host);
-  if (official) {
-    final l = loc.toLowerCase();
-    final regional = switch (l) {
-      'global' => 'aiplatform.googleapis.com',
-      'us' || 'eu' => 'aiplatform.$l.rep.googleapis.com',
-      _ => '$l-aiplatform.googleapis.com',
-    };
-    return 'https://$regional';
-  }
-  return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
 }

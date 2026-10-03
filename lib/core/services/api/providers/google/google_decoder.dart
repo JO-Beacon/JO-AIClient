@@ -68,8 +68,7 @@ class GoogleStreamDecoder implements StreamChunkDecoder {
     this.initialUsage,
     List<Map<String, dynamic>>? citations,
     String sourceId = 'stream',
-  }) : usage = initialUsage,
-       builtinCitations = citations ?? <Map<String, dynamic>>[],
+  }) : builtinCitations = citations ?? <Map<String, dynamic>>[],
        _ids = StreamChunkIds(sourceId);
 
   final bool isGemini3;
@@ -79,7 +78,9 @@ class GoogleStreamDecoder implements StreamChunkDecoder {
   final StreamChunkIds _ids;
 
   bool receivedImage;
-  TokenUsage? usage;
+  TokenUsage? _round;
+  final Map<String, dynamic> _roundUsageFields = {};
+  TokenUsage? get usage => _round?.asSnapshot() ?? initialUsage;
   String? finishReason;
   bool _hasSeenPart = false;
   bool _stopAfterPart = false;
@@ -253,8 +254,18 @@ class GoogleStreamDecoder implements StreamChunkDecoder {
   void _parseEvent(Map<String, dynamic> obj, List<StreamChunk> chunks) {
     final um = obj['usageMetadata'];
     if (um is Map<String, dynamic>) {
-      usage = (usage ?? const TokenUsage()).merge(googleUsageFromMetadata(um));
-      chunks.add(Usage(usage!));
+      if (!um.containsKey('totalTokenCount') &&
+          (um.containsKey('promptTokenCount') ||
+              um.containsKey('candidatesTokenCount') ||
+              um.containsKey('thoughtsTokenCount'))) {
+        _roundUsageFields.remove('totalTokenCount');
+      }
+      _roundUsageFields.addAll(um);
+      final parsed = googleUsageFromMetadata(_roundUsageFields);
+      if (parsed.hasReportedTokens) {
+        _round = parsed;
+        chunks.add(Usage(usage!));
+      }
     }
 
     final candidates = obj['candidates'];

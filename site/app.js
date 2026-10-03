@@ -8,6 +8,84 @@
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
   /* ============================================================
+     0. 主题切换：浅色 / 深色 / 跟随系统
+     ============================================================ */
+  (function () {
+    var root = document.documentElement;
+    var btn = $('#themeToggle');
+    if (!btn) return;
+    var mql = window.matchMedia('(prefers-color-scheme: light)');
+    var order = ['system', 'light', 'dark'];
+    var animTimer = null;
+
+    function readPref() {
+      try { return localStorage.getItem('jo-theme') || 'system'; }
+      catch (e) { return 'system'; }
+    }
+    function effective(pref) {
+      return (pref === 'light' || (pref === 'system' && mql.matches)) ? 'light' : 'dark';
+    }
+    function label(pref) {
+      return pref === 'light' ? '浅色' : (pref === 'dark' ? '深色' : '跟随系统');
+    }
+    function apply(pref, animate) {
+      var eff = effective(pref);
+      root.setAttribute('data-theme-pref', pref);
+      if (animate) {
+        root.classList.add('theme-anim');
+        void root.offsetWidth;
+        window.clearTimeout(animTimer);
+        animTimer = window.setTimeout(function () {
+          root.classList.remove('theme-anim');
+        }, 340);
+      }
+      root.setAttribute('data-theme', eff);
+      btn.setAttribute('aria-label', '主题：' + label(pref));
+      btn.setAttribute('title', '主题：' + label(pref) + '（点击切换）');
+      var color = eff === 'light' ? '#faf9f6' : '#0e0f10';
+      $$('meta[name="theme-color"]').forEach(function (m) { m.setAttribute('content', color); });
+      $$('link[rel="icon"][type="image/svg+xml"]').forEach(function (l) {
+        l.removeAttribute('media');
+        l.setAttribute('href', eff === 'light' ? 'icon-light.svg' : 'icon-dark.svg');
+      });
+    }
+
+    btn.addEventListener('click', function () {
+      var next = order[(order.indexOf(readPref()) + 1) % order.length];
+      try { localStorage.setItem('jo-theme', next); } catch (e) {}
+      apply(next, true);
+    });
+    mql.addEventListener('change', function () {
+      if (readPref() === 'system') apply('system', true);
+    });
+    apply(readPref(), false);
+  })();
+
+  /* ============================================================
+     0.5 内层滚动到底/顶后，立即把滚轮交给外层页面
+     —— Chromium 的滚动锁存会让“换目标”延迟约半秒，这里手动接力。
+     ============================================================ */
+  (function () {
+    function chain(el) {
+      el.addEventListener('wheel', function (e) {
+        if (e.ctrlKey || e.shiftKey) return;
+        var max = el.scrollHeight - el.clientHeight;
+        if (max <= 0) return;
+        var atTop = el.scrollTop <= 0;
+        var atBottom = el.scrollTop >= max - 1;
+        if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) {
+          var dy = e.deltaY;
+          if (e.deltaMode === 1) dy *= 16;
+          else if (e.deltaMode === 2) dy *= window.innerHeight;
+          e.preventDefault();
+          window.scrollBy(0, dy);
+        }
+      }, { passive: false });
+    }
+    $$('.mock__side, .mock__chat, .mock__tree, .demo__stage').forEach(chain);
+  })();
+
+  /* ============================================================
      1. 首屏界面示意
      ============================================================ */
 
@@ -19,7 +97,7 @@
         '首次生成回答 → 分支 1',
         '点击“重新生成”→ 分支 2',
         '再次“重新生成”→ 分支 3',
-        '用 ◀ 分支 2 / 3 ▶ 切换，右侧消息树同步高亮'
+        '用 ◀ 分支 2 / 3 ▶ 切换，右侧上下文分支同步高亮'
       ]
     },
     '2': {
@@ -89,20 +167,20 @@
       }
     });
 
-    /* 消息树高亮 */
+    /* 上下文分支高亮 */
     var activeLi = $('.tli[data-branch="' + hero.branch + '"]', hero.el.tree);
     $$('.tli', hero.el.tree).forEach(function (li) {
       li.classList.remove('is-active');
       li.classList.remove('on-path');
     });
-    ['u1', 'forkA'].forEach(function (id) {
+    ['u1'].forEach(function (id) {
       var n = $('.tli[data-node="' + id + '"]', hero.el.tree);
       if (n) n.classList.add('on-path');
     });
     if (activeLi) {
       activeLi.classList.add('is-active', 'on-path');
       if (hero.branch === 2) {
-        ['u2', 'forkB', 'b2a'].forEach(function (id) {
+        ['u2', 'b2a'].forEach(function (id) {
           var n = $('.tli[data-node="' + id + '"]', hero.el.tree);
           if (n) n.classList.add('on-path');
         });
@@ -139,7 +217,7 @@
     if (b === hero.branch) return;
     hero.branch = b;
     if (viaArrow) hero.switched = true;
-    paintHero(viaArrow ? '已切换到分支 ' + b + '。对话区只渲染当前活动分支，右侧消息树同步高亮这条路径。' : null);
+    paintHero(viaArrow ? '已切换到分支 ' + b + '。对话区只渲染当前活动分支，右侧上下文分支同步高亮这条路径。' : null);
   }
 
   function setQuestion(q) {
@@ -172,10 +250,13 @@
     var menuBtn = $('#heroMenuBtn');
     var menu = $('#heroMenu');
     var MENU_COPY = {
-      'regen': '示意：“重新生成”会在同一位置追加一个新分支，已有分支不会被覆盖。',
-      'delete-after': '示意：“删除后续”按树结构删除当前节点之后、当前活动分支上的节点，其他分支不受影响。',
+      'edit': '示意：“编辑”修改这条消息；保存时可以选择原地更新或保存为新分支。',
+      'branch': '示意：“创建消息分支”以这条消息为分叉锚点新建分支，原有分支继续保留在树上。',
+      'delete-only': '示意：“删除此条消息”只删除这一条，后续消息保留。',
+      'delete-after': '示意：“删除此消息及后续”按树结构删除当前活动分支上的这条消息及其后续，其他分支不受影响。',
+      'delete-node': '示意：“删除此分支节点”删除该分叉下的所有分支。',
       'delete-branch': '示意：“删除当前分支”只移除这一条分支，同一分叉点上的其他分支保留。',
-      'continue': '示意：“从历史消息继续对话”以该节点为分叉锚点新建分支，原有分支继续保留在树上。'
+      'delete-all': '示意：“删除所有分支”删除该分叉点的所有分支及其后续消息。'
     };
 
     function closeMenu(refocus) {
@@ -301,23 +382,23 @@
       title: '首次生成回答',
       note: '提出问题后模型给出第一版回答，此时该位置只有一个分支，分支控件不可切换。',
       branches: 1, active: 1,
-      flash: '消息树：用户提问 → 分叉点 A（1 个分支）。'
+      flash: '上下文分支：用户 → 助手（1 个分支）。'
     },
     {
       title: '点击“重新生成”，产生分支 2',
-      note: '重新生成不覆盖原回答，而是在同一位置追加一个新分支。分叉点 A 现在有 2 个子节点，活动分支指向新的分支 2。',
+      note: '重新生成不覆盖原回答，而是在同一位置追加一个新分支。用户消息下现在有 2 个助手分支，活动分支指向新的分支 2。',
       branches: 2, active: 2,
       flash: '分支 1 仍然完整保存在 SQLite 中，随时可以切回去。'
     },
     {
       title: '再次重新生成，产生分支 3',
-      note: '第三次生成继续追加分支。分叉点 A 现在有 3 个子节点，界面依旧只渲染当前活动分支。',
+      note: '第三次生成继续追加分支。用户消息下现在有 3 个助手分支，界面依旧只渲染当前活动分支。',
       branches: 3, active: 3,
       flash: '三个分支各自带创建时间与来源标记（首次生成 / 重新生成）。'
     },
     {
       title: '用 ◀ 分支 2 / 3 ▶ 切换',
-      note: '点击分支控件的左右箭头，对话区内容随之替换，右侧消息树同步把高亮移到对应分支。可以直接在左侧舞台里点箭头试试。',
+      note: '点击分支控件的左右箭头，对话区内容随之替换，右侧上下文分支同步把高亮移到对应分支。可以直接在左侧舞台里点箭头试试。',
       branches: 3, active: 2,
       flash: '切换只改变“显示哪一条”，不修改任何分支数据。'
     }
@@ -352,13 +433,13 @@
 
   var B_STEPS = [
     {
-      title: '上游原版导入：分叉被拍平成单链',
-      note: '同一段对话在上游原版导入后，所有消息被排成一条链。原本“同一位置的三个备选回答”变成了前后相连的三条消息，分叉关系无处存放。',
+      title: '上游 Kelivo 导入：分叉按单链排列',
+      note: 'Chatbox 备份记录了同一位置的多个备选回答与选中项。上游 Kelivo 的导入按顺序读取消息、排成一条单链，这份分叉记录不参与导入。',
       render: renderB1
     },
     {
-      title: 'JO-AIClient 导入：按树完整重建',
-      note: 'Chatbox 1.22 以下走树形 JSON，1.22 起走 ZIP 备份，两条路都按消息树重建：分叉消息、嵌套分支、分支创建时间、选中路径全部保留。',
+      title: 'JO-AIClient 导入：完整重建分支树',
+      note: 'Chatbox 1.22 以下走树形 JSON，1.22 起走 ZIP 备份，两条路都完整重建：分叉锚点、嵌套分支、分支创建时间与选中路径全部保留。',
       render: renderB2
     },
     {
@@ -388,7 +469,7 @@
                '<span class="dmsg__who">' + m.who + '</span>' +
                '<div class="dmsg__b"><p>' + m.text + '</p></div>' +
                (m.lost
-                 ? '<div class="dmsg__meta"><span class="tag tag--lost">✕ 分叉丢失</span><span class="tag">被排入单链</span></div>'
+                 ? '<div class="dmsg__meta"><span class="tag">分叉按单链排列</span></div>'
                  : '') +
              '</div>';
     }).join('');
@@ -396,40 +477,35 @@
     return '<div class="stage__cols">' +
              '<div class="dchat">' + msgs + '</div>' +
              '<div class="dpanel">' +
-               '<h4 class="dpanel__h">这段结果里丢掉的</h4>' +
+               '<h4 class="dpanel__h">单链结果里没有对应位置的</h4>' +
                '<ul class="dlist">' +
-                 listRow('分叉锚点：看不出第 2、3、4 条其实是同一位置的备选', 'is-lost', '✕') +
-                 listRow('分支创建时间：14:02 / 14:05 / 14:06 的顺序无处存放', 'is-lost', '✕') +
-                 listRow('选中路径：原对话里用户实际继续的是哪一条', 'is-lost', '✕') +
-                 listRow('嵌套分支：第二处分叉同样被拍平', 'is-lost', '✕') +
+                 listRow('分叉锚点：第 2、3、4 条是同一位置的备选，还是前后相接，单链里看不出来') +
+                 listRow('分支创建时间：14:02 / 14:05 / 14:06 的先后关系没有落库') +
+                 listRow('选中路径：原对话里用户实际继续的是哪一条') +
+                 listRow('嵌套分支：第二处分叉同样只按单链排列') +
                '</ul>' +
              '</div>' +
            '</div>' +
-           '<p class="stage__flash">导入完成后，这段对话在应用里就只有一条线，无法再切回其他备选回答。</p>';
+           '<p class="stage__flash">导入后这段对话是一条单链，其他备选回答没有对应的切换入口。</p>';
   }
 
   function bTreeHtml(activeTop, activeNested) {
     var kids = B_TOP.map(function (b) {
       var isActive = b.id === activeTop;
-      var inner = '<span class="trow"><span class="tdot"></span><span class="tlabel">分支 ' + b.id + '</span>' +
-                  '<span class="tcount">' + b.time + '</span>' +
+      var inner = '<span class="trow"><span class="tdot"></span><span class="tlabel">助手</span><span class="tcount">分支 ' + b.id + '</span>' +
                   (isActive ? '<span class="tnow">当前</span>' : '') + '</span>';
       if (b.follow) {
         var gk = b.follow.kids.map(function (k) {
           var kOn = isActive && k.id === activeNested;
           return '<li class="tli' + (kOn ? ' is-active on-path' : '') + '" data-bk="' + k.id + '">' +
-                   '<span class="trow"><span class="tdot"></span><span class="tlabel">分支 ' + k.id + '</span>' +
-                   '<span class="tcount">' + k.time + '</span>' +
+                   '<span class="trow"><span class="tdot"></span><span class="tlabel">助手</span><span class="tcount">分支 ' + k.id + '</span>' +
                    (kOn ? '<span class="tnow">当前</span>' : '') + '</span>' +
                  '</li>';
         }).join('');
         inner += '<ul>' +
                    '<li class="tli' + (isActive ? ' on-path' : '') + '">' +
-                     '<span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户追问</span></span>' +
-                     '<ul><li class="tli' + (isActive ? ' on-path' : '') + '">' +
-                       '<span class="trow"><span class="tdot tdot--fork"></span><span class="tlabel">分叉点 B</span><span class="tcount">2</span></span>' +
-                       '<ul>' + gk + '</ul>' +
-                     '</li></ul>' +
+                     '<span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户</span></span>' +
+                     '<ul>' + gk + '</ul>' +
                    '</li>' +
                  '</ul>';
       }
@@ -438,11 +514,8 @@
 
     return '<div class="tree">' +
              '<ul><li class="tli on-path">' +
-               '<span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户提问</span></span>' +
-               '<ul><li class="tli on-path">' +
-                 '<span class="trow"><span class="tdot tdot--fork"></span><span class="tlabel">分叉点 A</span><span class="tcount">3</span></span>' +
-                 '<ul>' + kids + '</ul>' +
-               '</li></ul>' +
+               '<span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户</span></span>' +
+               '<ul>' + kids + '</ul>' +
              '</li></ul>' +
            '</div>';
   }
@@ -450,7 +523,7 @@
   function renderB2() {
     return '<div class="stage__cols">' +
              '<div class="dpanel dpanel--plain">' +
-               '<h4 class="dpanel__h">重建后的消息树</h4>' +
+               '<h4 class="dpanel__h">重建后的上下文分支</h4>' +
                bTreeHtml(2, 1) +
              '</div>' +
              '<div class="dpanel">' +
@@ -465,7 +538,7 @@
                '<p class="dpanel__p">合并模式保留本地内容，覆盖模式只定点替换对应导入会话。</p>' +
              '</div>' +
            '</div>' +
-           '<p class="stage__flash">两处分叉、五个回答版本、各自的时间戳，导入后一个都不少。</p>';
+           '<p class="stage__flash">两处分叉、五个回答版本与各自的时间戳，都完整保留。</p>';
   }
 
   function renderB3() {
@@ -485,7 +558,7 @@
           '<div class="dmsg__meta">' +
             branchCtl('bNested', b.follow.kids.length, k.id) +
             '<span class="tag">' + k.tag + ' · ' + k.time + '</span>' +
-            '<span class="tag tag--gold">嵌套分支</span>' +
+            '<span class="tag tag--accent">嵌套分支</span>' +
           '</div>' +
         '</div>';
     } else {
@@ -504,13 +577,13 @@
                  '<div class="dmsg__meta">' +
                    branchCtl('bTop', B_TOP.length, b.id) +
                    '<span class="tag">' + b.tag + ' · ' + b.time + '</span>' +
-                   '<span class="tag tag--gold">导入的分支</span>' +
+                   '<span class="tag tag--accent">导入的分支</span>' +
                  '</div>' +
                '</div>' +
                nested +
              '</div>' +
              '<div class="dpanel">' +
-               '<h4 class="dpanel__h">消息树</h4>' +
+               '<h4 class="dpanel__h">上下文分支</h4>' +
                bTreeHtml(b.id, state.bNested) +
              '</div>' +
            '</div>';
@@ -534,16 +607,13 @@
     var items = '';
     for (var i = 1; i <= count; i++) {
       items += '<li class="tli' + (i === active ? ' is-active on-path' : '') + '">' +
-                 '<span class="trow"><span class="tdot"></span><span class="tlabel">分支 ' + i + '</span>' +
+                 '<span class="trow"><span class="tdot"></span><span class="tlabel">助手</span><span class="tcount">分支 ' + i + '</span>' +
                  (i === active ? '<span class="tnow">当前</span>' : '') + '</span>' +
                '</li>';
     }
     return '<div class="tree"><ul><li class="tli on-path">' +
-             '<span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户提问</span></span>' +
-             '<ul><li class="tli on-path">' +
-               '<span class="trow"><span class="tdot tdot--fork"></span><span class="tlabel">分叉点 A</span><span class="tcount">' + count + '</span></span>' +
-               '<ul>' + items + '</ul>' +
-             '</li></ul>' +
+             '<span class="trow"><span class="tdot tdot--user"></span><span class="tlabel">用户</span></span>' +
+             '<ul>' + items + '</ul>' +
            '</li></ul></div>';
   }
 
@@ -562,13 +632,13 @@
                  '<div class="dmsg__meta">' +
                    branchCtl('a', st.branches, state.aActive) +
                    '<span class="tag">' + b.tag + '</span>' +
-                   (state.aActive > 1 ? '<span class="tag tag--gold">重新生成产生</span>' : '') +
+                   (state.aActive > 1 ? '<span class="tag tag--accent">重新生成产生</span>' : '') +
                  '</div>' +
                '</div>' +
                '<p class="stage__flash">' + st.flash + '</p>' +
              '</div>' +
              '<div class="dpanel">' +
-               '<h4 class="dpanel__h">消息树</h4>' +
+               '<h4 class="dpanel__h">上下文分支</h4>' +
                demoTreeHtml(st.branches, state.aActive) +
                '<p class="dpanel__p">界面默认只显示当前活动分支。</p>' +
              '</div>' +
@@ -692,7 +762,7 @@
       active = state.bNested;
     }
 
-    paintDemo('已切换到分支 ' + active + ' / ' + total + '，消息树高亮同步移动。');
+    paintDemo('已切换到分支 ' + active + ' / ' + total + '，上下文分支高亮同步移动。');
 
     /* 重新渲染后把焦点还给同一侧的箭头，箭头到边界时改聚焦另一侧 */
     if (!focusAfter(stage, '.branchctl[data-ctl="' + key + '"] .branchctl__b[data-dir="' + dir + '"]')) {

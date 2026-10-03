@@ -311,6 +311,11 @@ abstract class BuiltInToolsHelper {
     return host.contains('openrouter.ai') || providerId.contains('openrouter');
   }
 
+  static bool isVercelProvider(ProviderConfig? cfg) {
+    return Uri.tryParse(cfg?.baseUrl ?? '')?.host.toLowerCase() ==
+        'ai-gateway.vercel.sh';
+  }
+
   static Map<String, dynamic>? _openRouterServerTool(String toolName) {
     switch (BuiltInToolNames.normalize(toolName)) {
       case BuiltInToolNames.search:
@@ -560,9 +565,18 @@ abstract class BuiltInToolsHelper {
       case ProviderKind.google:
         return true;
       case ProviderKind.claude:
+        if (isVercelProvider(cfg)) {
+          return upstreamModelId.toLowerCase().startsWith('anthropic/');
+        }
         if (isDeepSeekProvider(cfg)) return true;
         return isClaudeBuiltInSearchSupportedModel(upstreamModelId);
       case ProviderKind.openai:
+        if (isVercelProvider(cfg)) {
+          // Chat Completions 用网关自己的搜索；Responses 用模型厂商原生的工具，
+          // 官方只对 OpenAI 的模型有文档。
+          return cfg.useResponseApi != true ||
+              upstreamModelId.toLowerCase().startsWith('openai/');
+        }
         if (isOpenRouterProvider(cfg)) {
           return true;
         }
@@ -781,15 +795,10 @@ abstract class BuiltInToolsHelper {
       return BuiltInToolsRequestPayload(tools: tools);
     }
 
-    final supportsSearch =
-        isOpenAIResponsesBuiltInSearchSupportedModel(upstreamModelId) ||
-        (isDeepSeekProvider(cfg) &&
-            isDeepSeekResponsesBuiltInSearchSupportedModel(upstreamModelId)) ||
-        (isDashScopeProvider(cfg) &&
-            isDashScopeResponsesBuiltInSearchSupportedModel(upstreamModelId)) ||
-        (isArkProvider(cfg) &&
-            isDoubaoResponsesBuiltInSearchSupportedModel(upstreamModelId));
-    if (!supportsSearch) return BuiltInToolsRequestPayload(tools: tools);
+    // 统一走门禁：各厂商（含 Vercel 网关）的可用性判断集中在一处。
+    if (!supportsBuiltInSearchForModel(cfg: cfg, modelId: modelId)) {
+      return BuiltInToolsRequestPayload(tools: tools);
+    }
     if (isDashScopeProvider(cfg) || isArkProvider(cfg)) {
       add({'type': 'web_search'});
       return BuiltInToolsRequestPayload(tools: tools);
@@ -848,6 +857,15 @@ abstract class BuiltInToolsHelper {
     }
     if (!configured.contains(BuiltInToolNames.search)) {
       return const BuiltInToolsRequestPayload();
+    }
+    if (isVercelProvider(cfg)) {
+      // 请求拼装会在合并自定义工具之后，再用最后一条用户消息填 config.query，
+      // 用户显式给出的 query 与选项优先。
+      return const BuiltInToolsRequestPayload(
+        tools: <Map<String, dynamic>>[
+          <String, dynamic>{'type': 'vercel:perplexity_search'},
+        ],
+      );
     }
     if (isDashScopeProvider(cfg) &&
         isDashScopeChatBuiltInSearchSupportedModel(upstreamModelId)) {

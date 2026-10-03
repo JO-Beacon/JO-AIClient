@@ -10,6 +10,7 @@ import '../../../../providers/settings_provider.dart';
 import '../../../../utils/multimodal_input_utils.dart';
 import '../../../../../utils/sandbox_path_resolver.dart';
 import '../../chat_api_helpers.dart';
+import '../../native_input_attachments.dart';
 import '../../tool_result_content.dart';
 import '../../generation/tool_loop_runner.dart';
 import '../../stream/sse_decode_loop.dart';
@@ -56,6 +57,9 @@ Map<String, dynamic> copyChatCompletionMessage(Map<String, dynamic> m) {
     if (m['reasoning_content'] != null) {
       out['reasoning_content'] = m['reasoning_content'];
     }
+    if (m['reasoning'] != null) {
+      out['reasoning'] = m['reasoning'];
+    }
     if (m['reasoning_details'] != null) {
       out['reasoning_details'] = m['reasoning_details'];
     }
@@ -88,6 +92,10 @@ Map<String, dynamic> copyChatCompletionMessage(Map<String, dynamic> m) {
     } else {
       out[multimodalInternalMediaPathsKey] = mediaPaths;
     }
+  }
+  final documents = m[multimodalInternalDocumentPathsKey];
+  if (documents != null) {
+    out[multimodalInternalDocumentPathsKey] = documents;
   }
   final revisionId = m[multimodalInternalRevisionIdKey];
   if (revisionId != null) {
@@ -133,6 +141,7 @@ Map<String, dynamic> _buildAssistantToolCallMessage({
   required List<Map<String, dynamic>> calls,
   dynamic content,
   String? reasoningContent,
+  String reasoningField = 'reasoning_content',
   dynamic reasoningDetails,
   bool includeEmptyReasoningContent = false,
 }) {
@@ -149,7 +158,7 @@ Map<String, dynamic> _buildAssistantToolCallMessage({
   };
   if (reasoningContent != null &&
       (reasoningContent.isNotEmpty || includeEmptyReasoningContent)) {
-    msg['reasoning_content'] = reasoningContent;
+    msg[reasoningField] = reasoningContent;
   }
   if (reasoningDetails is List && reasoningDetails.isNotEmpty) {
     msg['reasoning_details'] = reasoningDetails;
@@ -250,13 +259,12 @@ openaiVisibleOutputFromMessage(Map<String, dynamic>? cmsg) {
 Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
   List<Map<String, dynamic>> messages, {
   List<String>? userMediaPaths,
+  required NativeInputAttachments nativeInputs,
   required bool canImageInput,
   bool canAudioInput = false,
   required bool allowRemoteImages,
   required ReasoningReplayPolicy reasoningReplay,
   ReasoningReplayField replayField = ReasoningReplayField.reasoningContent,
-  bool stripReasoningContent = false,
-  bool normalizeReasoningDetails = false,
   bool skipImageParsing = false,
   bool supportsGoogleOpenAIThoughtSignatures = false,
 }) async {
@@ -309,6 +317,24 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
     // 先凑齐整批工具回复，再插入用户图片。
     if (role != 'tool') flushToolImages();
     final isAssistant = role == 'assistant';
+    final nativeParts = await nativeInputs.build(
+      m,
+      userPaths: i == lastUserIndex ? userMediaPaths : null,
+    );
+    void addMessage(Map<String, dynamic> message) {
+      if (nativeParts.isNotEmpty) {
+        final content = message['content'];
+        message['content'] = [
+          if (content is List)
+            ...content
+          else if (content is String && content.isNotEmpty)
+            {'type': 'text', 'text': content},
+          ...nativeParts,
+        ];
+      }
+      out.add(message);
+    }
+
     final internalMediaRefs = parseInternalMediaRefs(
       m[multimodalInternalMediaPathsKey],
     );
@@ -335,14 +361,20 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
             ),
         ];
       }
+      final rawDetails = outMsg['reasoning_details'];
+      final signedDetails = reasoningDetailsNeedSignedReplay(rawDetails);
       final keepReasoningContent =
-          !stripReasoningContent &&
+          !signedDetails &&
           (reasoningReplay == ReasoningReplayPolicy.all ||
               (reasoningReplay == ReasoningReplayPolicy.toolTurns &&
                   toolTurnIds.contains(messageTurnIds[i])));
       if (!keepReasoningContent) {
         outMsg.remove('reasoning_content');
         outMsg.remove('reasoning');
+        if (!signedDetails &&
+            replayField == ReasoningReplayField.reasoningDetails) {
+          outMsg.remove('reasoning_details');
+        }
       } else if (replayField != ReasoningReplayField.reasoningDetails) {
         final field = replayField.wireName;
         final value =
@@ -355,10 +387,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
       }
       // Only Anthropic upstreams need the streamed fragments rebuilt into
       // whole blocks; other vendors document replaying the sequence verbatim.
-      final rawDetails = outMsg['reasoning_details'];
-      if (rawDetails != null &&
-          (normalizeReasoningDetails ||
-              reasoningDetailsLookAnthropic(rawDetails))) {
+      if (signedDetails) {
         final details = normalizeReasoningDetailsForReplay(rawDetails);
         if (details == null) {
           outMsg.remove('reasoning_details');
@@ -519,13 +548,8 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
           final bool isInlineUrl =
               isRemoteHttpUrl(mediaPath) || mediaPath.startsWith('data:');
           final String mime = mimeForInternalMediaRef(mediaRef);
-          if (isAudioMime(mime)) {
-            // 模型声明支持音频时真正送进去；不支持则维持原有丢弃行为，
-            // 背景调用没有用户可打断，不改成报错。
-            if (canAudioInput && !isAssistant) {
-              final audioPart = await openAIAudioContentPartFor(mediaRef, mime);
-              if (audioPart != null) parts.add(audioPart);
-            }
+          if (isAudioMime(mime) ||
+              (role == 'user' && (isVideoMime(mime) || isPdfMime(mime)))) {
             continue;
           }
           // 不支持图片输入时，图片与视频一律不进请求。
@@ -568,13 +592,13 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
         }
       }
       outMsg['content'] = content;
-      out.add(outMsg);
+      addMessage(outMsg);
       continue;
     }
 
     if (role == 'system') {
       outMsg['content'] = raw;
-      out.add(outMsg);
+      addMessage(outMsg);
       continue;
     }
 
@@ -586,7 +610,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
         canImageInput: canImageInput,
       );
       outMsg['content'] = result.text;
-      out.add(outMsg);
+      addMessage(outMsg);
       if (result.imageUrls.isNotEmpty) {
         pendingToolImageParts.add({
           'type': 'text',
@@ -607,7 +631,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
         outMsg['tool_calls'] is List &&
         (outMsg['tool_calls'] as List).isNotEmpty) {
       outMsg['content'] = raw;
-      out.add(outMsg);
+      addMessage(outMsg);
       continue;
     }
 
@@ -625,7 +649,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
         !hasInternalMedia &&
         !shouldAttachAssistantMedia) {
       outMsg['content'] = raw;
-      out.add(outMsg);
+      addMessage(outMsg);
       continue;
     }
 
@@ -640,7 +664,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
     );
     if (!canImageInput && !canAudioInput) {
       outMsg['content'] = parsed.text;
-      out.add(outMsg);
+      addMessage(outMsg);
       continue;
     }
 
@@ -739,13 +763,8 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
       if (!seenSources.add(normalized)) continue;
       final bool isInlineUrl = isRemoteHttpUrl(p) || p.startsWith('data:');
       final String mime = mimeForInternalMediaRef(mediaRef);
-      if (isAudioMime(mime)) {
-        // 模型声明支持音频时真正送进去；不支持则维持原有丢弃行为，
-        // 背景调用没有用户可打断，不改成报错。
-        if (canAudioInput && !isAssistant) {
-          final audioPart = await openAIAudioContentPartFor(mediaRef, mime);
-          if (audioPart != null) parts.add(audioPart);
-        }
+      if (isAudioMime(mime) ||
+          (role == 'user' && (isVideoMime(mime) || isPdfMime(mime)))) {
         continue;
       }
       // 不支持图片输入时，图片与视频一律不进请求。
@@ -787,7 +806,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
     } else {
       outMsg['content'] = parts.isEmpty ? raw : parts;
     }
-    out.add(outMsg);
+    addMessage(outMsg);
   }
   flushToolImages();
   return out;
@@ -815,7 +834,6 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
   required bool canImageInput,
   bool canAudioInput = false,
   required bool allowRemoteImages,
-  required bool isClaudeUpstream,
   bool skipImageParsing = false,
   required bool isReasoning,
   required String effort,
@@ -824,7 +842,9 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
   required double? temperature,
   required double? topP,
   required List<Map<String, dynamic>>? tools,
+  required Object? builtInSearchQuery,
   required Map<String, dynamic> extraBodyCfg,
+  required String? promptCacheKey,
   required Map<String, String>? extraHeaders,
   required bool wantsImageOutput,
   required bool needsReasoningEcho,
@@ -861,6 +881,8 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
           calls: openaiToolCallMaps([for (final item in executed) item.call]),
           content: assistantContent(),
           reasoningContent: needsReasoningEcho ? reasoning() : null,
+          // 回放字段取自模型规格：不是所有厂商都叫 reasoning_content。
+          reasoningField: spec.reasoning.replayField.wireName,
           includeEmptyReasoningContent: needsReasoningEcho,
           reasoningDetails: reasoningDetails(),
         ),
@@ -875,13 +897,16 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
         'messages': await buildOpenAIChatCompletionMessages(
           currentMessages,
           userMediaPaths: userImagePaths,
+          nativeInputs: NativeInputAttachments(
+            config: config,
+            spec: spec,
+            protocol: NativeInputProtocol.chatCompletions,
+          ),
           canImageInput: canImageInput,
           canAudioInput: canAudioInput,
           allowRemoteImages: allowRemoteImages,
           reasoningReplay: spec.reasoning.replay,
           replayField: spec.reasoning.replayField,
-          stripReasoningContent: isClaudeUpstream,
-          normalizeReasoningDetails: isClaudeUpstream,
           skipImageParsing: skipImageParsing,
           supportsGoogleOpenAIThoughtSignatures:
               info.supportsGoogleOpenAIThoughtSignatures,
@@ -909,12 +934,16 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
       if (extraBodyCfg.isNotEmpty) {
         body2.addAll(extraBodyCfg);
       }
+      if (promptCacheKey != null) {
+        body2.putIfAbsent('prompt_cache_key', () => promptCacheKey);
+      }
       // Built-in tools run after the custom body and merge by type.
       applyChatCompletionsBuiltInTools(
         body2,
         config: config,
         modelId: modelId,
         upstreamModelId: upstreamModelId,
+        searchQuery: builtInSearchQuery,
       );
       final req2 = http.Request('POST', url);
       req2.headers.addAll(
@@ -1006,7 +1035,6 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
   required bool canImageInput,
   bool canAudioInput = false,
   required bool allowRemoteImages,
-  required bool isClaudeUpstream,
   bool skipImageParsing = false,
   required bool needsReasoningEcho,
   required Map<String, String>? extraHeaders,
@@ -1015,6 +1043,10 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
 }) async* {
   var usage = initialUsage;
   var lastObj = firstObj;
+  final citationsDecoder = ChatCompletionsStreamDecoder(sourceId: 'finish');
+  for (final chunk in citationsDecoder.decodeCitations(lastObj)) {
+    yield chunk;
+  }
   var currentMessages = [
     for (final message in messages) copyChatCompletionMessage(message),
   ];
@@ -1034,6 +1066,7 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
           calls: openaiToolCallMaps([for (final item in executed) item.call]),
           content: msg['content'],
           reasoningContent: needsReasoningEcho ? reasoningForTools : null,
+          reasoningField: spec.reasoning.replayField.wireName,
           includeEmptyReasoningContent: needsReasoningEcho,
           reasoningDetails: msg['reasoning_details'],
         ),
@@ -1060,13 +1093,16 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
       reqBody['messages'] = await buildOpenAIChatCompletionMessages(
         currentMessages,
         userMediaPaths: userImagePaths,
+        nativeInputs: NativeInputAttachments(
+          config: config,
+          spec: spec,
+          protocol: NativeInputProtocol.chatCompletions,
+        ),
         canImageInput: canImageInput,
         canAudioInput: canAudioInput,
         allowRemoteImages: allowRemoteImages,
         reasoningReplay: spec.reasoning.replay,
         replayField: spec.reasoning.replayField,
-        stripReasoningContent: isClaudeUpstream,
-        normalizeReasoningDetails: isClaudeUpstream,
         skipImageParsing: skipImageParsing,
         supportsGoogleOpenAIThoughtSignatures:
             info.supportsGoogleOpenAIThoughtSignatures,
@@ -1082,6 +1118,9 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
           jsonDecode(await decodeUtf8Stream(resp2.stream))
               as Map<String, dynamic>;
       final roundUsage = openaiUsageFromObj(lastObj);
+      for (final chunk in citationsDecoder.decodeCitations(lastObj)) {
+        yield chunk;
+      }
       if (roundUsage != null) {
         usage = (usage ?? const TokenUsage()).merge(roundUsage);
       }

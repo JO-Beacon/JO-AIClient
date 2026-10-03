@@ -37,27 +37,18 @@ void main() {
     ),
   ];
 
-  Future<void> pumpSheet(
+  Future<void> pumpMiniMap(
     WidgetTester tester, {
     Future<List<MiniMapSearchHit>> Function(String query)? onSearch,
   }) async {
+    // 直接驱动全屏小地图：旧的底部弹层入口 showMiniMapSheet 已删除。
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => unawaited(
-                showMiniMapSheet(context, messages, onSearch: onSearch),
-              ),
-              child: const Text('open'),
-            ),
-          ),
-        ),
+        home: MiniMapPage(messages: messages, onSearch: onSearch),
       ),
     );
-    await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
 
@@ -68,7 +59,7 @@ void main() {
 
   testWidgets('waits 250ms before querying', (tester) async {
     final queries = <String>[];
-    await pumpSheet(
+    await pumpMiniMap(
       tester,
       onSearch: (query) async {
         queries.add(query);
@@ -85,7 +76,7 @@ void main() {
   });
 
   testWidgets('renders a returned snippet and match count', (tester) async {
-    await pumpSheet(
+    await pumpMiniMap(
       tester,
       onSearch: (_) async => const [
         MiniMapSearchHit(
@@ -110,7 +101,7 @@ void main() {
 
   testWidgets('ignores stale results after the query changes', (tester) async {
     final first = Completer<List<MiniMapSearchHit>>();
-    await pumpSheet(
+    await pumpMiniMap(
       tester,
       onSearch: (query) => query == 'alpha'
           ? first.future

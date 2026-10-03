@@ -29,8 +29,9 @@ void main() {
       'Zhipu AI',
       'Grok',
       'ByteDance',
+      'Vercel',
     ]);
-    expect(ProviderPreset.vendorKeys.toSet(), hasLength(10));
+    expect(ProviderPreset.vendorKeys.toSet(), hasLength(11));
     for (final token in const <String>['AIhubmix', 'KelivoIN', 'Tensdaq']) {
       expect(
         ProviderPreset.vendorKeys,

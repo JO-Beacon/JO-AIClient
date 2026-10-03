@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:Kelivo/core/services/api/providers/google_vertex.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/services/api/chat_api_service.dart';
-import 'package:Kelivo/core/services/api/providers/claude/claude_provider.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk.dart';
 import 'package:Kelivo/core/services/api/providers/zhipu_layout_parsing.dart';
 
@@ -14,6 +14,7 @@ ProviderConfig _config(
   String baseUrl, {
   ProviderKind kind = ProviderKind.openai,
   String modelId = 'gpt-events-test',
+  Map<String, dynamic>? specOverride,
 }) {
   return ProviderConfig(
     id: '${kind.name}EventsTest',
@@ -24,11 +25,13 @@ ProviderConfig _config(
     providerType: kind,
     models: [modelId],
     modelOverrides: {
-      modelId: {
-        'type': 'chat',
-        'input': ['text'],
-        'output': ['text'],
-      },
+      modelId:
+          specOverride ??
+          {
+            'type': 'chat',
+            'input': ['text'],
+            'output': ['text'],
+          },
     },
   );
 }
@@ -295,7 +298,7 @@ void main() {
           },
         },
       );
-      final events = await sendClaudeStreamEvents(
+      final events = await sendGoogleVertexStream(
         client,
         config,
         'claude-sonnet-4@20250514',
@@ -341,6 +344,12 @@ void main() {
       config: _config(
         'http://${server.address.address}:${server.port}',
         modelId: 'gpt-image-events-test',
+        // 能力判定读的是模型规格：要走出图接口，规格里必须声明为图片模型。
+        specOverride: const {
+          'type': 'image',
+          'input': ['text', 'image'],
+          'output': ['image'],
+        },
       ),
       modelId: 'gpt-image-events-test',
       messages: const [

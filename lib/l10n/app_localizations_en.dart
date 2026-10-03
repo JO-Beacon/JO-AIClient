@@ -3330,6 +3330,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInputBarVoiceTranscribing => 'Recognizing…';
 
   @override
+  String get chatInputBarVoiceAttachAudioTooltip => 'Stop and attach as audio';
+
+  @override
+  String get chatInputBarVoiceSendAudioTooltip => 'Send recording';
+
+  @override
+  String get chatInputBarVoiceSavingAudio => 'Saving audio…';
+
+  @override
+  String get audioClipPlayTooltip => 'Play audio';
+
+  @override
+  String get audioClipPauseTooltip => 'Pause';
+
+  @override
+  String get audioClipPlaybackFailed => 'Couldn\'t play this audio';
+
+  @override
   String get chatInputBarImageProcessing => 'Processing image';
 
   @override
@@ -3982,6 +4000,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get providerDetailPageResponseApiTitle => 'Response API (/responses)';
+
+  @override
+  String get providerDetailPagePromptCacheKeyTitle =>
+      'Send Conversation Cache Key';
+
+  @override
+  String get providerDetailPagePromptCacheKeyHelp =>
+      'Adds a stable prompt_cache_key for each conversation to OpenAI-compatible requests. Enable only if your provider supports it. Custom Body values take precedence; cache hits are not guaranteed.';
 
   @override
   String get providerDetailPageAihubmixAppCodeLabel => 'APP-Code (10% off)';
@@ -4832,6 +4858,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutPageLicense => 'License';
+
+  @override
+  String get aboutPageOpenSourceLicenses => 'Open source licenses';
+
+  @override
+  String get aboutOpenSourceLicensesEmpty =>
+      'No license information was found.';
 
   @override
   String get aboutPageCheckForUpdates => 'Check for Updates';

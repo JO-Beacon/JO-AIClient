@@ -100,6 +100,10 @@ typedef _VersionedBackupInfo = ({
   bool secretsIncluded,
   Map<String, Object?>? businessEntityRowIds,
   String normalizedManifestSha256,
+
+  /// 本包的导出时刻（清单的 `createdAtUtc`）；解析不出来时为 null，
+  /// 此时恢复合并维持"本机优先"的原行为。
+  DateTime? createdAtUtc,
 });
 
 /// 依据实时文件系统重新计算 [ImagePart]／[FilePart.unavailable]。
@@ -2604,6 +2608,9 @@ class DataSync {
       secretsIncluded: true,
       businessEntityRowIds: businessEntityRowIds,
       normalizedManifestSha256: normalizedManifestSha256,
+      createdAtUtc: DateTime.tryParse(
+        (manifest['createdAtUtc'] as String?) ?? '',
+      )?.toUtc(),
     );
   }
 
@@ -3566,6 +3573,7 @@ class DataSync {
           preserveExplicitEmptyInstructionList:
               preserveExplicitEmptyInstructionList,
           entityRowIds: entityRowIds,
+          packageCreatedAtUtc: versionedBackup?.createdAtUtc,
         );
         if (!restoreChats) {
           beginNonCancellableCommit();
@@ -3631,6 +3639,7 @@ class DataSync {
                 settings,
                 preserveExplicitEmptyInstructionList: true,
                 assumePreV3EmbeddingMigrationWhenVersionMissing: true,
+                packageCreatedAtUtc: versionedBackup?.createdAtUtc,
               );
       }
 

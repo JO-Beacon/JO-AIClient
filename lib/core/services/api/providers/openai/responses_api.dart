@@ -209,6 +209,7 @@ Stream<StreamChunk> runOpenAIResponsesToolFollowUps({
   required ToolCallHandler onToolCall,
   required Map<String, String>? extraHeaders,
   required Map<String, dynamic>? extraBody,
+  required String? promptCacheKey,
   required double? temperature,
   required double? topP,
   required int? maxTokens,
@@ -285,6 +286,9 @@ Stream<StreamChunk> runOpenAIResponsesToolFollowUps({
       );
       final extraCfg = customBody(config, modelId, assistantBody: extraBody);
       if (extraCfg.isNotEmpty) body2.addAll(extraCfg);
+      if (promptCacheKey != null) {
+        body2.putIfAbsent('prompt_cache_key', () => promptCacheKey);
+      }
       applyPoolsideThinkingIfNeeded(
         body2,
         info: info,
@@ -340,6 +344,14 @@ Stream<StreamChunk> runOpenAIResponsesToolFollowUps({
         final raw = await decodeUtf8Stream(resp2.stream);
         throwIfInBandStreamError(raw);
         final obj = jsonDecode(raw) as Map;
+        for (final chunk
+            in ResponsesStreamDecoder(
+              sourceId: 'round-$round',
+            ).decodeSearchResults(
+              obj['response'] is Map ? obj['response'] as Map : obj,
+            )) {
+          yield chunk;
+        }
         final output = obj['output'] ?? obj['response']?['output'];
         outputItemsForAppend = [
           if (output is List)

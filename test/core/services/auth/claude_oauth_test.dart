@@ -7,7 +7,7 @@ import 'package:Kelivo/core/services/auth/provider_oauth_adapter.dart';
 import 'package:Kelivo/core/services/auth/provider_oauth_service.dart';
 import 'package:Kelivo/core/services/auth/claude_oauth_request.dart';
 import 'package:Kelivo/core/services/auth/oauth_pkce.dart';
-import 'package:Kelivo/core/services/api/providers/claude/claude_provider.dart';
+import 'package:Kelivo/core/services/api/providers/claude_official.dart';
 import 'package:Kelivo/core/services/api/provider_request_headers.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -844,7 +844,7 @@ void main() {
           }),
           config,
         );
-        await sendClaudeStreamEvents(
+        await sendClaudeStream(
           client,
           config,
           'claude-sonnet-4-6',
@@ -903,7 +903,7 @@ void main() {
             }),
             config,
           );
-          final chunks = await sendClaudeStreamEvents(
+          final chunks = await sendClaudeStream(
             client,
             config,
             'claude-sonnet-4-6',
@@ -1138,7 +1138,7 @@ void main() {
           }),
           config,
         );
-        final chunks = await sendClaudeStreamEvents(
+        final chunks = await sendClaudeStream(
           client,
           config,
           'claude-opus-5-5',

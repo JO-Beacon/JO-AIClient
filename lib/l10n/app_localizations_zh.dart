@@ -3204,6 +3204,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatInputBarVoiceTranscribing => '正在识别…';
 
   @override
+  String get chatInputBarVoiceAttachAudioTooltip => '停止并存为音频';
+
+  @override
+  String get chatInputBarVoiceSendAudioTooltip => '直接发送录音';
+
+  @override
+  String get chatInputBarVoiceSavingAudio => '正在保存录音…';
+
+  @override
+  String get audioClipPlayTooltip => '播放音频';
+
+  @override
+  String get audioClipPauseTooltip => '暂停';
+
+  @override
+  String get audioClipPlaybackFailed => '无法播放此音频';
+
+  @override
   String get chatInputBarImageProcessing => '正在处理图片';
 
   @override
@@ -3832,6 +3850,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get providerDetailPageResponseApiTitle => 'Response API (/responses)';
+
+  @override
+  String get providerDetailPagePromptCacheKeyTitle => '发送会话缓存键';
+
+  @override
+  String get providerDetailPagePromptCacheKeyHelp =>
+      '为 OpenAI 兼容请求附加稳定的会话级 prompt_cache_key。仅在供应商支持时开启，自定义 Body 优先，不保证缓存命中。';
 
   @override
   String get providerDetailPageAihubmixAppCodeLabel => '应用 Code（享 10% 优惠）';
@@ -4655,6 +4680,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutPageLicense => '许可证';
+
+  @override
+  String get aboutPageOpenSourceLicenses => '开放源代码许可';
+
+  @override
+  String get aboutOpenSourceLicensesEmpty => '未找到许可信息。';
 
   @override
   String get aboutPageCheckForUpdates => '检查更新';
@@ -16379,6 +16410,24 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get chatInputBarVoiceTranscribing => '正在识别…';
 
   @override
+  String get chatInputBarVoiceAttachAudioTooltip => '停止并存为音频';
+
+  @override
+  String get chatInputBarVoiceSendAudioTooltip => '直接发送录音';
+
+  @override
+  String get chatInputBarVoiceSavingAudio => '正在保存录音…';
+
+  @override
+  String get audioClipPlayTooltip => '播放音频';
+
+  @override
+  String get audioClipPauseTooltip => '暂停';
+
+  @override
+  String get audioClipPlaybackFailed => '无法播放此音频';
+
+  @override
   String get chatInputBarImageProcessing => '正在处理图片';
 
   @override
@@ -17007,6 +17056,13 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get providerDetailPageResponseApiTitle => 'Response API (/responses)';
+
+  @override
+  String get providerDetailPagePromptCacheKeyTitle => '发送会话缓存键';
+
+  @override
+  String get providerDetailPagePromptCacheKeyHelp =>
+      '为 OpenAI 兼容请求附加稳定的会话级 prompt_cache_key。仅在供应商支持时开启，自定义 Body 优先，不保证缓存命中。';
 
   @override
   String get providerDetailPageAihubmixAppCodeLabel => '应用 Code（享 10% 优惠）';
@@ -17830,6 +17886,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get aboutPageLicense => '许可证';
+
+  @override
+  String get aboutPageOpenSourceLicenses => '开放源代码许可';
+
+  @override
+  String get aboutOpenSourceLicensesEmpty => '未找到许可信息。';
 
   @override
   String get aboutPageCheckForUpdates => '检查更新';
@@ -29554,6 +29616,24 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get chatInputBarVoiceTranscribing => '正在辨識…';
 
   @override
+  String get chatInputBarVoiceAttachAudioTooltip => '停止並存為音訊';
+
+  @override
+  String get chatInputBarVoiceSendAudioTooltip => '直接發送錄音';
+
+  @override
+  String get chatInputBarVoiceSavingAudio => '正在儲存錄音…';
+
+  @override
+  String get audioClipPlayTooltip => '播放音訊';
+
+  @override
+  String get audioClipPauseTooltip => '暫停';
+
+  @override
+  String get audioClipPlaybackFailed => '無法播放此音訊';
+
+  @override
   String get chatInputBarImageProcessing => '正在處理圖片';
 
   @override
@@ -30182,6 +30262,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get providerDetailPageResponseApiTitle => 'Response API (/responses)';
+
+  @override
+  String get providerDetailPagePromptCacheKeyTitle => '傳送對話快取鍵';
+
+  @override
+  String get providerDetailPagePromptCacheKeyHelp =>
+      '為 OpenAI 相容請求附加穩定的對話級 prompt_cache_key。僅在供應商支援時開啟，自訂 Body 優先，不保證快取命中。';
 
   @override
   String get providerDetailPageAihubmixAppCodeLabel => '應用 Code（享 10% 優惠）';
@@ -31004,6 +31091,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutPageLicense => '授權';
+
+  @override
+  String get aboutPageOpenSourceLicenses => '開放原始碼授權';
+
+  @override
+  String get aboutOpenSourceLicensesEmpty => '未找到授權資訊。';
 
   @override
   String get aboutPageCheckForUpdates => '檢查更新';

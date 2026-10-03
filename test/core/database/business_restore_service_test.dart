@@ -88,6 +88,49 @@ void main() {
     expect(await service.exportSettings(), before);
   });
 
+  for (final merge in [false, true]) {
+    test(
+      'invalid prompt cache key setting leaves existing data intact during ${merge ? 'merge' : 'overwrite'}',
+      () async {
+        await service.overwrite({
+          'provider_configs_v1': jsonEncode({
+            'old': {
+              'id': 'old',
+              'apiKey': 'old-key',
+              'promptCacheKeyEnabled': true,
+            },
+          }),
+          'providers_order_v1': ['old'],
+          'theme_mode_v1': 'light',
+        });
+        final before = await service.exportSettings();
+        for (final invalidValue in <Object>['true', 1, [], {}]) {
+          final incoming = <String, Object?>{
+            'provider_configs_v1': jsonEncode({
+              'incoming': {
+                'id': 'incoming',
+                'promptCacheKeyEnabled': invalidValue,
+              },
+            }),
+            'providers_order_v1': ['incoming'],
+            'theme_mode_v1': 'dark',
+          };
+          await expectLater(
+            merge ? service.merge(incoming) : service.overwrite(incoming),
+            throwsA(
+              isA<FormatException>().having(
+                (error) => error.message,
+                'setting key',
+                'provider_configs_v1',
+              ),
+            ),
+          );
+          expect(await service.exportSettings(), before);
+        }
+      },
+    );
+  }
+
   test('overwrite preserves an explicitly empty instruction list', () async {
     await service.overwrite({
       'instruction_injections_v1': jsonEncode(const <Object>[]),
@@ -266,5 +309,34 @@ END;
     );
 
     expect(await service.exportSettings(), before);
+  });
+
+  test('合并恢复：备份更晚时用备份值（覆盖本机较旧的设置）', () async {
+    await repository.setPreference('theme_mode_v1', 'light');
+    // 把本机这个键的改动时刻改早，模拟"本机改在前、备份导出在后"
+    await database.customStatement(
+      "UPDATE preference_rows SET updated_at = ? WHERE key = 'theme_mode_v1';",
+      [DateTime.utc(2026, 10, 3, 12).microsecondsSinceEpoch],
+    );
+
+    await service.merge({
+      'theme_mode_v1': 'dark',
+    }, packageCreatedAtUtc: DateTime.utc(2026, 10, 3, 13));
+
+    expect(await repository.getPreference('theme_mode_v1'), 'dark');
+  });
+
+  test('合并恢复：本机更晚时不被备份倒退（保留本机）', () async {
+    await repository.setPreference('theme_mode_v1', 'light');
+    await database.customStatement(
+      "UPDATE preference_rows SET updated_at = ? WHERE key = 'theme_mode_v1';",
+      [DateTime.utc(2026, 10, 3, 13).microsecondsSinceEpoch],
+    );
+
+    await service.merge({
+      'theme_mode_v1': 'dark',
+    }, packageCreatedAtUtc: DateTime.utc(2026, 10, 3, 12));
+
+    expect(await repository.getPreference('theme_mode_v1'), 'light');
   });
 }

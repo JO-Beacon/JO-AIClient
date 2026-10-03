@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,11 +9,11 @@ void main() {
   const channel = MethodChannel('app.file_save');
 
   setUp(() {
-    NativeFileSave.debugForceAndroidForTest = true;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
   });
 
   tearDown(() {
-    NativeFileSave.debugForceAndroidForTest = false;
+    debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });

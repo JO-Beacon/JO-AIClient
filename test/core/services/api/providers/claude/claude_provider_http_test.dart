@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_container.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_files.dart';
-import 'package:Kelivo/core/services/api/providers/claude/claude_provider.dart';
+import 'package:Kelivo/core/services/api/providers/claude_official.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_role_normalizer.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk.dart';
 import 'package:Kelivo/core/utils/multimodal_input_utils.dart';
@@ -168,7 +168,7 @@ void main() {
       final client = _ClaudeFakeClient();
       addTearDown(client.close);
 
-      await sendClaudeStreamEvents(client, _config(), _model, [
+      await sendClaudeStream(client, _config(), _model, [
         {
           'role': 'user',
           'content': 'analyse',
@@ -205,7 +205,7 @@ void main() {
     final missing = File('${tempDir.path}/missing.csv');
 
     await expectLater(
-      sendClaudeStreamEvents(client, _config(), _model, [
+      sendClaudeStream(client, _config(), _model, [
         {
           'role': 'user',
           'content': 'analyse',
@@ -225,7 +225,7 @@ void main() {
       final client = _ClaudeFakeClient()..staleContainer = 'container_old';
       addTearDown(client.close);
 
-      await sendClaudeStreamEvents(client, _config(), _model, [
+      await sendClaudeStream(client, _config(), _model, [
         {
           'role': 'user',
           'content': 'first',
@@ -276,7 +276,7 @@ void main() {
       final client = _ClaudeFakeClient();
       addTearDown(client.close);
 
-      await sendClaudeStreamEvents(
+      await sendClaudeStream(
         client,
         _config(builtInTools: const ['web_fetch']),
         _model,
@@ -315,7 +315,7 @@ void main() {
       final client = _ClaudeFakeClient();
       addTearDown(client.close);
 
-      await sendClaudeStreamEvents(
+      await sendClaudeStream(
         client,
         _config(),
         _model,
@@ -357,15 +357,9 @@ void main() {
       final client = _ClaudeFakeClient()..emitPauseTurn = true;
       addTearDown(client.close);
 
-      final events = await sendClaudeStreamEvents(
-        client,
-        _config(),
-        _model,
-        const [
-          {'role': 'user', 'content': 'run code'},
-        ],
-        stream: false,
-      ).toList();
+      final events = await sendClaudeStream(client, _config(), _model, const [
+        {'role': 'user', 'content': 'run code'},
+      ], stream: false).toList();
 
       expect(
         client.requests.where(
@@ -392,19 +386,13 @@ void main() {
       final client = _ClaudeFakeClient();
       addTearDown(client.close);
 
-      await sendClaudeStreamEvents(
-        client,
-        _config(builtInTools: const []),
-        _model,
-        [
-          {
-            'role': 'assistant',
-            'content': 'the reply the conversation starts on',
-          },
-          {'role': 'user', 'content': 'carry on'},
-        ],
-        stream: false,
-      ).toList();
+      await sendClaudeStream(client, _config(builtInTools: const []), _model, [
+        {
+          'role': 'assistant',
+          'content': 'the reply the conversation starts on',
+        },
+        {'role': 'user', 'content': 'carry on'},
+      ], stream: false).toList();
 
       final body =
           jsonDecode(client.requests.single.body) as Map<String, dynamic>;

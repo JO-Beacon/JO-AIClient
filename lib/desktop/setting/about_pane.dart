@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import '../../features/settings/pages/open_source_licenses_page.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -110,6 +112,18 @@ class _DesktopAboutPaneState extends State<DesktopAboutPane> {
 
   @override
   Widget build(BuildContext context) {
+    // 面板内部再挂一个 Navigator：许可页要在设置面板这块区域里翻页（右半边内
+    // 全屏），而不是弹对话框。与定时任务、日志页的做法一致。
+    return Navigator(
+      onGenerateRoute: (_) => MaterialPageRoute<void>(
+        // 用路由自己的 context 构建，这样内容里的 Navigator.of 找到的是
+        // 这个面板内的 Navigator，而不是整窗的根 Navigator。
+        builder: (routeContext) => _buildBody(routeContext),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final updateProvider = context.watch<UpdateProvider>();
@@ -223,6 +237,27 @@ class _DesktopAboutPaneState extends State<DesktopAboutPane> {
                     label: l10n.aboutPageLicense,
                     onTap: () => _openUrl(
                       'https://github.com/JO-Beacon/JO-AIClient/blob/main/LICENSE',
+                    ),
+                  ),
+                  const _DeskRowDivider(),
+                  // 随包分发的第三方组件（Flutter 框架、各依赖包）的许可证与版权声明
+                  _DeskNavRow(
+                    icon: lucide.Lucide.BookOpenText,
+                    label: l10n.aboutPageOpenSourceLicenses,
+                    // 在设置面板内部翻页，不用 Material 的 showLicensePage，
+                    // 也不弹居中对话框。面板内换页用淡入淡出，不用 Material
+                    // 的推入/缩放转场，否则观感与应用其他部分不一致。
+                    onTap: () => Navigator.of(context).push(
+                      PageRouteBuilder<void>(
+                        transitionDuration: const Duration(milliseconds: 200),
+                        reverseTransitionDuration: const Duration(
+                          milliseconds: 200,
+                        ),
+                        pageBuilder: (_, __, ___) =>
+                            const OpenSourceLicensesPage(embedded: true),
+                        transitionsBuilder: (_, animation, __, child) =>
+                            FadeTransition(opacity: animation, child: child),
+                      ),
                     ),
                   ),
                 ],

@@ -112,10 +112,9 @@ void main() {
         ConversationPromptSettings.fromExtras(fork.extras).systemPrompt,
         'PRIVATE',
       );
-      expect(
-        ConversationPromptSettings.fromExtras(fork.extras).worldBookIds,
-        ['book'],
-      );
+      expect(ConversationPromptSettings.fromExtras(fork.extras).worldBookIds, [
+        'book',
+      ]);
       expect(
         fork.extras[WorldBookActivation.extrasKey],
         expected[WorldBookActivation.extrasKey],

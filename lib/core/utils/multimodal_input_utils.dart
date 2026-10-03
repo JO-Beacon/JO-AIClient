@@ -66,6 +66,9 @@ bool isAudioMime(String mime) => mime.toLowerCase().startsWith('audio/');
 
 bool isVideoMime(String mime) => mime.toLowerCase().startsWith('video/');
 
+bool isPdfMime(String mime) =>
+    mime.toLowerCase().split(';').first.trim() == 'application/pdf';
+
 /// 音频容器的规范标记（wav、mp3、m4a 等）；非音频或无法判定时返回 null。
 ///
 /// 官方 OpenAI 的音频输入只接受 wav 与 mp3，其它容器由接口层拒收；
@@ -101,13 +104,17 @@ String? _fileExtensionOfSource(String source) {
 }
 
 String inferMediaMimeFromSource(String source, {String fallbackMime = ''}) {
-  final lower = source.toLowerCase();
+  var lower = source.toLowerCase();
   if (lower.startsWith('data:')) {
     final start = lower.indexOf(':');
     final semi = lower.indexOf(';');
     if (start >= 0 && semi > start) {
       return lower.substring(start + 1, semi);
     }
+  }
+  // 带签名的下载链接，扩展名仍留在路径里。
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    lower = Uri.tryParse(lower)?.path ?? lower;
   }
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
     return 'image/jpeg';
@@ -118,6 +125,12 @@ String inferMediaMimeFromSource(String source, {String fallbackMime = ''}) {
   if (lower.endsWith('.bmp')) return 'image/bmp';
   if (lower.endsWith('.wav')) return 'audio/wav';
   if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  if (lower.endsWith('.aac')) return 'audio/aac';
+  if (lower.endsWith('.flac')) return 'audio/flac';
+  if (lower.endsWith('.ogg') || lower.endsWith('.oga')) return 'audio/ogg';
+  if (lower.endsWith('.opus')) return 'audio/opus';
+  if (lower.endsWith('.aiff') || lower.endsWith('.aif')) return 'audio/aiff';
   if (lower.endsWith('.pcm16')) return 'audio/pcm16';
   if (lower.endsWith('.pcm')) return 'audio/pcm';
   if (lower.endsWith('.mp4')) return 'video/mp4';
@@ -129,6 +142,7 @@ String inferMediaMimeFromSource(String source, {String fallbackMime = ''}) {
   if (lower.endsWith('.wmv')) return 'video/x-ms-wmv';
   if (lower.endsWith('.webm')) return 'video/webm';
   if (lower.endsWith('.3gp') || lower.endsWith('.3gpp')) return 'video/3gpp';
+  if (lower.endsWith('.pdf')) return 'application/pdf';
   return fallbackMime;
 }
 

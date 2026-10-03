@@ -7,7 +7,7 @@ import 'package:Kelivo/core/models/api_keys.dart';
 import 'package:Kelivo/core/providers/model_provider.dart';
 import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/services/api/embedding/embedding_api_service.dart';
-import 'package:Kelivo/core/services/api/providers/google/google_provider.dart';
+import 'package:Kelivo/core/services/api/providers/google_vertex.dart';
 
 class _Server {
   _Server._(this._server);

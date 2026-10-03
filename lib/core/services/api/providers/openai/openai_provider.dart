@@ -13,6 +13,7 @@ import '../../../../utils/multimodal_input_utils.dart';
 import '../../../../../utils/sandbox_path_resolver.dart';
 import '../../builtin_tools.dart';
 import '../../chat_api_helpers.dart';
+import '../../native_input_attachments.dart';
 import '../../tool_result_content.dart';
 import '../../generation/tool_loop_runner.dart';
 import '../../kimi_formula_search.dart';
@@ -111,6 +112,7 @@ Stream<StreamChunk> sendOpenAIStream(
   ProviderConfig config,
   String modelId,
   List<Map<String, dynamic>> messages, {
+  String? conversationId,
   List<String>? userImagePaths,
   int? thinkingBudget,
   ReasoningRequest reasoning = ReasoningRequest.auto,
@@ -127,6 +129,11 @@ Stream<StreamChunk> sendOpenAIStream(
   StreamRoundRunner? retryRound,
 }) async* {
   final upstreamModelId = apiModelId(config, modelId);
+  final cacheKey = conversationId?.trim() ?? '';
+  final promptCacheKey =
+      config.promptCacheKeyEnabled && !config.isOAuth && cacheKey.isNotEmpty
+      ? cacheKey
+      : null;
   // Utility calls (title / summary generation) only want search injected.
   final Iterable<String>? configuredBuiltInTools = builtInSearchOnly
       ? builtInTools(
@@ -135,10 +142,6 @@ Stream<StreamChunk> sendOpenAIStream(
         ).where((name) => name == BuiltInToolNames.search)
       : null;
   final url = _openAICompatibleUrl(config);
-  // Claude models served through OpenAI-compatible proxies require signed
-  // thinking blocks; unsigned reasoning echoes are stripped before sending.
-  final isClaudeUpstream = upstreamModelId.toLowerCase().contains('claude');
-
   final effectiveInfo = effectiveModelInfo(config, modelId);
   final isReasoning = effectiveInfo.abilities.contains(ModelAbility.reasoning);
   final wantsImageOutput = effectiveInfo.output.contains(Modality.image);
@@ -162,8 +165,10 @@ Stream<StreamChunk> sendOpenAIStream(
         (isReasoning || modelMetadata['oauthThinkingRequired'] == true),
   );
   // Kimi Code 的 k3 别名同样不支持远程图片，须与 isKimiK3Model 一起排除。
+  // 是否接受远程图片链接由模型规格决定（remoteImageUrls），不能只看供应商。
   final bool allowRemoteImages =
       canImageInput &&
+      effectiveInfo.remoteImageUrls &&
       !isKimiK3Model(upstreamModelId) &&
       !info.isKimiCodeK3Model;
   // OpenRouter documents delta-style `reasoning_details` chunks that must be
@@ -189,6 +194,18 @@ Stream<StreamChunk> sendOpenAIStream(
     config,
     modelId,
   ).contains(BuiltInToolNames.search);
+  if (BuiltInToolsHelper.isVercelProvider(config) &&
+      config.useResponseApi == true &&
+      builtInSearchEnabled &&
+      !BuiltInToolsHelper.supportsBuiltInSearchForModel(
+        cfg: config,
+        modelId: modelId,
+      )) {
+    throw UnsupportedError(
+      'Kelivo supports Vercel Responses native web search with OpenAI models. '
+      'Use Chat Completions for Vercel Gateway search with other models.',
+    );
+  }
   if (config.useResponseApi != true &&
       BuiltInToolsHelper.isMoonshotProvider(config) &&
       BuiltInToolsHelper.isKimiK3Model(upstreamModelId) &&
@@ -307,6 +324,29 @@ Stream<StreamChunk> sendOpenAIStream(
         continue;
       }
 
+      final nativeParts =
+          await NativeInputAttachments(
+            config: config,
+            spec: spec,
+            protocol: NativeInputProtocol.responses,
+          ).build(
+            m,
+            userPaths: i == lastResponsesUserIndex ? userImagePaths : null,
+          );
+      void addMessage(Map<String, dynamic> message) {
+        if (nativeParts.isNotEmpty) {
+          final content = message['content'];
+          message['content'] = [
+            if (content is List)
+              ...content
+            else if (content is String && content.isNotEmpty)
+              {'type': 'input_text', 'text': content},
+            ...nativeParts,
+          ];
+        }
+        input.add(message);
+      }
+
       final isAssistant = roleRaw == 'assistant';
 
       // Handle assistant messages with tool_calls - convert to function_call format
@@ -381,7 +421,7 @@ Stream<StreamChunk> sendOpenAIStream(
               ],
             });
           } else {
-            input.add({'role': roleRaw, 'content': parsed.text});
+            addMessage({'role': roleRaw, 'content': parsed.text});
           }
           continue;
         }
@@ -453,6 +493,14 @@ Stream<StreamChunk> sendOpenAIStream(
             }
           }
           final bool isAv = isAudioMime(mime) || isVideoMime(mime);
+          final bool isPdf = isPdfMime(mime);
+          // 只有协议与模型确实能原生携带时，才把媒体让给原生附件；否则保留一行
+          // 文本引用，避免纯附件消息把 content 变成空数组（接口拒收或静默丢弃）。
+          final bool nativeCarried =
+              (isAudioMime(mime) && spec.supportsAudioInput) ||
+              (isVideoMime(mime) && spec.supportsVideoInput) ||
+              (isPdf && spec.supportsPdfInput);
+          if (nativeCarried && !isAssistant) continue;
           if (isAv) {
             // 这条路径没有视频部件；音频在模型不支持时也走这里。两者都保留一行文本
             // 引用，避免纯音视频附件把 content 变成空数组（接口拒收或静默丢弃）。
@@ -465,6 +513,8 @@ Stream<StreamChunk> sendOpenAIStream(
             }
             continue;
           }
+          // 未原生携带的 PDF 不按图片下发。
+          if (isPdf) continue;
           if (!allowRemoteImages && isRemoteHttpUrl(p)) {
             // Keep the remote reference visible as text when image embed is off.
             final normalized = normalizeSrc(p);
@@ -517,7 +567,7 @@ Stream<StreamChunk> sendOpenAIStream(
             'content': assistantContent,
           });
         } else {
-          input.add({'role': roleRaw, 'content': parts});
+          addMessage({'role': roleRaw, 'content': parts});
         }
       } else {
         // No images
@@ -532,7 +582,7 @@ Stream<StreamChunk> sendOpenAIStream(
             ],
           });
         } else {
-          input.add({'role': roleRaw, 'content': raw});
+          addMessage({'role': roleRaw, 'content': raw});
         }
       }
     }
@@ -592,13 +642,16 @@ Stream<StreamChunk> sendOpenAIStream(
     final mm = await buildOpenAIChatCompletionMessages(
       messages,
       userMediaPaths: userImagePaths,
+      nativeInputs: NativeInputAttachments(
+        config: config,
+        spec: spec,
+        protocol: NativeInputProtocol.chatCompletions,
+      ),
       canImageInput: canImageInput,
       canAudioInput: canAudioInput,
       allowRemoteImages: allowRemoteImages,
       reasoningReplay: spec.reasoning.replay,
       replayField: spec.reasoning.replayField,
-      stripReasoningContent: isClaudeUpstream,
-      normalizeReasoningDetails: isClaudeUpstream,
       skipImageParsing: skipImageParsing,
       supportsGoogleOpenAIThoughtSignatures:
           info.supportsGoogleOpenAIThoughtSignatures,
@@ -660,10 +713,14 @@ Stream<StreamChunk> sendOpenAIStream(
   if (extraBodyCfg.isNotEmpty) {
     body.addAll(extraBodyCfg);
   }
+  if (promptCacheKey != null) {
+    body.putIfAbsent('prompt_cache_key', () => promptCacheKey);
+  }
   // Built-in tools run after the custom body and merge by type so custom
   // function tools and provider server tools coexist.
+  Object? builtInSearchQuery;
   if (config.useResponseApi != true) {
-    applyChatCompletionsBuiltInTools(
+    builtInSearchQuery = applyChatCompletionsBuiltInTools(
       body,
       config: config,
       modelId: modelId,
@@ -686,6 +743,12 @@ Stream<StreamChunk> sendOpenAIStream(
       final obj = jsonDecode(txt);
       // Responses API non-stream
       if (config.useResponseApi == true) {
+        for (final chunk
+            in ResponsesStreamDecoder(sourceId: 'finish').decodeSearchResults(
+              obj['response'] is Map ? obj['response'] as Map : obj as Map,
+            )) {
+          yield chunk;
+        }
         String outText = '';
         final rawOutput = obj['output'] ?? obj['response']?['output'];
         final reasoningText = responsesReasoningText(rawOutput);
@@ -784,6 +847,7 @@ Stream<StreamChunk> sendOpenAIStream(
             onToolCall: effectiveOnToolCall,
             extraHeaders: extraHeaders,
             extraBody: extraBody,
+            promptCacheKey: promptCacheKey,
             temperature: temperature,
             topP: topP,
             maxTokens: maxTokens,
@@ -849,7 +913,6 @@ Stream<StreamChunk> sendOpenAIStream(
           canImageInput: canImageInput,
           allowRemoteImages: allowRemoteImages,
           skipImageParsing: skipImageParsing,
-          isClaudeUpstream: isClaudeUpstream,
           needsReasoningEcho: needsReasoningEcho,
           extraHeaders: extraHeaders,
           initialUsage: firstUsage,
@@ -862,6 +925,11 @@ Stream<StreamChunk> sendOpenAIStream(
       );
       final firstMessage = openaiFirstChoiceMessage(lastObj);
       final ids = StreamChunkIds('finish');
+      for (final chunk in ChatCompletionsStreamDecoder(
+        sourceId: 'finish',
+      ).decodeCitations(lastObj)) {
+        yield chunk;
+      }
       yield* emitImages(visible.images, ids: ids);
       yield* emitDone(
         ids: ids,
@@ -1036,6 +1104,7 @@ Stream<StreamChunk> sendOpenAIStream(
             onToolCall: effectiveOnToolCall,
             extraHeaders: extraHeaders,
             extraBody: extraBody,
+            promptCacheKey: promptCacheKey,
             temperature: temperature,
             topP: topP,
             maxTokens: maxTokens,
@@ -1115,14 +1184,15 @@ Stream<StreamChunk> sendOpenAIStream(
       canImageInput: canImageInput,
       allowRemoteImages: allowRemoteImages,
       skipImageParsing: skipImageParsing,
-      isClaudeUpstream: isClaudeUpstream,
       isReasoning: isReasoning,
       effort: effort,
       thinkingBudget: thinkingBudget,
       temperature: temperature,
       topP: topP,
       tools: tools,
+      builtInSearchQuery: builtInSearchQuery,
       extraBodyCfg: extraBodyCfg,
+      promptCacheKey: promptCacheKey,
       extraHeaders: extraHeaders,
       wantsImageOutput: wantsImageOutput,
       needsReasoningEcho: needsReasoningEcho,

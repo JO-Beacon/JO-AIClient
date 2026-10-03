@@ -1061,6 +1061,14 @@ void main() {
     );
   }
 
+  /// 「模型规格表单」的保存控件：移动端整页是 `model-spec-save`，
+  /// 桌面弹窗是 `model-spec-confirm`。两者都只有图标与 tooltip，没有可见文字。
+  Finder modelSaveFinder() {
+    final page = find.byKey(const ValueKey('model-spec-save'));
+    if (page.evaluate().isNotEmpty) return page;
+    return find.byKey(const ValueKey('model-spec-confirm'));
+  }
+
   Future<void> openModelEditor(
     WidgetTester tester, {
     required bool desktop,
@@ -1102,8 +1110,10 @@ void main() {
     );
     await tester.tap(find.text('Synced Kimi'));
     await tester.pumpAndSettle();
-    expect(find.text('Confirm'), findsOneWidget);
-    expect(find.byType(BottomSheet), desktop ? findsNothing : findsOneWidget);
+    // 模型编辑器已统一到「模型规格表单」：确认不是文字按钮，
+    // 移动端是整页（key `model-spec-save`），桌面是弹窗（key `model-spec-confirm`）。
+    expect(modelSaveFinder(), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
   }
 
@@ -1134,7 +1144,7 @@ void main() {
         'model Confirm preserves ${metadata['oauthProtocol']} OAuth metadata desktop=$desktop',
         (tester) async {
           await openModelEditor(tester, desktop: desktop, metadata: metadata);
-          await tester.tap(find.text('Confirm'));
+          await tester.tap(modelSaveFinder());
           await tester.pumpAndSettle();
 
           final config = settings.providerConfigs['oauth-test']!;
@@ -1174,7 +1184,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Confirm'));
+        await tester.tap(modelSaveFinder());
         await tester.pumpAndSettle();
 
         final saved =
@@ -1199,7 +1209,7 @@ void main() {
         await tester.ensureVisible(find.text('Embedding'));
         await tester.tap(find.text('Embedding'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Confirm'));
+        await tester.tap(modelSaveFinder());
         await tester.pumpAndSettle();
 
         final saved =

@@ -15,6 +15,14 @@
 *.md text eol=lf
 *.sh text eol=lf
 *.ps1 text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.svg text eol=lf
+*.py text eol=lf
+
+# 字体子集是二进制，不做换行转换，也不参与差异计算。
+*.woff2 binary
 
 # dependencies/ 下的第三方 fork 保持上游原样：不做换行转换，
 # 也不纳入本仓库的换行约定。

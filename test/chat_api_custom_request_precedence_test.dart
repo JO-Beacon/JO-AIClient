@@ -137,7 +137,14 @@ void main() {
         expect(receivedBody['assistantOnly'], 3);
         expect(receivedBody['providerOnly'], isTrue);
         expect(receivedBody['modelOnly'], 42);
-        expect(receivedBody['nested'], {'model': true});
+        // 嵌套对象逐键深合并：助手级、供应商级、模型级各写的键都在。
+        // 这里曾写成 `{'model': true}`（浅覆盖），与上游语义不符；
+        // 浅覆盖会让模型级把同一个嵌套对象里前两级的键整块顶掉。
+        expect(receivedBody['nested'], {
+          'assistant': true,
+          'provider': true,
+          'model': true,
+        });
       },
     );
   }

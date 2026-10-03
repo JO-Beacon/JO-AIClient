@@ -7,11 +7,12 @@ import 'package:http/http.dart' as http;
 
 import '../../../providers/settings_provider.dart';
 import '../../auth/provider_oauth_service.dart';
+import '../../custom_request_merger.dart';
 import '../../model_override_payload_parser.dart';
 import '../../network/provider_http_client.dart';
 import '../chat_api_helpers.dart';
 import '../provider_request_headers.dart';
-import '../providers/google/google_provider.dart';
+import '../providers/google_vertex.dart';
 
 /// What the vectors will be used for. Only Gemini uses it to tune the
 /// embedding; other APIs ignore it.
@@ -296,15 +297,20 @@ class EmbeddingApiService {
   }) async {
     // 供应商级自定义 body 作用于所有模型，但其中只有聊天请求认识的字段会
     // 让 embeddings 接口报错，先剔除；模型级 body 为本模型而写，原样最后应用。
-    final providerBody = ModelOverridePayloadParser.customBodyFromRows(
-      config.customBody,
-    )..removeWhere((key, _) => _chatOnlyBodyKeys.contains(key));
-    final modelBody = ModelOverridePayloadParser.customBody(
-      ModelOverridePayloadParser.modelOverride(config.modelOverrides, modelId),
+    CustomRequestMerger.applyBody(
+      body,
+      ModelOverridePayloadParser.customBodyFromRows(config.customBody)
+        ..removeWhere((key, _) => _chatOnlyBodyKeys.contains(key)),
     );
-    body
-      ..addAll(providerBody)
-      ..addAll(modelBody);
+    CustomRequestMerger.applyBody(
+      body,
+      ModelOverridePayloadParser.customBody(
+        ModelOverridePayloadParser.modelOverride(
+          config.modelOverrides,
+          modelId,
+        ),
+      ),
+    );
     final res = await client.post(
       url,
       headers: customHeaders(

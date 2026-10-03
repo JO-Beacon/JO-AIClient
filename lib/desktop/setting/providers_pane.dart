@@ -3188,6 +3188,48 @@ class DesktopProviderDetailPaneState extends State<DesktopProviderDetailPane> {
                                     ],
                                   ),
                                 ),
+                              if (kindNow == ProviderKind.openai &&
+                                  !cfgNow.isOAuth) ...[
+                                const SizedBox(height: 4),
+                                row(
+                                  l10n.providerDetailPagePromptCacheKeyTitle,
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Tooltip(
+                                        message: l10n
+                                            .providerDetailPagePromptCacheKeyHelp,
+                                        child: Icon(
+                                          Icons.help_outline,
+                                          size: 16,
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IosSwitch(
+                                        value: cfgNow.promptCacheKeyEnabled,
+                                        semanticLabel: l10n
+                                            .providerDetailPagePromptCacheKeyTitle,
+                                        onChanged: (value) async {
+                                          final current = spWatch
+                                              .getProviderConfig(
+                                                widget.providerKey,
+                                                defaultName: widget.displayName,
+                                              );
+                                          await spWatch.setProviderConfig(
+                                            widget.providerKey,
+                                            current.copyWith(
+                                              promptCacheKeyEnabled: value,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               if (supportsClaudePromptCaching) ...[
                                 const SizedBox(height: 4),
                                 row(
@@ -4608,7 +4650,9 @@ class DesktopProviderDetailPaneState extends State<DesktopProviderDetailPane> {
   // }
 
   Future<void> _createModel(BuildContext context) async {
-    final res = await showDesktopCreateModelDialog(
+    // 统一走模型规格表单：它支持三档类型（聊天 / 嵌入 / 图片），
+    // 旧编辑器只有两档，图片模型建不出来。
+    final res = await showDesktopCreateModelSpecDialog(
       context,
       providerKey: widget.providerKey,
     );
@@ -6941,10 +6985,10 @@ class _ModelRow extends StatelessWidget {
       onTap: isSelectionMode
           ? () => onSelectionChanged?.call(!isSelected)
           : cfg.isOAuth
-          ? () => showDesktopModelEditDialog(
+          ? () => showDesktopModelSpecEditDialog(
               context,
               providerKey: providerKey,
-              modelId: modelId,
+              modelKey: modelId,
             )
           : null,
       child: Container(
@@ -7022,10 +7066,10 @@ class _ModelRow extends StatelessWidget {
               _IconBtn(
                 icon: lucide.Lucide.Settings2,
                 onTap: () async {
-                  await showDesktopModelEditDialog(
+                  await showDesktopModelSpecEditDialog(
                     context,
                     providerKey: providerKey,
-                    modelId: modelId,
+                    modelKey: modelId,
                   );
                 },
               ),

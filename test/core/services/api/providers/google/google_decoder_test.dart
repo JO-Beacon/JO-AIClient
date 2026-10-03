@@ -465,4 +465,78 @@ void main() {
       expect(decoder.textThoughtSigVal, 'sig-text');
     },
   );
+
+  Map<String, dynamic> usageEvent(Map<String, dynamic> usage) {
+    return <String, dynamic>{
+      'usageMetadata': usage,
+      'candidates': [
+        <String, dynamic>{
+          'content': <String, dynamic>{
+            'parts': [
+              {'text': 'x'},
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  test('本轮只报拆分、不报总数时，上一期的总数作废', () {
+    final decoder = GoogleStreamDecoder();
+    decoder.accept(
+      _event(
+        usageEvent({
+          'promptTokenCount': 10,
+          'candidatesTokenCount': 5,
+          'totalTokenCount': 15,
+        }),
+      ),
+    );
+    expect(decoder.usage!.totalTokens, 15);
+
+    final result = decoder.accept(
+      _event(usageEvent({'promptTokenCount': 20, 'candidatesTokenCount': 8})),
+    );
+
+    // 本期给了拆分却没给总数：总数改按本期拆分推导（20+8），
+    // 不得沿用上一期的 15。
+    expect(decoder.usage!.totalTokens, isNot(15));
+    expect(decoder.usage!.totalTokens, 28);
+    expect(decoder.usage!.promptTokens, 20);
+    expect(result.chunks.whereType<Usage>().single.usage.totalTokens, 28);
+  });
+
+  test('本轮明确上报 0 时按 0 处理，不作废', () {
+    final decoder = GoogleStreamDecoder();
+    decoder.accept(
+      _event(
+        usageEvent({
+          'promptTokenCount': 10,
+          'candidatesTokenCount': 5,
+          'totalTokenCount': 15,
+        }),
+      ),
+    );
+
+    decoder.accept(
+      _event(
+        usageEvent({
+          'promptTokenCount': 10,
+          'candidatesTokenCount': 5,
+          'totalTokenCount': 0,
+        }),
+      ),
+    );
+
+    // 上报为 0 与"未上报"必须区分：0 要如实显示。
+    expect(decoder.usage!.totalTokens, 0);
+  });
+
+  test('本轮完全没上报用量时不发 Usage 分块', () {
+    final decoder = GoogleStreamDecoder();
+    final result = decoder.accept(_event(usageEvent(<String, dynamic>{})));
+
+    expect(result.chunks.whereType<Usage>(), isEmpty);
+    expect(decoder.usage, isNull);
+  });
 }

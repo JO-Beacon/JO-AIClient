@@ -11,7 +11,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 
 import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_files.dart';
-import 'package:Kelivo/core/services/api/providers/claude/claude_provider.dart';
+import 'package:Kelivo/core/services/api/providers/claude_official.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk.dart';
 import 'package:Kelivo/utils/upload_dedupe.dart';
 
@@ -268,7 +268,7 @@ void main() {
       ..contents['file_chart'] = <int>[1, 2, 3, 4];
     addTearDown(api.close);
 
-    final chunks = await sendClaudeStreamEvents(api, _config(), _model, [
+    final chunks = await sendClaudeStream(api, _config(), _model, [
       {'role': 'user', 'content': 'plot'},
     ]).toList();
 
@@ -321,7 +321,7 @@ void main() {
     };
     api.contents['file_chart'] = <int>[1, 2, 3, 4];
 
-    final chunks = await sendClaudeStreamEvents(api, _config(), _model, [
+    final chunks = await sendClaudeStream(api, _config(), _model, [
       {'role': 'user', 'content': 'plot'},
     ]).toList();
 
