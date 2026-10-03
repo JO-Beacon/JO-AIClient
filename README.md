@@ -77,7 +77,7 @@
 - 🎙️ **语音服务** - 支持系统语音与多家网络 TTS 服务商，以及可配置的语音识别（ASR）服务；支持朗读音频导出。
 - 🛠️ **MCP 支持** - 支持 Model Context Protocol 工具与 OAuth 授权，内置 fetch 工具。
 - 🔍 **网络搜索** - 集成二十余家搜索服务（Bing、Tavily、Brave、Grok、博查、Firecrawl、AnySearch、You.com 等），并支持部分供应商的内置搜索。
-- 🧰 **设备本地工具** - 日历、屏幕使用时长（Android）、当前位置（Android）、健康数据摘要、提醒事项、天气等，按平台与授权提供。
+- 🧰 **设备本地工具** - 日历、屏幕使用时长（Android）、当前位置（Android）等，按平台与授权提供。
 - 🔁 **自动重试** - 请求失败后按可配置的等待策略自动重试，界面显示倒计时，提供完整的重试设置面板。
 - 💬 **对话体验** - 每个会话可单独指定模型；长回复自动按段落分成多个气泡；气泡样式可按角色自定义并实时预览；会话多选批量置顶、移动、删除；支持复制话题。
 - 🧩 **记忆系统** - 支持记忆提取、管理、上下文注入与注入策略配置。
@@ -160,7 +160,7 @@
 
 如果你喜欢这个项目，可以给个 Star ⭐
 
-<a href="https://www.star-history.com/?type=date&repos=JO-Beacon%2FJO-Kelivo">
+<a href="https://www.star-history.com/?type=date&repos=JO-Beacon%2FJO-AIClient">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=JO-Beacon/JO-AIClient&type=date&theme=dark&legend=top-left&sealed_token=cviwNfwHCNCz1YqYCFNDyNSGtySn160KcyFzHuXfrwvxZs98E2ogX9uhHzJQ0IuzVT9NqXi_kd_0lpeIxd43zfHRFwJ5s4m0iVBNchoUCp6IKgWUKcbUf94uBRQhtaY--oO9WsM5uULEmMBWF_nkj5W8YjOiFLkwm97i3Ioh1u9YzU41NAmN94wov_RK" />
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=JO-Beacon/JO-AIClient&type=date&legend=top-left&sealed_token=cviwNfwHCNCz1YqYCFNDyNSGtySn160KcyFzHuXfrwvxZs98E2ogX9uhHzJQ0IuzVT9NqXi_kd_0lpeIxd43zfHRFwJ5s4m0iVBNchoUCp6IKgWUKcbUf94uBRQhtaY--oO9WsM5uULEmMBWF_nkj5W8YjOiFLkwm97i3Ioh1u9YzU41NAmN94wov_RK" />
