@@ -157,52 +157,88 @@ class _MessageEditSheetState extends State<_MessageEditSheet> {
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          maxChildSize: 0.9,
-          minChildSize: 0.4,
-          builder: (c, sc) => Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onVerticalDragStart: _handleHeaderDragStart,
-                  onVerticalDragUpdate: _handleHeaderDragUpdate,
-                  onVerticalDragEnd: _handleHeaderDragEnd,
-                  child: Column(
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: cs.onSurface.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(999),
+        child: NotificationListener<DraggableScrollableNotification>(
+          onNotification: (notification) {
+            // 面板拖到最低高度时，外层弹窗会自行关闭。这条路径走的是
+            // Navigator.pop，绕过 PopScope，正在编辑的内容会被静默丢弃。
+            // 这里拦下这条通知，改由本面板统一询问，避免误划一下就丢改动。
+            if (notification.extent <= notification.minExtent) {
+              unawaited(_confirmClose());
+            }
+            return true;
+          },
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.8,
+            maxChildSize: 0.9,
+            minChildSize: 0.4,
+            // 到最低高度不再自行关闭，交给上面的通知处理统一询问。
+            shouldCloseOnMinExtent: false,
+            builder: (c, sc) => Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onVerticalDragStart: _handleHeaderDragStart,
+                    onVerticalDragUpdate: _handleHeaderDragUpdate,
+                    onVerticalDragEnd: _handleHeaderDragEnd,
+                    child: Column(
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: cs.onSurface.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        l10n.messageEditPageTitle,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: AppFontWeights.semibold,
+                        const SizedBox(height: 10),
+                        Text(
+                          l10n.messageEditPageTitle,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: AppFontWeights.semibold,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: [
-                          if (widget.message.role == 'user')
+                        const SizedBox(height: 4),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 4,
+                          runSpacing: 2,
+                          children: [
+                            if (widget.message.role == 'user')
+                              IosCardPress(
+                                onTap: () {
+                                  Haptics.light();
+                                  _closeWithResult(_result(shouldSend: true));
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                baseColor: Colors.transparent,
+                                pressedBlendStrength:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? 0.10
+                                    : 0.06,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 6,
+                                ),
+                                child: Text(
+                                  l10n.messageEditPageSaveAsBranchAndSend,
+                                  style: TextStyle(
+                                    color: cs.primary,
+                                    fontWeight: AppFontWeights.emphasis,
+                                  ),
+                                ),
+                              ),
                             IosCardPress(
                               onTap: () {
                                 Haptics.light();
-                                _closeWithResult(_result(shouldSend: true));
+                                _closeWithResult(_result(shouldSend: false));
                               },
                               borderRadius: BorderRadius.circular(20),
                               baseColor: Colors.transparent,
@@ -216,100 +252,79 @@ class _MessageEditSheetState extends State<_MessageEditSheet> {
                                 vertical: 6,
                               ),
                               child: Text(
-                                l10n.messageEditPageSaveAsBranchAndSend,
+                                l10n.messageEditPageSaveAsBranch,
                                 style: TextStyle(
                                   color: cs.primary,
                                   fontWeight: AppFontWeights.emphasis,
                                 ),
                               ),
                             ),
-                          IosCardPress(
-                            onTap: () {
-                              Haptics.light();
-                              _closeWithResult(_result(shouldSend: false));
-                            },
-                            borderRadius: BorderRadius.circular(20),
-                            baseColor: Colors.transparent,
-                            pressedBlendStrength:
-                                Theme.of(context).brightness == Brightness.dark
-                                ? 0.10
-                                : 0.06,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            child: Text(
-                              l10n.messageEditPageSaveAsBranch,
-                              style: TextStyle(
-                                color: cs.primary,
-                                fontWeight: AppFontWeights.emphasis,
-                              ),
-                            ),
-                          ),
-                          if (widget.canCloneSubtree)
-                            IosCardPress(
-                              onTap: () => _closeWithResult(
-                                _result(
-                                  shouldSend: false,
-                                  saveMode: MessageEditSaveMode.cloneSubtree,
+                            if (widget.canCloneSubtree)
+                              IosCardPress(
+                                onTap: () => _closeWithResult(
+                                  _result(
+                                    shouldSend: false,
+                                    saveMode: MessageEditSaveMode.cloneSubtree,
+                                  ),
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                baseColor: Colors.transparent,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 6,
+                                ),
+                                child: Text(
+                                  l10n.messageEditPageSaveAsBranchCopyChildren,
+                                  style: TextStyle(color: cs.primary),
                                 ),
                               ),
+                            IosCardPress(
+                              onTap: () {
+                                Haptics.light();
+                                unawaited(_confirmOverwrite());
+                              },
                               borderRadius: BorderRadius.circular(20),
                               baseColor: Colors.transparent,
+                              pressedBlendStrength:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.10
+                                  : 0.06,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
                                 vertical: 6,
                               ),
                               child: Text(
-                                l10n.messageEditPageSaveAsBranchCopyChildren,
-                                style: TextStyle(color: cs.primary),
+                                l10n.messageEditPageOverwriteSave,
+                                style: TextStyle(
+                                  color: cs.primary,
+                                  fontWeight: AppFontWeights.emphasis,
+                                ),
                               ),
                             ),
-                          IosCardPress(
-                            onTap: () {
-                              Haptics.light();
-                              unawaited(_confirmOverwrite());
-                            },
-                            borderRadius: BorderRadius.circular(20),
-                            baseColor: Colors.transparent,
-                            pressedBlendStrength:
-                                Theme.of(context).brightness == Brightness.dark
-                                ? 0.10
-                                : 0.06,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            child: Text(
-                              l10n.messageEditPageOverwriteSave,
-                              style: TextStyle(
-                                color: cs.primary,
-                                fontWeight: AppFontWeights.emphasis,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: sc,
-                    child: Column(
-                      children: [
-                        MessagePartsEditor(
-                          parts: _editedParts,
-                          onChanged: (parts) => setState(() {
-                            _editedParts = parts;
-                          }),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: sc,
+                      child: Column(
+                        children: [
+                          MessagePartsEditor(
+                            parts: _editedParts,
+                            onChanged: (parts) => setState(() {
+                              _editedParts = parts;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

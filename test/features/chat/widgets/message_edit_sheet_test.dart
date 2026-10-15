@@ -233,6 +233,84 @@ void main() {
     expect(result, isNull);
   });
 
+  testWidgets('dragging the sheet body to its minimum asks before discarding', (
+    tester,
+  ) async {
+    MessageEditResult? result;
+    var completed = false;
+    await tester.pumpWidget(
+      harness(
+        message: ChatMessage(
+          role: 'user',
+          conversationId: 'conversation',
+          parts: const <MessagePart>[TextPart('before')],
+        ),
+        onResult: (value) {
+          result = value;
+          completed = true;
+        },
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'edited draft');
+    await tester.pumpAndSettle();
+
+    // 面板正文自带“拖到最低高度就关闭”的路径，它走的是弹窗自己的
+    // Navigator.pop，会绕过 PopScope；这里必须仍然先问再关。
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, 600),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Close without saving?'), findsOneWidget);
+    expect(completed, isFalse);
+    expect(find.text('edited draft'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('edited draft'), findsOneWidget);
+    expect(completed, isFalse);
+    expect(result, isNull);
+  });
+
+  testWidgets('system back asks before discarding changes', (tester) async {
+    MessageEditResult? result;
+    var completed = false;
+    await tester.pumpWidget(
+      harness(
+        message: ChatMessage(
+          role: 'user',
+          conversationId: 'conversation',
+          parts: const <MessagePart>[TextPart('before')],
+        ),
+        onResult: (value) {
+          result = value;
+          completed = true;
+        },
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'edited draft');
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Close without saving?'), findsOneWidget);
+    expect(completed, isFalse);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('edited draft'), findsOneWidget);
+    expect(completed, isFalse);
+    expect(result, isNull);
+  });
+
   testWidgets('dragging the sheet down asks before discarding', (tester) async {
     var completed = false;
     await tester.pumpWidget(
