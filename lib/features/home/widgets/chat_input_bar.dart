@@ -782,6 +782,8 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   void _setExpanded(bool expanded) {
     if (expanded == _isExpanded) return;
+    // 输入框在展开/收起之间保持焦点，此时若上下文菜单还开着，它下方的文字会跳动。
+    ContextMenuController.removeAny();
     final composer = _composerKey.currentContext?.findRenderObject();
     final textArea = _textAreaKey.currentContext?.findRenderObject();
     final editable = _findRenderEditable();
@@ -3311,22 +3313,26 @@ class _ChatInputBarState extends State<ChatInputBar>
                                         PositionedDirectional(
                                           top: 2,
                                           end: 6,
-                                          child: IosIconButton(
-                                            icon: _isExpanded
-                                                ? Lucide.Minimize2
-                                                : Lucide.Maximize2,
-                                            size: 16,
-                                            color: theme.colorScheme.onSurface
-                                                .withValues(alpha: 0.45),
-                                            tooltip: _isExpanded
-                                                ? AppLocalizations.of(
-                                                    context,
-                                                  )!.chatInputBarCollapse
-                                                : AppLocalizations.of(
-                                                    context,
-                                                  )!.chatInputBarExpand,
-                                            onTap: () =>
-                                                _setExpanded(!_isExpanded),
+                                          // 放进输入框的点击区域内：非触摸指针（鼠标、触控板、触控笔）
+                                          // 或桌面端点击这里不算"点到外面"，不会失焦、键盘也不会弹跳。
+                                          child: TextFieldTapRegion(
+                                            child: IosIconButton(
+                                              icon: _isExpanded
+                                                  ? Lucide.Minimize2
+                                                  : Lucide.Maximize2,
+                                              size: 16,
+                                              color: theme.colorScheme.onSurface
+                                                  .withValues(alpha: 0.45),
+                                              tooltip: _isExpanded
+                                                  ? AppLocalizations.of(
+                                                      context,
+                                                    )!.chatInputBarCollapse
+                                                  : AppLocalizations.of(
+                                                      context,
+                                                    )!.chatInputBarExpand,
+                                              onTap: () =>
+                                                  _setExpanded(!_isExpanded),
+                                            ),
                                           ),
                                         ),
                                     ],
