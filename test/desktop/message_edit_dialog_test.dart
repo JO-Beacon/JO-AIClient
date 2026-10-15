@@ -387,7 +387,7 @@ void main() {
     await tester.tap(find.byIcon(Lucide.Maximize2));
     await tester.pumpAndSettle();
 
-    expect(find.text('Thinking 1'), findsWidgets);
+    expect(find.text('1 Thinking'), findsWidgets);
     expect(find.text('Save'), findsNothing);
 
     await tester.tap(find.text('Close'));

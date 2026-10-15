@@ -270,7 +270,7 @@ class _PartCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '$label ${index + 1}',
+                    '${index + 1} $label',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: AppFontWeights.semibold,
