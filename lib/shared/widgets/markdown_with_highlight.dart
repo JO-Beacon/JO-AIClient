@@ -99,6 +99,7 @@ class MarkdownWithCodeHighlight extends StatefulWidget {
     this.citationIndexResolver,
     this.baseStyle,
     this.streaming = false,
+    this.useBlockRendering = false,
     this.conversationId,
   });
 
@@ -111,6 +112,9 @@ class MarkdownWithCodeHighlight extends StatefulWidget {
   final String? Function(String id)? citationIndexResolver;
   final TextStyle? baseStyle; // 可选的基础 Markdown 文本样式覆盖
   final bool streaming;
+
+  /// 静态文档按源码分块渲染，同时保留完整代码高亮、表格与交互状态。
+  final bool useBlockRendering;
 
   static const int _streamingTableMaxRows = 30;
   static const int _streamingHighlightMaxLines = 300;
@@ -145,6 +149,7 @@ class _MarkdownWithCodeHighlightState extends State<MarkdownWithCodeHighlight> {
   String? _metadataSource;
   final _sourceScan = MarkdownSourceScan();
   bool? _metadataAppended;
+  bool _previousBlockSourceUnchanged = false;
   String _sanitizedText = '';
   List<String> _imageUrls = const [];
   List<String> _documentCitationIds = const [];
@@ -259,13 +264,28 @@ class _MarkdownWithCodeHighlightState extends State<MarkdownWithCodeHighlight> {
     // Keep the same block tree from the first streaming frame through
     // completion, so growing replies do not dispose interactive children.
     final useIncrementalBlocks =
-        widget.streaming || _incrementalDocument.blocks.isNotEmpty;
+        widget.useBlockRendering ||
+        widget.streaming ||
+        _incrementalDocument.blocks.isNotEmpty;
+    // 整篇源码重写可能产生新的安全边界（例如行内起始的块级公式里出现空行）。
+    // 静态分块要在这些重写之后切分，且不能对切出来的片段再套一次同样处理。
+    final preprocessedBlocks = widget.useBlockRendering && !widget.streaming;
+    final blockSource = preprocessedBlocks
+        ? normalize(sanitizedText, streaming: false)
+        : sanitizedText;
+    final blockSourceUnchanged = identical(blockSource, sanitizedText);
     final sourceBlocks = useIncrementalBlocks
         ? _incrementalDocument.update(
-            sanitizedText,
-            appendOnly: _metadataAppended,
+            blockSource,
+            // 只有前后两次输入都没在预处理中变化时，源码级"仅追加"的结论才成立
+            // （例如切换数学渲染设置之后就不成立）。
+            appendOnly: _previousBlockSourceUnchanged && blockSourceUnchanged
+                ? _metadataAppended
+                : null,
           )
         : const <IncrementalMarkdownBlock>[];
+    _previousBlockSourceUnchanged =
+        useIncrementalBlocks && blockSourceUnchanged;
     final sourceAppended = _incrementalDocument.lastUpdateAppended;
     final wholeFence = useIncrementalBlocks
         ? null
@@ -725,7 +745,12 @@ class _MarkdownWithCodeHighlightState extends State<MarkdownWithCodeHighlight> {
         return cached.$3;
       }
       final result = _swallowsTrailingBlankLine(
-        normalize(block.text, streaming: widget.streaming && !block.stable),
+        preprocessedBlocks
+            ? block.text
+            : normalize(
+                block.text,
+                streaming: widget.streaming && !block.stable,
+              ),
         mathEnabled: settings.enableMathRendering,
       );
       _separatorCache[block] = (
@@ -754,7 +779,7 @@ class _MarkdownWithCodeHighlightState extends State<MarkdownWithCodeHighlight> {
                   false,
                 );
               }
-              final content = fence != null
+              final content = fence != null || preprocessedBlocks
                   ? block.text
                   : normalize(
                       block.text,
