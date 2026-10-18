@@ -44,19 +44,45 @@ class MessagePartsEditor extends StatefulWidget {
 
 class _MessagePartsEditorState extends State<MessagePartsEditor> {
   late List<MessagePart> _parts;
+  // 每个部件给一个稳定编号，输入框缓存按编号存——不按位置存。
+  // 否则删掉上面的部件后，下面那个框会把上一个框的内容拿过来。
+  late List<int> _partKeys;
+  int _nextPartKey = 0;
   final Map<int, TextEditingController> _controllers = {};
 
   @override
   void initState() {
     super.initState();
-    _parts = List<MessagePart>.of(widget.parts);
+    _resetParts(widget.parts);
   }
 
   @override
   void didUpdateWidget(covariant MessagePartsEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.parts, widget.parts)) {
-      _parts = List<MessagePart>.of(widget.parts);
+      _resetParts(widget.parts);
+    }
+  }
+
+  void _resetParts(List<MessagePart> parts) {
+    _parts = List<MessagePart>.of(parts);
+    _partKeys = [for (var i = 0; i < _parts.length; i++) _nextPartKey++];
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    _controllers.clear();
+  }
+
+  /// 附件编辑器会整体换一份列表；文字部件的位置不变，只补/收尾部编号。
+  void _syncPartKeys() {
+    while (_partKeys.length < _parts.length) {
+      _partKeys.add(_nextPartKey++);
+    }
+    if (_partKeys.length > _parts.length) {
+      for (final key in _partKeys.sublist(_parts.length)) {
+        _controllers.remove(key)?.dispose();
+      }
+      _partKeys = _partKeys.sublist(0, _parts.length);
     }
   }
 
@@ -68,23 +94,25 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
     super.dispose();
   }
 
-  TextEditingController _controllerFor(int index, String text) {
+  TextEditingController _controllerFor(int key, String text) {
     final normalized = normalizeNewlines(text);
     final controller = _controllers.putIfAbsent(
-      index,
+      key,
       () => TextEditingController(text: normalized),
     );
-    if (controller.text != normalized && !_editing(index)) {
+    if (controller.text != normalized && !_editing(key)) {
       controller.text = normalized;
     }
     return controller;
   }
 
-  bool _editing(int index) => _controllers[index]?.selection.isValid == true;
+  bool _editing(int key) => _controllers[key]?.selection.isValid == true;
 
   void _emit() => widget.onChanged(List<MessagePart>.unmodifiable(_parts));
 
   Future<void> _remove(int index) async {
+    // 分界是结构信息，不是内容：不允许单独删除（空段的会在保存时自动收掉）。
+    if (_parts[index] is AssistantRoundEndPart) return;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -105,26 +133,16 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    final key = _partKeys.removeAt(index);
     _parts.removeAt(index);
-    final old = _controllers.remove(index);
-    old?.dispose();
-    _emit();
-    setState(() {});
-  }
-
-  void _reorder(int oldIndex, int newIndex) {
-    final part = _parts.removeAt(oldIndex);
-    _parts.insert(newIndex, part);
-    for (final controller in _controllers.values) {
-      controller.dispose();
-    }
-    _controllers.clear();
+    _controllers.remove(key)?.dispose();
     _emit();
     setState(() {});
   }
 
   void _addText() {
     _parts.add(const TextPart(''));
+    _partKeys.add(_nextPartKey++);
     _emit();
     setState(() {});
   }
@@ -154,24 +172,25 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final cs = Theme.of(context).colorScheme;
     final list = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ReorderableListView.builder(
+        // 部件顺序就是事实顺序（哪段话在工具调用前、哪段在结果之后），
+        // 换序只能靠删了重加，不提供拖动：能拖的几种换法要么没意义、
+        // 要么会把续写挪到工具结果前面。
+        ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          buildDefaultDragHandles: false,
           itemCount: _parts.length,
-          onReorderItem: _reorder,
           itemBuilder: (context, index) {
             final part = _parts[index];
+            final partKey = _partKeys[index];
             return _PartCard(
-              key: ValueKey('part-$index-${part.kind}'),
+              key: ValueKey('part-$partKey-${part.kind}'),
               index: index,
               part: part,
               controller: part is TextPart
-                  ? _controllerFor(index, part.text)
+                  ? _controllerFor(partKey, part.text)
                   : null,
               onTextChanged: part is TextPart
                   ? (value) {
@@ -181,14 +200,6 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
                   : null,
               onDelete: () => unawaited(_remove(index)),
               onExpand: () => unawaited(_expandPart(index)),
-              dragHandle: ReorderableDragStartListener(
-                index: index,
-                child: Icon(
-                  Lucide.GripVertical,
-                  size: 18,
-                  color: cs.onSurface.withValues(alpha: 0.45),
-                ),
-              ),
             );
           },
         ),
@@ -211,6 +222,7 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
           parts: _parts,
           onChanged: (parts) {
             _parts = List<MessagePart>.of(parts);
+            _syncPartKeys();
             _emit();
             setState(() {});
           },
@@ -236,7 +248,6 @@ class _PartCard extends StatelessWidget {
     required this.onTextChanged,
     required this.onDelete,
     required this.onExpand,
-    required this.dragHandle,
   });
 
   final int index;
@@ -245,7 +256,6 @@ class _PartCard extends StatelessWidget {
   final ValueChanged<String>? onTextChanged;
   final VoidCallback onDelete;
   final VoidCallback onExpand;
-  final Widget dragHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -273,7 +283,6 @@ class _PartCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                dragHandle,
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -292,13 +301,14 @@ class _PartCard extends StatelessWidget {
                   semanticLabel: l10n.messageEditExpandPart,
                   onTap: onExpand,
                 ),
-                IosIconButton(
-                  icon: Lucide.Trash2,
-                  size: 18,
-                  color: cs.error,
-                  semanticLabel: l10n.messageEditDeletePart,
-                  onTap: onDelete,
-                ),
+                if (part is! AssistantRoundEndPart)
+                  IosIconButton(
+                    icon: Lucide.Trash2,
+                    size: 18,
+                    color: cs.error,
+                    semanticLabel: l10n.messageEditDeletePart,
+                    onTap: onDelete,
+                  ),
               ],
             ),
             if (part is TextPart)

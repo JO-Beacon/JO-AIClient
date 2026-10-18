@@ -18,6 +18,7 @@ final class KelivoFileUri {
     'images',
     'avatars',
     'fonts',
+    'drafts',
   ];
 
   /// 廉价的前缀检查，**不会**校验结构。

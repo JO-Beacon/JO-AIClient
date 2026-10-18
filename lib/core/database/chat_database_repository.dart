@@ -10,11 +10,13 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import '../models/composer_draft.dart';
 import '../models/token_usage.dart';
 import '../models/conversation.dart';
 import '../models/conversation_tree.dart';
 import '../models/message_part.dart';
 import '../services/backup/restore_previous_plan.dart';
+import 'composer_draft_store.dart';
 import '../services/api/stream/stream_chunk_handler.dart';
 import '../services/api/providers/claude/claude_history.dart';
 import '../services/api/providers/claude/claude_thinking_recovery.dart';
@@ -24,6 +26,7 @@ import '../../utils/kelivo_file_uri.dart';
 import '../models/memory_entry.dart';
 import '../models/user_profile_field.dart';
 import 'app_database.dart';
+import 'message_timeline_index.dart';
 import 'business_data.dart';
 import 'business_repository.dart';
 import 'chat_database_observer.dart';
@@ -155,6 +158,13 @@ class ChatDatabaseRepository {
   final File? _databaseFile;
   final ChatDatabaseObserver _observer;
   bool _messageSearchFtsReady = false;
+
+  /// 本机会话草稿：编辑中的输入、附件与待确认提交。
+  /// 数据只属于这台设备，备份导出时会被剔除。
+  late final ComposerDraftStore composerDrafts = ComposerDraftStore(_db);
+
+  /// 会话时间线的可重建索引：只存消息身份，不是另一份历史。
+  late final MessageTimelineIndex _timelineIndex = MessageTimelineIndex(_db);
 
   static ChatDatabaseRepository open({
     File? file,
@@ -458,6 +468,9 @@ class ChatDatabaseRepository {
       database.execute('PRAGMA foreign_keys = OFF;');
       database.execute('BEGIN IMMEDIATE;');
       try {
+        for (final sql in MessageTimelineIndex.discardStatements) {
+          database.execute(sql);
+        }
         final presentTables = database
             .select("SELECT name FROM sqlite_master WHERE type = 'table';")
             .map((row) => row['name'])
@@ -567,6 +580,9 @@ class ChatDatabaseRepository {
       }
       database.execute('BEGIN IMMEDIATE;');
       try {
+        for (final sql in MessageTimelineIndex.discardStatements) {
+          database.execute(sql);
+        }
         // 终止遗留流是真实状态变化；同一条 UPDATE 盖上 updated_at，
         // 让 LWW／同步消费方看到终止，而不是崩溃前的旧值。
         database.execute(
@@ -1261,6 +1277,8 @@ class ChatDatabaseRepository {
   }
 
   Future<void> close() async {
+    await composerDrafts.flush();
+    composerDrafts.dispose();
     await _db.close();
   }
 
@@ -2427,157 +2445,116 @@ class ChatDatabaseRepository {
     bool includeFollowingAssistant = false,
   }) async {
     if (limit <= 0) return const <ChatMessage>[];
-    return _observer.measure(ChatDatabaseOperation.queryMessageRange, () async {
-      final result = await _db
-          .customSelect(
-            '''
-            WITH group_rows AS (
-              SELECT
-                COALESCE(m.group_id, m.id) AS group_id,
-                MIN(m.message_order) AS anchor_order,
-                MAX(m.version) AS latest_version
-              FROM message_rows m
-              WHERE m.conversation_id = ?
-              GROUP BY COALESCE(m.group_id, m.id)
-            ),
-            selections AS (
-              SELECT j.key AS group_id, CAST(j.value AS INTEGER) AS version
-              FROM conversation_rows c, json_each(c.version_selections_json) j
-              WHERE c.id = ?
-            ),
-            ranked AS (
-              SELECT
-                m.id AS revision_id,
-                g.group_id,
-                m.role,
-                g.anchor_order,
-                ROW_NUMBER() OVER (
-                  PARTITION BY g.group_id
-                  ORDER BY
-                    CASE
-                      WHEN m.version = COALESCE(s.version, g.latest_version)
-                      THEN 0 ELSE 1
-                    END,
-                    m.version DESC,
-                    m.message_order DESC,
-                    m.id DESC
-                ) AS version_rank
-              FROM group_rows g
-              JOIN message_rows m
-                ON m.conversation_id = ?
-               AND COALESCE(m.group_id, m.id) = g.group_id
-              LEFT JOIN selections s ON s.group_id = g.group_id
-            ),
-            ordered AS (
-              SELECT
-                revision_id,
-                group_id,
-                role,
-                ROW_NUMBER() OVER (ORDER BY anchor_order, revision_id) - 1
-                  AS logical_index,
-                COUNT(*) OVER () AS total_count
-              FROM ranked
-              WHERE version_rank = 1
-            ),
-            target AS (
-              SELECT COALESCE(group_id, id) AS group_id, role
-              FROM message_rows
-              WHERE conversation_id = ? AND id = ?
-            ),
-            cutoff AS (
-              SELECT CASE
-                WHEN ? AND target.role = 'user' THEN COALESCE(
-                  (
-                    SELECT MIN(candidate.logical_index)
-                    FROM ordered candidate
-                    WHERE candidate.logical_index > selected.logical_index
-                      AND candidate.role = 'assistant'
-                  ),
-                  selected.logical_index
-                )
-                ELSE selected.logical_index
-              END AS logical_index,
-              selected.logical_index AS target_index
-              FROM target
-              JOIN ordered selected ON selected.group_id = target.group_id
-            ),
-            limited AS (
-              SELECT revision_id, logical_index
-              FROM ordered
-              WHERE logical_index >= CASE
-                WHEN ? >= 0 AND ? <= total_count
-                  AND (NOT EXISTS (SELECT 1 FROM cutoff)
-                    OR ? <= (SELECT target_index FROM cutoff)) THEN ?
-                ELSE 0
-              END
-                AND (
-                  ? IS NULL OR
-                  logical_index <= (SELECT logical_index FROM cutoff)
-                )
-              ORDER BY logical_index DESC
-              LIMIT ?
+    await _timelineIndex.ensureConversation(conversationId);
+    return _observer.measure(
+      ChatDatabaseOperation.queryMessageRange,
+      () => _db.transaction(() async {
+        final state = await _db
+            .customSelect(
+              'SELECT group_count FROM timeline_state WHERE conversation_id=?',
+              variables: [Variable<String>(conversationId)],
             )
-            SELECT
-              m.*,
-              p.part_id AS part_part_id,
-              p.ordinal AS part_ordinal,
-              p.kind AS part_kind,
-              p.payload AS part_payload,
-              p.created_at AS part_created_at,
-              p.updated_at AS part_updated_at
-            FROM limited l
-            JOIN message_rows m ON m.id = l.revision_id
-            LEFT JOIN message_part_rows p ON p.revision_id = m.id
-            ORDER BY l.logical_index, p.ordinal;
-            ''',
-            variables: [
-              Variable<String>(conversationId),
-              Variable<String>(conversationId),
-              Variable<String>(conversationId),
-              Variable<String>(conversationId),
-              Variable<String>(throughRevisionId ?? ''),
-              Variable<bool>(includeFollowingAssistant),
-              Variable<int>(truncateIndex),
-              Variable<int>(truncateIndex),
-              Variable<int>(truncateIndex),
-              Variable<int>(truncateIndex),
-              Variable<String>(throughRevisionId),
-              Variable<int>(limit),
-            ],
-            readsFrom: {
-              _db.conversationRows,
-              _db.messageRows,
-              _db.messagePartRows,
-            },
-          )
-          .get();
-      final rowsById = <String, MessageRow>{};
-      final partsById = <String, List<MessagePartRow>>{};
-      for (final row in result) {
-        final message = _db.messageRows.map(row.data);
-        rowsById.putIfAbsent(message.id, () => message);
-        final ordinal = row.readNullable<int>('part_ordinal');
-        if (ordinal == null) continue;
-        partsById
-            .putIfAbsent(message.id, () => <MessagePartRow>[])
-            .add(
-              MessagePartRow(
-                partId: row.read<int>('part_part_id'),
-                conversationId: message.conversationId,
-                revisionId: message.id,
-                ordinal: ordinal,
-                kind: row.read<String>('part_kind'),
-                payload: row.read<String>('part_payload'),
-                createdAt: _dateTimeFromSqlite(row.data['part_created_at']),
-                updatedAt: _dateTimeFromSqlite(row.data['part_updated_at']),
-              ),
-            );
-      }
-      return [
-        for (final message in rowsById.values)
-          _messageFromRow(message, authoritativeParts: partsById[message.id]),
-      ];
-    }, resultCount: (rows) => rows.length);
+            .getSingleOrNull();
+        final total = state?.read<int>('group_count') ?? 0;
+        if (total == 0) return <ChatMessage>[];
+        var targetIndex = total;
+        QueryRow? upper;
+        if (throughRevisionId != null) {
+          upper = await _db
+              .customSelect(
+                'SELECT g.anchor_order,g.group_id,m.role FROM message_rows m '
+                'JOIN timeline_group_rows g ON g.conversation_id=m.conversation_id AND g.group_id=COALESCE(m.group_id,m.id) '
+                'WHERE m.conversation_id=? AND m.id=?',
+                variables: [
+                  Variable<String>(conversationId),
+                  Variable<String>(throughRevisionId),
+                ],
+              )
+              .getSingleOrNull();
+          if (upper == null) return <ChatMessage>[];
+          final suffix = await _db
+              .customSelect(
+                'SELECT COUNT(*) AS n FROM timeline_group_rows WHERE conversation_id=? AND (anchor_order,group_id)>(?,?)',
+                variables: [
+                  Variable<String>(conversationId),
+                  Variable<int>(upper.read<int>('anchor_order')),
+                  Variable<String>(upper.read<String>('group_id')),
+                ],
+              )
+              .getSingle();
+          targetIndex = total - suffix.read<int>('n') - 1;
+          if (includeFollowingAssistant &&
+              upper.read<String>('role') == 'user') {
+            // 本仓库的分支模型里，工具与中间节点也可能是普通行，
+            // 因此取之后第一个“助手”分组，而不是只检查紧邻的那一个。
+            final selected = MessageTimelineIndex.selectedRevision('g');
+            final following = await _db
+                .customSelect(
+                  'SELECT g.anchor_order,g.group_id,m.role '
+                  'FROM timeline_group_rows g '
+                  'LEFT JOIN timeline_selection_rows s ON s.conversation_id=g.conversation_id AND s.group_id=g.group_id '
+                  'JOIN message_rows m ON m.id=$selected '
+                  'WHERE g.conversation_id=? AND (g.anchor_order,g.group_id)>(?,?) '
+                  "AND m.role='assistant' "
+                  'ORDER BY g.anchor_order,g.group_id LIMIT 1',
+                  variables: [
+                    Variable<String>(conversationId),
+                    Variable<int>(upper.read<int>('anchor_order')),
+                    Variable<String>(upper.read<String>('group_id')),
+                  ],
+                )
+                .getSingleOrNull();
+            if (following != null) upper = following;
+          }
+        }
+        final conditions = <String>[];
+        final values = <Variable<Object>>[Variable<String>(conversationId)];
+        if (truncateIndex > 0 &&
+            truncateIndex <= total &&
+            truncateIndex <= targetIndex) {
+          if (truncateIndex == total) return <ChatMessage>[];
+          final lower = await _db
+              .customSelect(
+                'SELECT anchor_order,group_id FROM timeline_group_rows WHERE conversation_id=? ORDER BY anchor_order,group_id LIMIT 1 OFFSET ?',
+                variables: [
+                  Variable<String>(conversationId),
+                  Variable<int>(truncateIndex),
+                ],
+              )
+              .getSingle();
+          conditions.add('AND (g.anchor_order,g.group_id)>=(?,?)');
+          values.addAll([
+            Variable<int>(lower.read<int>('anchor_order')),
+            Variable<String>(lower.read<String>('group_id')),
+          ]);
+        }
+        if (upper != null) {
+          conditions.add('AND (g.anchor_order,g.group_id)<=(?,?)');
+          values.addAll([
+            Variable<int>(upper.read<int>('anchor_order')),
+            Variable<String>(upper.read<String>('group_id')),
+          ]);
+        }
+        values.add(Variable<int>(limit));
+        final rows = await _db
+            .customSelect(
+              'SELECT ${MessageTimelineIndex.selectedRevision('g')} AS revision_id '
+              'FROM timeline_group_rows g LEFT JOIN timeline_selection_rows s ON s.conversation_id=g.conversation_id AND s.group_id=g.group_id '
+              'WHERE g.conversation_id=? ${conditions.join(' ')} ORDER BY g.anchor_order DESC,g.group_id DESC LIMIT ?',
+              variables: values,
+              readsFrom: {
+                _db.messageRows,
+                _db.conversationRows,
+                _db.messagePartRows,
+              },
+            )
+            .get();
+        return getMessagesByIds(
+          rows.reversed.map((r) => r.read<String>('revision_id')).toList(),
+        );
+      }),
+      resultCount: (rows) => rows.length,
+    );
   }
 
   Future<int> getMaxMessageVersionForGroup(
@@ -2712,157 +2689,150 @@ class ChatDatabaseRepository {
     bool fromStart = false,
     int limit = 40,
   }) async {
-    if (limit <= 0) {
-      return const LinearMessageWindow(
-        slots: <LinearMessageWindowSlot>[],
-        totalSlotCount: 0,
-        hasMoreBefore: false,
-        hasMoreAfter: false,
-      );
-    }
-    final cursorCount = <String?>[
+    const empty = LinearMessageWindow(
+      slots: <LinearMessageWindowSlot>[],
+      totalSlotCount: 0,
+      hasMoreBefore: false,
+      hasMoreAfter: false,
+    );
+    if (limit <= 0) return empty;
+    final cursors = [
       beforeRevisionId,
       afterRevisionId,
       aroundRevisionId,
-    ].whereType<String>().length;
-    if (cursorCount > 1 || (fromStart && cursorCount > 0)) {
+    ].whereType<String>();
+    if (cursors.length > 1 || (fromStart && cursors.isNotEmpty)) {
       throw ArgumentError('Only one linear message cursor may be supplied.');
     }
-    final cursorVariables = <Variable<Object>>[];
-    late final String pageSql;
-    if (fromStart) {
-      pageSql = 'SELECT * FROM ordered ORDER BY logical_index LIMIT ?';
-    } else if (beforeRevisionId != null || afterRevisionId != null) {
-      final cursor = beforeRevisionId ?? afterRevisionId!;
-      cursorVariables.add(Variable<String>(cursor));
-      final comparison = beforeRevisionId != null ? '<' : '>';
-      final direction = beforeRevisionId != null ? 'DESC' : 'ASC';
-      pageSql =
-          '''
-        , target_group AS (
-          SELECT COALESCE(group_id, id) AS group_id
-          FROM message_rows WHERE conversation_id = ? AND id = ?
-        ),
-        target_index AS (
-          SELECT logical_index FROM ordered
-          WHERE group_id = (SELECT group_id FROM target_group)
-        )
-        SELECT * FROM ordered
-        WHERE logical_index $comparison (SELECT logical_index FROM target_index)
-        ORDER BY logical_index $direction LIMIT ?
-      ''';
-      cursorVariables.insert(0, Variable<String>(conversationId));
-    } else if (aroundRevisionId != null) {
-      cursorVariables
-        ..add(Variable<String>(conversationId))
-        ..add(Variable<String>(aroundRevisionId));
-      pageSql = '''
-        , target_group AS (
-          SELECT COALESCE(group_id, id) AS group_id
-          FROM message_rows WHERE conversation_id = ? AND id = ?
-        ),
-        target_index AS (
-          SELECT logical_index FROM ordered
-          WHERE group_id = (SELECT group_id FROM target_group)
-        ),
-        nearest AS (
-          SELECT ordered.* FROM ordered, target_index
-          ORDER BY ABS(ordered.logical_index - target_index.logical_index),
-                   ordered.logical_index
-          LIMIT ?
-        )
-        SELECT * FROM nearest ORDER BY logical_index
-      ''';
-    } else {
-      pageSql = 'SELECT * FROM ordered ORDER BY logical_index DESC LIMIT ?';
-    }
-    final rows = await _db
-        .customSelect(
-          '''
-          WITH group_rows AS (
-            SELECT
-              COALESCE(m.group_id, m.id) AS group_id,
-              MIN(m.message_order) AS anchor_order,
-              COUNT(*) AS version_count,
-              MAX(m.version) AS latest_version
-            FROM message_rows m
-            WHERE m.conversation_id = ?
-            GROUP BY COALESCE(m.group_id, m.id)
-          ),
-          selections AS (
-            SELECT j.key AS group_id, CAST(j.value AS INTEGER) AS version
-            FROM conversation_rows c, json_each(c.version_selections_json) j
-            WHERE c.id = ?
-          ),
-          ranked AS (
-            SELECT
-              m.id AS revision_id,
-              g.group_id,
-              g.anchor_order,
-              g.version_count,
-              ROW_NUMBER() OVER (
-                PARTITION BY g.group_id
-                ORDER BY
-                  CASE
-                    WHEN m.version = COALESCE(s.version, g.latest_version)
-                    THEN 0 ELSE 1
-                  END,
-                  m.version DESC,
-                  m.message_order DESC,
-                  m.id DESC
-              ) AS version_rank
-            FROM group_rows g
-            JOIN message_rows m
-              ON m.conversation_id = ?
-             AND COALESCE(m.group_id, m.id) = g.group_id
-            LEFT JOIN selections s ON s.group_id = g.group_id
-          ),
-          ordered AS (
-            SELECT
-              revision_id,
-              group_id,
-              version_count,
-              ROW_NUMBER() OVER (
-                ORDER BY anchor_order, group_id
-              ) - 1 AS logical_index,
-              COUNT(*) OVER () AS total_count
-            FROM ranked
-            WHERE version_rank = 1
+    await _timelineIndex.ensureConversation(conversationId);
+    return _db.transaction(() async {
+      final state = await _db
+          .customSelect(
+            'SELECT group_count FROM timeline_state WHERE conversation_id = ?',
+            variables: [Variable<String>(conversationId)],
           )
-          $pageSql;
-        ''',
-          variables: [
-            Variable<String>(conversationId),
-            Variable<String>(conversationId),
-            Variable<String>(conversationId),
-            ...cursorVariables,
-            Variable<int>(limit),
-          ],
-          readsFrom: {_db.conversationRows, _db.messageRows},
-        )
-        .get();
-    final orderedRows =
-        beforeRevisionId != null ||
-            (!fromStart && afterRevisionId == null && aroundRevisionId == null)
-        ? rows.reversed
-        : rows;
-    final slots = orderedRows
-        .map(
-          (row) => LinearMessageWindowSlot(
-            groupId: row.read<String>('group_id'),
-            revisionId: row.read<String>('revision_id'),
-            versionCount: row.read<int>('version_count'),
-            logicalIndex: row.read<int>('logical_index'),
+          .getSingleOrNull();
+      final total = state?.read<int>('group_count') ?? 0;
+      if (total == 0) return empty;
+      Future<List<QueryRow>> readPage(
+        String condition,
+        List<Variable<Object>> values,
+        bool descending,
+        int size,
+      ) => _db
+          .customSelect(
+            'SELECT g.group_id,g.anchor_order,g.version_count,'
+            '${MessageTimelineIndex.selectedRevision('g')} AS revision_id '
+            'FROM timeline_group_rows g '
+            'LEFT JOIN timeline_selection_rows s ON s.conversation_id=g.conversation_id AND s.group_id=g.group_id '
+            'WHERE g.conversation_id = ? $condition '
+            'ORDER BY g.anchor_order ${descending ? 'DESC' : 'ASC'},g.group_id ${descending ? 'DESC' : 'ASC'} LIMIT ?',
+            variables: [
+              Variable<String>(conversationId),
+              ...values,
+              Variable<int>(size),
+            ],
+            readsFrom: {_db.messageRows, _db.conversationRows},
+          )
+          .get();
+      int index = 0;
+      List<QueryRow> rows;
+      if (cursors.isEmpty) {
+        rows = await readPage('', [], !fromStart, limit);
+        if (!fromStart) {
+          rows = rows.reversed.toList();
+          index = total - rows.length;
+        }
+      } else {
+        final cursor = await _db
+            .customSelect(
+              'SELECT g.group_id,g.anchor_order FROM message_rows m '
+              'JOIN timeline_group_rows g ON g.conversation_id=m.conversation_id AND g.group_id=COALESCE(m.group_id,m.id) '
+              'WHERE m.conversation_id=? AND m.id=?',
+              variables: [
+                Variable<String>(conversationId),
+                Variable<String>(cursors.single),
+              ],
+            )
+            .getSingleOrNull();
+        if (cursor == null) return empty;
+        final cursorValues = <Variable<Object>>[
+          Variable<int>(cursor.read<int>('anchor_order')),
+          Variable<String>(cursor.read<String>('group_id')),
+        ];
+        // 正常尾部／向前翻页只需数后缀，不做窗口函数排名，也不加载历史。
+        final suffix = await _db
+            .customSelect(
+              'SELECT COUNT(*) AS n FROM timeline_group_rows WHERE conversation_id=? '
+              'AND (anchor_order,group_id)>(?,?)',
+              variables: [Variable<String>(conversationId), ...cursorValues],
+            )
+            .getSingle();
+        final cursorIndex = total - suffix.read<int>('n') - 1;
+        if (aroundRevisionId != null) {
+          final before = (await readPage(
+            'AND (g.anchor_order,g.group_id)<(?,?)',
+            cursorValues,
+            true,
+            limit,
+          )).reversed.toList();
+          final after = await readPage(
+            'AND (g.anchor_order,g.group_id)>=(?,?)',
+            cursorValues,
+            false,
+            limit,
+          );
+          final candidates =
+              <({QueryRow row, int index})>[
+                for (var i = 0; i < before.length; i++)
+                  (row: before[i], index: cursorIndex - before.length + i),
+                for (var i = 0; i < after.length; i++)
+                  (row: after[i], index: cursorIndex + i),
+              ]..sort((a, b) {
+                final distance = (a.index - cursorIndex).abs().compareTo(
+                  (b.index - cursorIndex).abs(),
+                );
+                return distance == 0 ? a.index.compareTo(b.index) : distance;
+              });
+          final selected = candidates.take(limit).toList()
+            ..sort((a, b) => a.index.compareTo(b.index));
+          rows = selected.map((item) => item.row).toList();
+          index = selected.first.index;
+        } else if (beforeRevisionId != null) {
+          rows = (await readPage(
+            'AND (g.anchor_order,g.group_id)<(?,?)',
+            cursorValues,
+            true,
+            limit,
+          )).reversed.toList();
+          index = cursorIndex - rows.length;
+        } else {
+          rows = await readPage(
+            'AND (g.anchor_order,g.group_id)>(?,?)',
+            cursorValues,
+            false,
+            limit,
+          );
+          index = cursorIndex + 1;
+        }
+      }
+      if (rows.isEmpty) return empty;
+      final slots = <LinearMessageWindowSlot>[
+        for (var offset = 0; offset < rows.length; offset++)
+          LinearMessageWindowSlot(
+            groupId: rows[offset].read<String>('group_id'),
+            revisionId: rows[offset].read<String>('revision_id'),
+            versionCount: rows[offset].read<int>('version_count'),
+            logicalIndex: index + offset,
           ),
-        )
-        .toList(growable: false);
-    final total = rows.isEmpty ? 0 : rows.first.read<int>('total_count');
-    return LinearMessageWindow(
-      slots: slots,
-      totalSlotCount: total,
-      hasMoreBefore: slots.isNotEmpty && slots.first.logicalIndex > 0,
-      hasMoreAfter: slots.isNotEmpty && slots.last.logicalIndex + 1 < total,
-    );
+      ];
+      return LinearMessageWindow(
+        slots: slots,
+        totalSlotCount: total,
+        hasMoreBefore: index > 0,
+        hasMoreAfter: index + slots.length < total,
+      );
+    });
   }
 
   Future<List<ChatMessage>> getMessagesByIds(List<String> ids) async {
@@ -2910,6 +2880,65 @@ class ChatDatabaseRepository {
             row.read(minOrder) != null)
           (row.read(group) ?? row.read(messageId))!: row.read(minOrder)!,
     };
+  }
+
+  Future<List<ChatMessage>> getMessageVersionHeaders(
+    String conversationId,
+    Iterable<String> groupIds,
+  ) async {
+    final ids = groupIds.toSet();
+    if (ids.isEmpty) return const [];
+    final placeholders = List.filled(ids.length, '?').join(',');
+    final rows = await _db
+        .customSelect(
+          'SELECT id,role,timestamp,group_id,version,message_order FROM message_rows '
+          'WHERE conversation_id=? AND group_id IN ($placeholders) '
+          'UNION ALL '
+          'SELECT id,role,timestamp,group_id,version,message_order FROM message_rows '
+          'WHERE conversation_id=? AND group_id IS NULL AND id IN ($placeholders) '
+          'ORDER BY message_order',
+          variables: [
+            Variable<String>(conversationId),
+            ...ids.map(Variable<String>.new),
+            Variable<String>(conversationId),
+            ...ids.map(Variable<String>.new),
+          ],
+        )
+        .get();
+    return [
+      for (final row in rows)
+        ChatMessage(
+          id: row.read<String>('id'),
+          conversationId: conversationId,
+          role: row.read<String>('role'),
+          content: '',
+          timestamp: _dateTimeFromSqlite(row.data['timestamp']),
+          groupId: row.readNullable<String>('group_id'),
+          version: row.read<int>('version'),
+        ),
+    ];
+  }
+
+  Future<bool> messageVersionExists(
+    String conversationId,
+    String groupId,
+    int version,
+  ) async {
+    final row = await _db
+        .customSelect(
+          'SELECT EXISTS(SELECT 1 FROM message_rows WHERE conversation_id=? AND group_id=? AND version=? '
+          'UNION ALL SELECT 1 FROM message_rows WHERE conversation_id=? AND id=? AND group_id IS NULL AND version=?) AS found',
+          variables: [
+            Variable<String>(conversationId),
+            Variable<String>(groupId),
+            Variable<int>(version),
+            Variable<String>(conversationId),
+            Variable<String>(groupId),
+            Variable<int>(version),
+          ],
+        )
+        .getSingle();
+    return row.read<int>('found') != 0;
   }
 
   Future<List<ChatMessage>> getMessagesForGroups(
@@ -4917,12 +4946,19 @@ class ChatDatabaseRepository {
     required ChatMessage userMessage,
     required ChatMessage assistantMessage,
     required String runId,
+    DraftSubmission? draftSubmission,
   }) {
     _validateGenerationBeginMessages(
       conversation: conversation,
       userMessage: userMessage,
       assistantMessage: assistantMessage,
     );
+    if (draftSubmission != null &&
+        (draftSubmission.conversationId != conversation.id ||
+            draftSubmission.id != userMessage.id ||
+            draftSubmission.editMessageId != null)) {
+      throw StateError('composer_submission_mismatch');
+    }
     return _observer.measure(
       ChatDatabaseOperation.commandAppendMessage,
       () => _db.transaction(() async {
@@ -4944,6 +4980,10 @@ class ChatDatabaseRepository {
           targetRevisionId: assistantMessage.id,
           createdAt: assistantMessage.timestamp,
         );
+        // 消息已落库：在同一次事务里把待确认草稿一并消费，避免留下重复草稿。
+        if (draftSubmission != null) {
+          await composerDrafts.consumeInTransaction(draftSubmission);
+        }
         return (
           conversation: persisted,
           userMessage: userMessage,
@@ -5128,6 +5168,7 @@ class ChatDatabaseRepository {
           .into(_db.messageRows)
           .insert(_messageCompanion(message, order), mode: InsertMode.insert);
       await _replaceMessageParts(message);
+      message.hydrateStorageOrder(order);
       await _appendMessageToTree(
         persisted.id,
         message.id,
@@ -5214,6 +5255,7 @@ class ChatDatabaseRepository {
     required String messageId,
     String content = '',
     List<MessagePart>? parts,
+    DraftSubmission? draftSubmission,
   }) {
     return _observer.measure(
       ChatDatabaseOperation.commandAppendVersion,
@@ -5221,6 +5263,7 @@ class ChatDatabaseRepository {
         messageId: messageId,
         content: content,
         parts: parts,
+        draftSubmission: draftSubmission,
       ),
     );
   }
@@ -5544,12 +5587,18 @@ class ChatDatabaseRepository {
     required String messageId,
     required String content,
     List<MessagePart>? parts,
+    DraftSubmission? draftSubmission,
   }) async {
     return _db.transaction(() async {
       final originalRow = await (_db.select(
         _db.messageRows,
       )..where((row) => row.id.equals(messageId))).getSingleOrNull();
       if (originalRow == null) return null;
+      if (draftSubmission != null &&
+          (draftSubmission.conversationId != originalRow.conversationId ||
+              draftSubmission.editMessageId != messageId)) {
+        throw StateError('composer_submission_mismatch');
+      }
       final conversationRow =
           await (_db.select(_db.conversationRows)
                 ..where((row) => row.id.equals(originalRow.conversationId)))
@@ -5575,6 +5624,7 @@ class ChatDatabaseRepository {
       );
       final keepReasoningMeta = derivedReasoning != null;
       final message = ChatMessage(
+        id: draftSubmission?.id,
         role: originalRow.role,
         parts: resolvedParts,
         conversationId: originalRow.conversationId,
@@ -5611,6 +5661,7 @@ class ChatDatabaseRepository {
           .into(_db.messageRows)
           .insert(_messageCompanion(message, order), mode: InsertMode.insert);
       await _replaceMessageParts(message);
+      message.hydrateStorageOrder(order);
       // 恢复记录属于所选中的历史，即使正文被编辑过。
       // 正文编辑保留 Claude 的原生响应边界；显式替换部件则可能有意删掉
       // 思考／工具，这时不能再继承能让它们在下次请求里复活的记录。
@@ -5650,6 +5701,10 @@ class ChatDatabaseRepository {
       await (_db.update(_db.conversationRows)
             ..where((row) => row.id.equals(conversation.id)))
           .write(_conversationCompanion(conversation));
+      // 编辑后的消息已落库：同一次事务里消费待确认草稿。
+      if (draftSubmission != null) {
+        await composerDrafts.consumeInTransaction(draftSubmission);
+      }
       return (conversation: conversation, message: message);
     });
   }
@@ -6045,7 +6100,7 @@ class ChatDatabaseRepository {
           "INSERT OR IGNORE INTO extension_entity_rows "
           "(kind, id, sort_order, owner_id, payload, updated_at) "
           "SELECT kind, id, sort_order, owner_id, payload, updated_at "
-          "FROM merge_source.extension_entity_rows WHERE kind IN ('workspace', 'skill');",
+          "FROM merge_source.extension_entity_rows WHERE kind IN ('workspace', 'skill', 'composerPublishedFile');",
         );
         final sourceRows = await _db
             .customSelect(
@@ -7658,28 +7713,33 @@ class ChatDatabaseRepository {
   static const tombstoneRetention = Duration(days: 90);
 
   Future<void> deleteConversation(String id) async {
-    await _db.transaction(() async {
-      final deleted = await (_db.delete(
-        _db.conversationRows,
-      )..where((t) => t.id.equals(id))).go();
-      if (deleted == 0) return;
-      final now = DateTime.now().toUtc();
-      await _db
-          .into(_db.tombstoneRows)
-          .insertOnConflictUpdate(
-            TombstoneRowsCompanion.insert(
-              scope: tombstoneScopeConversation,
-              entityId: id,
-              deletedAt: now,
-            ),
-          );
-      await (_db.delete(_db.tombstoneRows)..where(
-            (t) => t.deletedAt.isSmallerThanValue(
-              now.subtract(tombstoneRetention).microsecondsSinceEpoch,
-            ),
-          ))
-          .go();
-    });
+    await composerDrafts.delete(
+      id,
+      deleteConversation: () async {
+        await _db.transaction(() async {
+          final deleted = await (_db.delete(
+            _db.conversationRows,
+          )..where((t) => t.id.equals(id))).go();
+          if (deleted == 0) return;
+          final now = DateTime.now().toUtc();
+          await _db
+              .into(_db.tombstoneRows)
+              .insertOnConflictUpdate(
+                TombstoneRowsCompanion.insert(
+                  scope: tombstoneScopeConversation,
+                  entityId: id,
+                  deletedAt: now,
+                ),
+              );
+          await (_db.delete(_db.tombstoneRows)..where(
+                (t) => t.deletedAt.isSmallerThanValue(
+                  now.subtract(tombstoneRetention).microsecondsSinceEpoch,
+                ),
+              ))
+              .go();
+        });
+      },
+    );
   }
 
   Future<List<TombstoneRow>> readTombstones({String? scope}) {
@@ -8042,6 +8102,10 @@ class ChatDatabaseRepository {
   }
 
   Future<void> _clearChatRows() async {
+    // 草稿只属于本机：整体替换/清空聊天数据时一并丢弃，避免旧草稿挂到新数据上。
+    await _db.customStatement(
+      "DELETE FROM extension_entity_rows WHERE kind IN ('composerDraft','composerNewEntry','composerPrivateFile','composerPublishedFile')",
+    );
     await _db.delete(_db.tombstoneRows).go();
     await _db.delete(_db.conversationMcpServerRows).go();
     await _db.delete(_db.messageRows).go();
@@ -8723,7 +8787,7 @@ class ChatDatabaseRepository {
             )
           : null,
       firstTokenMs: _tokenExtraInt(extras, _firstTokenMsExtraKey),
-    );
+    )..hydrateStorageOrder(row.messageOrder);
   }
 
   bool _messageHasAttachmentParts(ChatMessage message) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:provider/provider.dart';
+import 'package:Kelivo/shared/text_input/message_editing_controller.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../shared/widgets/interactive_drawer.dart';
@@ -697,7 +698,7 @@ class _HomePageState extends State<HomePage>
   final InteractiveDrawerController _drawerController =
       InteractiveDrawerController();
   final FocusNode _inputFocus = FocusNode();
-  final TextEditingController _inputController = TextEditingController();
+  final TextEditingController _inputController = MessageEditingController();
   final ChatInputBarController _mediaController = ChatInputBarController();
   scroll_ctrl.ChatAutoFollowScrollController _scrollController =
       scroll_ctrl.ChatAutoFollowScrollController();

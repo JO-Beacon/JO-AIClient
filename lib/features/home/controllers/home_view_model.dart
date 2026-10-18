@@ -327,9 +327,9 @@ class HomeViewModel extends ChangeNotifier {
       final convo = _chatService.getConversation(conversationId);
       if (convo == null) return;
       final assistantProvider = _contextProvider.read<AssistantProvider>();
-      final assistant = convo.assistantId != null
-          ? assistantProvider.getById(convo.assistantId!)
-          : assistantProvider.currentAssistant;
+      final assistant = assistantProvider.resolveConversationAssistant(
+        convo.assistantId,
+      );
       if (assistant == null || !assistant.enableMemory) return;
       if (!assistant.autoOrganizeMemory) return;
       final pipeline = _contextProvider.read<MemoryPipelineService>();
@@ -427,7 +427,14 @@ class HomeViewModel extends ChangeNotifier {
       return ChatInputSubmissionResult.rejected;
     }
 
-    final conversation = currentConversation;
+    final conversation = input.draftSubmission == null
+        ? currentConversation
+        : _chatService
+              .getConversation(input.draftSubmission!.conversationId)
+              ?.copyWith();
+    if (input.draftSubmission != null && conversation == null) {
+      return ChatInputSubmissionResult.rejected;
+    }
     if (conversation == null) {
       // 首先创建新会话
       await createNewConversation();
@@ -438,7 +445,11 @@ class HomeViewModel extends ChangeNotifier {
       return ChatInputSubmissionResult.rejected;
     }
 
-    final activeConversation = currentConversation!;
+    final activeConversation = conversation ?? currentConversation!;
+    if (_queuedInput != null &&
+        _chatService.getConversation(_queuedInput!.conversationId) == null) {
+      _queuedInput = null;
+    }
     if (_chatController.isConversationLoading(activeConversation.id)) {
       if (_queuedInput != null) {
         return ChatInputSubmissionResult.rejected;
@@ -485,6 +496,18 @@ class HomeViewModel extends ChangeNotifier {
       conversation: conversation,
     );
 
+    // 消息已落库：待确认提交在这里收尾，即使发送回调失败也不用重发。
+    if (input.draftSubmission != null &&
+        _chatService.composerDrafts != null &&
+        await _chatService.composerDrafts!.wasSubmitted(
+          input.draftSubmission!.id,
+        )) {
+      await _chatService.composerDrafts!.finishSubmission(
+        input.draftSubmission!,
+      );
+      return true;
+    }
+
     if (!result.success) {
       // 并发发送已拥有此会话；它也拥有 UI 状态，
       // 因此失败方静默退出。
@@ -506,6 +529,7 @@ class HomeViewModel extends ChangeNotifier {
       imagePaths: List<String>.of(input.imagePaths),
       documents: List<DocumentAttachment>.of(input.documents),
       allowImagesApiRouting: input.allowImagesApiRouting,
+      draftSubmission: input.draftSubmission,
     );
   }
 
@@ -526,13 +550,27 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     final input = queued.input;
-    final success = await _sendMessageToConversation(input, conversation);
-    if (!success) {
-      _queuedInput = queued;
+    final drafts = _chatService.composerDrafts;
+    drafts?.submitting.add(conversationId);
+    try {
+      final success = await _sendMessageToConversation(input, conversation);
+      if (!success && _chatService.getConversation(conversationId) != null) {
+        _queuedInput = queued;
+      }
+    } catch (_) {
+      final submission = input.draftSubmission;
+      if (drafts != null &&
+          submission != null &&
+          await drafts.wasSubmitted(submission.id)) {
+        await drafts.finishSubmission(submission);
+      } else if (_chatService.getConversation(conversationId) != null) {
+        _queuedInput = queued;
+      }
+    } finally {
+      drafts?.submissionIdle(conversationId);
+      _isDrainingQueuedInput = false;
+      notifyListeners();
     }
-
-    _isDrainingQueuedInput = false;
-    notifyListeners();
   }
 
   /// 在指定消息处重新生成回复。
@@ -1097,19 +1135,22 @@ class HomeViewModel extends ChangeNotifier {
     AssistantProvider assistantProvider,
     String? convoAssistantId,
   ) {
-    if (convoAssistantId == null ||
-        assistantProvider.currentAssistantId == convoAssistantId ||
-        assistantProvider.getById(convoAssistantId) == null) {
+    final assistant = assistantProvider.resolveConversationAssistant(
+      convoAssistantId,
+    );
+    if (assistant == null ||
+        assistantProvider.currentAssistantId == assistant.id) {
       return null;
     }
-    return assistantProvider.setCurrentAssistant(convoAssistantId);
+    return assistantProvider.setCurrentAssistant(assistant.id);
   }
 
-  /// 创建新会话。
-  Future<void> createNewConversation() async {
+  /// 创建新会话。返回本次新建或复用的草稿会话，
+  /// 即使后续导航已经改变也能让调用方确认目标。
+  Future<Conversation?> createNewConversation({String? assistantId}) async {
     // 创建新会话前刷新当前会话进度
     await _chatActions.flushConversationProgress(currentConversation);
-    if (!_contextProvider.mounted) return;
+    if (!_contextProvider.mounted) return null;
 
     // 创建时重置处理状态
     resetFileProcessingIndicator();
@@ -1119,22 +1160,34 @@ class HomeViewModel extends ChangeNotifier {
       await ap.loaded;
     } catch (e) {
       onError?.call(e.toString());
-      return;
+      return null;
     }
-    if (!_contextProvider.mounted) return;
-    final assistantId = ap.currentAssistantId;
-    final a = ap.currentAssistant;
+    if (!_contextProvider.mounted) return null;
+    final targetAssistantId = assistantId ?? ap.currentAssistantId;
+    final a = ap.getById(targetAssistantId ?? '');
+    final existingEntryId = _chatService.composerDrafts
+        ?.newEntry(targetAssistantId)
+        ?.id;
 
     final conversation = await _chatService.createDraftConversation(
       title: getTitleForLocale(_contextProvider),
-      assistantId: assistantId,
+      assistantId: targetAssistantId,
+      reuseNewEntry: true,
     );
 
-    _chatController.setDraftConversation(conversation);
+    final restoringEntry = existingEntryId == conversation.id;
+    if (restoringEntry) {
+      // 未发送的新会话可能已经有助手预设消息，需要从数据库恢复。
+      await _chatController.setCurrentConversationAndLoad(conversation);
+      if (currentConversation?.id != conversation.id) return conversation;
+    } else {
+      _chatController.setDraftConversation(conversation);
+    }
     _streamController.clearAllState(
       keepMessageIds: _chatActions.activeStreamingMessageIds,
     );
     notifyListeners();
+    if (restoringEntry) return conversation;
 
     // 将助手预设消息注入新会话（按顺序）
     try {
@@ -1147,7 +1200,7 @@ class HomeViewModel extends ChangeNotifier {
           if (content.isEmpty) continue;
           injected.add(
             await _chatService.addMessage(
-              conversationId: currentConversation!.id,
+              conversationId: conversation.id,
               role: role,
               content: content,
             ),
@@ -1162,6 +1215,7 @@ class HomeViewModel extends ChangeNotifier {
     } catch (_) {}
 
     onScrollToBottom?.call();
+    return conversation;
   }
 
   Future<void> toggleTemporaryConversation() async {
@@ -1325,9 +1379,7 @@ class HomeViewModel extends ChangeNotifier {
     final locale = Localizations.localeOf(_contextProvider).toLanguageTag();
     final settings = _contextProvider.read<SettingsProvider>();
     final ap = _contextProvider.read<AssistantProvider>();
-    final assistant = convo.assistantId != null
-        ? ap.getById(convo.assistantId!)
-        : ap.currentAssistant;
+    final assistant = ap.resolveConversationAssistant(convo.assistantId);
 
     // 当前上下文由消息树活动路径定义。
     final activeMessages = await _chatController
@@ -1507,12 +1559,16 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   void _restoreMessageUiState() {
+    _streamController.pruneOffWindowState({
+      ..._chatActions.activeStreamingMessageIds,
+      for (final message in messages) message.id,
+    });
     for (int i = 0; i < messages.length; i++) {
       final m = messages[i];
       if (m.role == 'assistant') {
         _streamController.restoreMessageUiState(
           m,
-          getToolEventsFromDb: (id) => _chatService.getToolEvents(id),
+          getToolEventsFromDb: (id) => _chatService.getToolEventsForMessage(m),
           getGeminiThoughtSigFromDb: (id) =>
               _chatService.getGeminiThoughtSignature(id),
         );
@@ -1622,9 +1678,9 @@ class HomeViewModel extends ChangeNotifier {
     final assistantProvider = _contextProvider.read<AssistantProvider>();
 
     // 获取此会话的助手
-    final assistant = convo.assistantId != null
-        ? assistantProvider.getById(convo.assistantId!)
-        : assistantProvider.currentAssistant;
+    final assistant = assistantProvider.resolveConversationAssistant(
+      convo.assistantId,
+    );
     final chatModel = resolveChatModel(
       settings,
       conversation: convo,
@@ -1701,9 +1757,9 @@ class HomeViewModel extends ChangeNotifier {
     final assistantProvider = _contextProvider.read<AssistantProvider>();
 
     // 获取此会话的助手
-    final assistant = convo.assistantId != null
-        ? assistantProvider.getById(convo.assistantId!)
-        : assistantProvider.currentAssistant;
+    final assistant = assistantProvider.resolveConversationAssistant(
+      convo.assistantId,
+    );
 
     final reasoning = settings.summaryGenerationReasoningFor(assistant);
 
@@ -1889,9 +1945,9 @@ class HomeViewModel extends ChangeNotifier {
 
     // 在下方异步间隙前读取与上下文相关的输入。
     final assistantProvider = _contextProvider.read<AssistantProvider>();
-    final assistant = convo.assistantId != null
-        ? assistantProvider.getById(convo.assistantId!)
-        : assistantProvider.currentAssistant;
+    final assistant = assistantProvider.resolveConversationAssistant(
+      convo.assistantId,
+    );
     final chatModel = resolveChatModel(
       settings,
       conversation: convo,

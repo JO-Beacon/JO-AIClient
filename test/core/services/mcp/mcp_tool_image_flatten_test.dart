@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:mcp_client/mcp_client.dart' as mcp;
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -10,6 +11,7 @@ import 'package:Kelivo/core/providers/assistant_provider.dart';
 import 'package:Kelivo/core/providers/mcp_provider.dart';
 import 'package:Kelivo/core/services/api/tool_result_content.dart';
 import 'package:Kelivo/core/services/mcp/mcp_tool_service.dart';
+import 'package:Kelivo/core/services/tool_image.dart';
 import 'package:Kelivo/utils/mcp_structured_image.dart';
 import 'package:Kelivo/utils/sandbox_path_resolver.dart';
 
@@ -20,7 +22,7 @@ import '../../../support/claude_test_api.dart' show FakePathProviderPlatform;
 /// 前者直接落成本机快照；后者在工具执行时下载一次再落盘，于是历史回放
 /// 不必每次都联网，也不会把服务端那边的本机路径当成客户端文件。
 const _png =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jTioAAAAASUVORK5CYII=';
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
 
 Future<Directory> _prepareImageDirectory() async {
   final directory = await Directory.systemTemp.createTemp('mcp_pixels_');
@@ -95,7 +97,13 @@ void main() {
       raw.markdown,
       metadata: {kMcpResultMetadataKey: mcpResultMetadata(raw.imageUris)},
     );
-    expect(media.text, 'drawing');
+    // 服务端本地路径的图片会被丢掉，但会留一行提醒；文字仍原样保留。
+    expect(media.text, startsWith('drawing'));
+    expect(
+      '(Image omitted'.allMatches(media.text).length,
+      3,
+      reason: '三张服务端本地路径的图各留一行提醒',
+    );
     expect(media.imageUrls, ['data:image/png;base64,$_png']);
   });
 
@@ -161,8 +169,95 @@ void main() {
     ]);
 
     expect(raw.imageUris, isEmpty);
-    expect(raw.markdown, '画不出');
+    // 下载失败时保留文字，并附一行提醒而不是静默丢掉。
+    expect(raw.markdown, startsWith('画不出'));
+    expect(raw.markdown, contains('(Image omitted'));
   });
+
+  // 工具图片在继续对话和历史回放里必须是一份“能直接用”的快照：
+  // 只在第一个回合碰巧能显示不算数。
+  for (final format in [
+    'jpeg_parameters',
+    'bmp',
+    'long_png',
+    'invalid',
+    'corrupt_png',
+  ]) {
+    test('MCP $format 在继续对话和历史回放里都能安全使用', () async {
+      await _prepareImageDirectory();
+      final pixels = img.Image(
+        width: format == 'long_png' ? 16 : 3,
+        height: format == 'long_png' ? 9000 : 2,
+      );
+      img.fill(pixels, color: img.ColorRgb8(240, 10, 40));
+      final bytes = switch (format) {
+        'jpeg_parameters' => img.encodeJpg(pixels),
+        'bmp' => img.encodeBmp(pixels),
+        'invalid' => utf8.encode('<svg>unsupported</svg>'),
+        'corrupt_png' => base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jTioAAAAASUVORK5CYII=',
+        ),
+        _ => img.encodePng(pixels),
+      };
+      final mime = switch (format) {
+        'jpeg_parameters' => 'image/jpeg; charset=binary',
+        'bmp' => 'image/bmp',
+        'invalid' => 'image/svg+xml',
+        _ => 'image/png',
+      };
+      final raw = await _flatten([
+        mcp.ImageContent.fromJson({
+          'type': 'image',
+          'mimeType': mime,
+          'data': base64Encode(bytes),
+        }),
+      ]);
+      final metadata = {
+        kMcpResultMetadataKey: mcpResultMetadata(raw.imageUris),
+      };
+      for (final current in [
+        metadata,
+        (jsonDecode(jsonEncode(metadata)) as Map).cast<String, dynamic>(),
+      ]) {
+        final media = await ToolResultContent.read(
+          'shot',
+          raw.markdown,
+          metadata: current,
+        );
+        if (format == 'invalid' || format == 'corrupt_png') {
+          expect(raw.imageUris, isEmpty);
+          expect(media.imageUrls, isEmpty);
+          expect(media.text, contains('Image omitted'));
+          continue;
+        }
+        expect(raw.imageUris, hasLength(1), reason: '$format stored');
+        expect(media.imageUrls, hasLength(1), reason: '$format read');
+        final data = Uri.parse(media.imageUrls.single).data!;
+        final encoded = data.contentAsBytes();
+        final decoder = img.findDecoderForData(encoded)!;
+        expect(
+          data.mimeType,
+          decoder.format == img.ImageFormat.jpg ? 'image/jpeg' : 'image/png',
+        );
+        expect(
+          decoder.format,
+          isIn([img.ImageFormat.png, img.ImageFormat.jpg]),
+        );
+        final decoded = img.decodeImage(encoded)!;
+        expect(decoded.width, lessThanOrEqualTo(ToolImage.maxLongEdge));
+        expect(decoded.height, lessThanOrEqualTo(ToolImage.maxLongEdge));
+        expect(decoded.getPixel(0, 0).r, greaterThan(220));
+        final stored = File(
+          SandboxPathResolver.resolveForIo(raw.imageUris.single)!,
+        );
+        expect(await stored.readAsBytes(), encoded);
+        expect(
+          raw.imageUris.single,
+          endsWith(data.mimeType == 'image/jpeg' ? '.jpg' : '.png'),
+        );
+      }
+    });
+  }
 }
 
 class _ContentMcpProvider extends McpProvider {

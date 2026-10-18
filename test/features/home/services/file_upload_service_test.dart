@@ -39,6 +39,11 @@ class _StaticPathPicker extends FilePicker {
 class _MediaController extends ChatInputBarController {
   final queued = <String>[];
 
+  // 测试不需要“捕获”语义：上传服务会先 capture() 再写入，
+  // 这里让捕获回落到自己，才能记到 queued 里。
+  @override
+  ChatInputBarController capture() => this;
+
   @override
   void enqueueImages(
     List<String> paths,

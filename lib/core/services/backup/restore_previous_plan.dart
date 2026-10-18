@@ -22,6 +22,85 @@ final class RestoreFileDescriptor {
   Map<String, dynamic> toJson() => {'bytes': bytes, 'sha256': sha256};
 }
 
+enum RestoreAssetEntryType { file, link, pipe, socket }
+
+/// 恢复时被改名保存的本机条目。链接是不可打开的：目标只记录、不跟随。
+final class RestoreAssetDescriptor {
+  const RestoreAssetDescriptor.file(RestoreFileDescriptor descriptor)
+    : type = RestoreAssetEntryType.file,
+      file = descriptor,
+      linkTarget = null;
+
+  const RestoreAssetDescriptor.link(String target)
+    : type = RestoreAssetEntryType.link,
+      file = null,
+      linkTarget = target;
+
+  const RestoreAssetDescriptor.pipe()
+    : type = RestoreAssetEntryType.pipe,
+      file = null,
+      linkTarget = null;
+
+  const RestoreAssetDescriptor.socket()
+    : type = RestoreAssetEntryType.socket,
+      file = null,
+      linkTarget = null;
+
+  final RestoreAssetEntryType type;
+  final RestoreFileDescriptor? file;
+  final String? linkTarget;
+
+  int get bytes => file?.bytes ?? utf8.encode(linkTarget ?? '').length;
+
+  bool matches(RestoreAssetDescriptor? other) =>
+      other != null &&
+      type == other.type &&
+      file?.bytes == other.file?.bytes &&
+      file?.sha256 == other.file?.sha256 &&
+      linkTarget == other.linkTarget;
+
+  Map<String, dynamic> toJson() => {
+    'type': type.name,
+    if (file != null) 'descriptor': file!.toJson(),
+    if (linkTarget != null) 'target': linkTarget,
+  };
+
+  factory RestoreAssetDescriptor.fromJson(Object? source, String field) {
+    final type = source is Map ? source['type'] : null;
+    final json = _requireMap(source, switch (type) {
+      'file' => const {'type', 'descriptor'},
+      'link' => const {'type', 'target'},
+      'pipe' || 'socket' => const {'type'},
+      _ => throw FormatException('restore_previous_asset_descriptor:$field'),
+    }, 'restore_previous_asset_descriptor:$field');
+    final descriptor = switch (type) {
+      'file' => RestoreAssetDescriptor.file(
+        _parseDescriptor(json['descriptor'], field),
+      ),
+      'link' when json['target'] is String => RestoreAssetDescriptor.link(
+        json['target'] as String,
+      ),
+      'pipe' => const RestoreAssetDescriptor.pipe(),
+      'socket' => const RestoreAssetDescriptor.socket(),
+      _ => throw FormatException('restore_previous_asset_descriptor:$field'),
+    };
+    try {
+      descriptor._validate(field);
+    } catch (_) {
+      throw FormatException('restore_previous_asset_descriptor:$field');
+    }
+    return descriptor;
+  }
+
+  void _validate(String field) {
+    if (file != null) _validateDescriptor(file!, field);
+    if (linkTarget != null &&
+        (linkTarget!.isEmpty || linkTarget!.contains('\u0000'))) {
+      throw ArgumentError('restore_previous_asset_link:$field');
+    }
+  }
+}
+
 final class RestorePreviousDatabasePlan {
   const RestorePreviousDatabasePlan._({
     required this.state,
@@ -87,7 +166,7 @@ final class RestorePreviousAssetsPlan {
 
   RestorePreviousAssetsPlan({
     required Map<String, RestorePreviousAssetRootState> rootStates,
-    required Map<String, RestoreFileDescriptor> entries,
+    required Map<String, RestoreAssetDescriptor> entries,
   }) : rootStates = Map.unmodifiable({
          for (final root in rootNames)
            if (rootStates.containsKey(root)) root: rootStates[root]!,
@@ -108,21 +187,29 @@ final class RestorePreviousAssetsPlan {
           !foldedNames.add(entry.key.toLowerCase())) {
         throw ArgumentError('restore_previous_asset_entry:${entry.key}');
       }
-      _validateDescriptor(entry.value, entry.key);
+      entry.value._validate(entry.key);
     }
   }
 
   final Map<String, RestorePreviousAssetRootState> rootStates;
-  final Map<String, RestoreFileDescriptor> entries;
+  final Map<String, RestoreAssetDescriptor> entries;
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson({
+    int formatVersion = RestorePreviousPlan.formatVersion,
+  }) => {
     'roots': {for (final root in rootNames) root: rootStates[root]!.name},
     'entries': {
-      for (final entry in entries.entries) entry.key: entry.value.toJson(),
+      for (final entry in entries.entries)
+        entry.key: formatVersion == 2
+            ? entry.value.file!.toJson()
+            : entry.value.toJson(),
     },
   };
 
-  factory RestorePreviousAssetsPlan.fromJson(Object? source) {
+  factory RestorePreviousAssetsPlan.fromJson(
+    Object? source, {
+    int formatVersion = RestorePreviousPlan.formatVersion,
+  }) {
     final json = _requireMap(source, const {
       'roots',
       'entries',
@@ -152,12 +239,13 @@ final class RestorePreviousAssetsPlan {
     if (rawEntries.keys.any((key) => key is! String)) {
       throw const FormatException('restore_previous_asset_entries');
     }
-    final entries = <String, RestoreFileDescriptor>{};
+    final entries = <String, RestoreAssetDescriptor>{};
     for (final entry in rawEntries.entries) {
-      entries[entry.key as String] = _parseDescriptor(
-        entry.value,
-        entry.key as String,
-      );
+      entries[entry.key as String] = formatVersion == 2
+          ? RestoreAssetDescriptor.file(
+              _parseDescriptor(entry.value, entry.key as String),
+            )
+          : RestoreAssetDescriptor.fromJson(entry.value, entry.key as String);
     }
     try {
       return RestorePreviousAssetsPlan(rootStates: roots, entries: entries);
@@ -178,7 +266,10 @@ final class RestorePreviousPlan {
     required this.createdAtUtc,
     required this.database,
     this.assets,
-  }) : selectedComponents = Set.unmodifiable(selectedComponents) {
+    int? persistedFormatVersion,
+  }) : selectedComponents = Set.unmodifiable(selectedComponents),
+       _persistedFormatVersion =
+           persistedFormatVersion ?? RestorePreviousPlan.formatVersion {
     if (!_runIdPattern.hasMatch(runId)) {
       throw ArgumentError.value(runId, 'runId');
     }
@@ -195,7 +286,7 @@ final class RestorePreviousPlan {
   }
 
   static const format = 'kelivo.restore-previous-plan';
-  static const formatVersion = 2;
+  static const formatVersion = 3;
 
   final String runId;
   final String preparedReceiptChecksum;
@@ -237,25 +328,36 @@ final class RestorePreviousPlan {
     }
   }
 
+  /// 这份计划在磁盘上的格式版本。续写时必须沿用，
+  /// 因为它的字节哈希被后续回执当作证据。
+  final int _persistedFormatVersion;
+
   String get checksum =>
       sha256.convert(utf8.encode(jsonEncode(_payloadJson()))).toString();
 
-  Map<String, dynamic> toJson() => {..._payloadJson(), 'checksum': checksum};
+  Map<String, dynamic> toJson({int? formatVersion}) {
+    final payload = _payloadJson(formatVersion: formatVersion);
+    final sum = sha256.convert(utf8.encode(jsonEncode(payload))).toString();
+    return {...payload, 'checksum': sum};
+  }
 
-  Map<String, dynamic> _payloadJson() => {
-    'format': format,
-    'formatVersion': formatVersion,
-    'runId': runId,
-    'preparedReceiptChecksum': preparedReceiptChecksum,
-    'candidateManifestSha256': candidateManifestSha256,
-    'selectedComponents': [
-      for (final component in _componentOrder)
-        if (selectedComponents.contains(component)) component.name,
-    ],
-    'createdAtUtc': createdAtUtc.toIso8601String(),
-    'database': database.toJson(),
-    'assets': assets?.toJson(),
-  };
+  Map<String, dynamic> _payloadJson({int? formatVersion}) {
+    final version = formatVersion ?? _persistedFormatVersion;
+    return {
+      'format': format,
+      'formatVersion': version,
+      'runId': runId,
+      'preparedReceiptChecksum': preparedReceiptChecksum,
+      'candidateManifestSha256': candidateManifestSha256,
+      'selectedComponents': [
+        for (final component in _componentOrder)
+          if (selectedComponents.contains(component)) component.name,
+      ],
+      'createdAtUtc': createdAtUtc.toIso8601String(),
+      'database': database.toJson(),
+      'assets': assets?.toJson(formatVersion: version),
+    };
+  }
 
   factory RestorePreviousPlan.fromJson(
     Map<dynamic, dynamic> source, {
@@ -273,9 +375,10 @@ final class RestorePreviousPlan {
       'assets',
       'checksum',
     }, 'restore_previous_plan');
+    final version = json['formatVersion'];
     if (json['format'] != format ||
-        json['formatVersion'] is! int ||
-        json['formatVersion'] != formatVersion ||
+        version is! int ||
+        (version != 2 && version != formatVersion) ||
         json['runId'] is! String ||
         json['preparedReceiptChecksum'] is! String ||
         json['candidateManifestSha256'] is! String ||
@@ -299,7 +402,11 @@ final class RestorePreviousPlan {
         database: RestorePreviousDatabasePlan.fromJson(json['database']),
         assets: json['assets'] == null
             ? null
-            : RestorePreviousAssetsPlan.fromJson(json['assets']),
+            : RestorePreviousAssetsPlan.fromJson(
+                json['assets'],
+                formatVersion: version,
+              ),
+        persistedFormatVersion: version,
       );
       if (!_hashPattern.hasMatch(json['checksum'] as String) ||
           plan.checksum != json['checksum']) {

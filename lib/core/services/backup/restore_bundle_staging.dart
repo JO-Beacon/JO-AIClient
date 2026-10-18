@@ -122,6 +122,9 @@ final class RestoreBundleStaging {
     required Directory extractedDirectory,
     required bool includeChats,
     required bool includeFiles,
+
+    /// 本次要恢复的附件根目录；空表示按包内全部。
+    Set<String>? assetRoots,
     bool useExistingLocalAttachments = false,
     bool? sourceIncludesChats,
     bool? sourceIncludesFiles,
@@ -133,6 +136,7 @@ final class RestoreBundleStaging {
   }) async {
     final declaredIncludeChats = sourceIncludesChats ?? includeChats;
     final declaredIncludeFiles = sourceIncludesFiles ?? includeFiles;
+    final roots = assetRoots ?? _assetRoots.toSet();
     if (!includeChats ||
         !declaredIncludeChats ||
         (includeFiles && !declaredIncludeFiles)) {
@@ -280,6 +284,8 @@ final class RestoreBundleStaging {
         sha256: await _sha256(stagedDatabaseFile, cancelToken: cancelToken),
       );
       if (includeFiles) {
+        // 目录尽量建全：候选拓扑校验按固定根目录检查，
+        // 但只复制范围内的条目（空目录不占空间）。
         for (final rootName in _assetRoots) {
           await _ensureDurableDirectory(
             directory: Directory(p.join(payloadDirectory.path, rootName)),
@@ -288,7 +294,7 @@ final class RestoreBundleStaging {
           );
         }
         final assetEntries = declaredEntries.keys.where(
-          (name) => _assetRoots.any((root) => name.startsWith('$root/')),
+          (name) => roots.any((root) => name.startsWith('$root/')),
         );
         var processed = 1;
         final assetTotal = assetEntries.length + 1;
@@ -347,7 +353,7 @@ final class RestoreBundleStaging {
         _databaseEntry,
         if (includeFiles)
           ...declaredEntries.keys.where(
-            (name) => _assetRoots.any((root) => name.startsWith('$root/')),
+            (name) => roots.any((root) => name.startsWith('$root/')),
           ),
         // 册子条目**无条件**登记，不能写进上面那个 if (includeFiles) 里：
         // 复制了而这里漏登记，会与 stagedEntries 比对不一致，
@@ -366,6 +372,9 @@ final class RestoreBundleStaging {
       manifest['includeFiles'] = includeFiles;
       manifest.remove('secretsIncluded');
       manifest.remove('businessEntityRowIds');
+      // 范围已经体现在这份候选内容里，读回时不再需要它；
+      // 候选清单保持严格的固定字段集。
+      manifest.remove('scope');
       // 前向兼容声明描述的是**来源**归档。候选内容只会被同一个构建读回，
       // 因此它不携带声明 —— 与下面 database 块的处理方式一致（重建而不是
       // 照抄）。

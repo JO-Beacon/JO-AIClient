@@ -10,16 +10,20 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:sqlite3/sqlite3.dart' as composer_sqlite;
 import 'package:xml/xml.dart';
 
 import '../../database/business_repository.dart';
+import '../../database/business_data.dart';
 import '../../database/business_preferences.dart';
 import '../../database/business_restore_service.dart';
 import '../../database/business_settings_router.dart';
 import '../../database/app_database.dart';
 import '../../database/chat_database_repository.dart';
+import '../../database/message_timeline_index.dart';
 import '../../database/schema_migrations.dart';
 import '../../models/backup.dart';
+import '../../models/backup_scope.dart';
 import '../../models/chat_message.dart';
 import '../../models/message_part.dart';
 import '../../models/conversation.dart';
@@ -101,6 +105,9 @@ typedef _VersionedBackupInfo = ({
   bool secretsIncluded,
   Map<String, Object?>? businessEntityRowIds,
   String normalizedManifestSha256,
+
+  /// 本包导出时选择的类别（旧包没有这个字段，按全选计）。
+  BackupScope scope,
 
   /// 本包的导出时刻（清单的 `createdAtUtc`）；解析不出来时为 null，
   /// 此时恢复合并维持"本机优先"的原行为。
@@ -395,6 +402,7 @@ class DataSync {
     required bool includeFiles,
     required bool restoreChats,
     required bool restoreFiles,
+    Set<String>? assetRoots,
     Map<String, dynamic>? validatedSettings,
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
@@ -406,6 +414,7 @@ class DataSync {
     bundleIncludesFiles: includeFiles,
     restoreChats: restoreChats,
     restoreFiles: restoreFiles,
+    assetRoots: assetRoots,
     validatedSettings: validatedSettings,
     onProgress: onProgress,
     cancelToken: cancelToken,
@@ -673,7 +682,9 @@ class DataSync {
   }) async => (await _prepareBackupArchive(
     includeChats: cfg.includeChats,
     includeFiles: cfg.includeFiles,
-    exportSettings: _exportBusinessSettings,
+    scope: cfg.scope,
+    exportSettings: () =>
+        exportBusinessSettingsFrom(businessRepository, scope: cfg.scope),
     snapshotDatabase: (destination) => chatService.createBackupDatabaseSnapshot(
       destination,
       onProgress: onProgress,
@@ -837,9 +848,29 @@ class DataSync {
   /// 从 [prepareBackupFile] 中拆出，使非实时数据库 —— 例如崩溃恢复
   /// 搁置下来的副本 —— 也能变成普通备份，
   /// 而不必为它单独准备一条恢复路径。
+  /// 从给定数据库文件读出“已随消息发出”的草稿附件 URI。
+  static Set<String> _publishedDraftFilesFrom(File file) {
+    if (!file.existsSync()) return {};
+    final database = composer_sqlite.sqlite3.open(
+      file.path,
+      mode: composer_sqlite.OpenMode.readOnly,
+    );
+    try {
+      return {
+        for (final row in database.select(
+          "SELECT id FROM extension_entity_rows WHERE kind = 'composerPublishedFile'",
+        ))
+          row['id'] as String,
+      };
+    } finally {
+      database.close();
+    }
+  }
+
   Future<PreparedBackupArchive> _prepareBackupArchive({
     required bool includeChats,
     required bool includeFiles,
+    BackupScope scope = BackupScope.all,
     required _BackupSettingsSource exportSettings,
     required _BackupDatabaseSource snapshotDatabase,
     Map<String, String>? ledgerEntries,
@@ -883,6 +914,7 @@ class DataSync {
       settingsTmp = settingsFile;
 
       ChatDatabaseSnapshotInfo? snapshotInfo;
+      var publishedDraftFiles = <String>{};
       if (includeChats) {
         final databaseFile = File(p.join(workDir.path, '_bk_kelivo.db'));
         databaseTmp = databaseFile;
@@ -894,7 +926,22 @@ class DataSync {
           ),
         );
         snapshotInfo = await snapshotDatabase(databaseFile);
+        publishedDraftFiles = _publishedDraftFilesFrom(databaseFile);
         await _sanitizeBackupDatabase(databaseFile);
+      } else if (includeFiles) {
+        // 不导聊天时也要能认出“已随消息发出”的草稿附件：
+        // 它们在实时库里登记为 composerPublishedFile，只有这些允许进包。
+        final store = chatService.composerDrafts;
+        publishedDraftFiles = store != null
+            ? await store.publishedFiles()
+            : _publishedDraftFilesFrom(
+                File(
+                  p.join(
+                    (await AppDirectories.getAppDataDirectory()).path,
+                    'kelivo.db',
+                  ),
+                ),
+              );
       }
 
       final packageInfo = await PackageInfo.fromPlatform();
@@ -930,8 +977,10 @@ class DataSync {
       // 拼接应用数据根目录，而不是用会顺带创建的辅助函数，
       // 免得备份动作把空的实时根目录也 mkdir 出来。
       final appData = await AppDirectories.getAppDataDirectory();
+      final scopedAssetRoots = scope.assetRoots;
       final assetRootPaths = {
-        for (final name in _assetRootNames) name: p.join(appData.path, name),
+        for (final name in _assetRootNames)
+          if (scopedAssetRoots.contains(name)) name: p.join(appData.path, name),
       };
       final manifestPath = manifestFile.path;
       final settingsPath = settingsFile.path;
@@ -951,7 +1000,9 @@ class DataSync {
           appVersion: appVersion,
           businessEntityRowIds: businessExport.entityRowIds,
           assetRootPaths: assetRootPaths,
+          scope: scope,
           ledgerDirectoryPath: ledgerDirectoryPath,
+          publishedDraftFiles: publishedDraftFiles,
         ),
         cancelToken: cancelToken,
         onProgress: onProgress,
@@ -1241,7 +1292,9 @@ class DataSync {
       appVersion: args.appVersion,
       businessEntityRowIds: args.businessEntityRowIds,
       assetRootPaths: args.assetRootPaths,
+      scope: args.scope,
       ledgerDirectoryPath: args.ledgerDirectoryPath,
+      publishedDraftFiles: args.publishedDraftFiles,
       ctx: ctx,
     );
     _verifyPackedBackupSync(
@@ -1277,21 +1330,40 @@ class DataSync {
     required String appVersion,
     required Map<String, List<String>> businessEntityRowIds,
     required Map<String, String> assetRootPaths,
+    BackupScope scope = BackupScope.all,
     String? ledgerDirectoryPath,
+    Set<String> publishedDraftFiles = const {},
     BackupIsolateContext? ctx,
   }) {
     if (includeChats != (databasePath != null && snapshotInfo != null)) {
       throw StateError('backup_database_component');
     }
-    if (includeFiles &&
-        (assetRootPaths.length != _assetRootNames.length ||
-            !_assetRootNames.every(assetRootPaths.containsKey))) {
-      throw StateError('backup_asset_roots');
+    if (includeFiles) {
+      final roots = scope.assetRoots;
+      if (assetRootPaths.keys.any((name) => !roots.contains(name)) ||
+          !roots.every(assetRootPaths.containsKey)) {
+        throw StateError('backup_asset_roots');
+      }
     }
     final assetFiles = includeFiles
         ? {
             for (final name in _assetRootNames)
-              name: _listFilesSync(assetRootPaths[name]!),
+              if (scope.assetRoots.contains(name))
+                name: _listFilesSync(assetRootPaths[name]!).where((file) {
+                  // 草稿私有附件默认不进包；只有已随消息发出的才保留。
+                  if (!RegExp(
+                    r'^draft-[0-9a-f-]{36}-[0-9]+',
+                  ).hasMatch(p.basename(file.path))) {
+                    return true;
+                  }
+                  final relative = p.relative(
+                    file.path,
+                    from: p.dirname(assetRootPaths[name]!),
+                  );
+                  final uri =
+                      'kelivo-file:///${p.split(relative).map(Uri.encodeComponent).join('/')}';
+                  return publishedDraftFiles.contains(uri);
+                }).toList(),
           }
         : const <String, List<File>>{};
     var totalBytes = _fileSizeSync(settingsPath) + _fileSizeSync(databasePath);
@@ -1360,6 +1432,7 @@ class DataSync {
         snapshotInfo: snapshotInfo,
         includeChats: includeChats,
         includeFiles: includeFiles,
+        scope: scope,
         appVersion: appVersion,
         businessEntityRowIds: businessEntityRowIds,
       );
@@ -1991,7 +2064,7 @@ class DataSync {
     final formatVersion = manifest['formatVersion'];
     if (formatVersion is! int) return false;
     if (formatVersion == _backupFormatVersion) return true;
-    // 更旧的归档格式过去不支持，现在依然不支持。
+    // 更旧的归档格式从未支持，现在依然不支持。
     if (formatVersion < _backupFormatVersion) return false;
     final declared = manifest[backupMinimumReadableFormatKey];
     return declared is int && declared >= 1 && declared <= _backupFormatVersion;
@@ -2032,6 +2105,7 @@ class DataSync {
     'includeFiles',
     'secretsIncluded',
     'businessEntityRowIds',
+    'scope',
     'database',
     'entries',
   };
@@ -2316,12 +2390,14 @@ class DataSync {
     required ChatDatabaseSnapshotInfo? snapshotInfo,
     required bool includeChats,
     required bool includeFiles,
+    BackupScope scope = BackupScope.all,
     required String appVersion,
     required Map<String, List<String>> businessEntityRowIds,
   }) {
     return jsonEncode({
       'format': _backupFormat,
       'formatVersion': _backupFormatVersion,
+      'scope': scope.toJson(),
       backupMinimumReadableFormatKey: _minimumReadableFormatVersion,
       'payloadKind': includeChats ? 'sqlite' : 'settings-only',
       'createdAtUtc': DateTime.now().toUtc().toIso8601String(),
@@ -2366,6 +2442,24 @@ class DataSync {
     ctx: ctx,
   );
 
+  /// 恢复时按范围剔掉不属于本次选择的设置与实体。
+  static void _applyRestoreScope(
+    Map<String, dynamic> settings,
+    BackupScope scope,
+  ) {
+    final included = scope.entityKinds;
+    for (final kind in BusinessEntityKind.values) {
+      if (included.contains(kind)) continue;
+      settings.remove(kind.sourceKey);
+    }
+    if (!scope.includes(BackupCategory.settings)) {
+      final entityKeys = {
+        for (final kind in BusinessEntityKind.values) kind.sourceKey,
+      };
+      settings.removeWhere((key, _) => !entityKeys.contains(key));
+    }
+  }
+
   static Future<_VersionedBackupInfo> _preflightVersionedBackup({
     required String manifestPath,
     required String extractDirPath,
@@ -2398,6 +2492,12 @@ class DataSync {
       throw const FormatException('manifest_fields');
     }
     final businessEntityRowIds = _parseBusinessEntityRowIds(manifest);
+    final BackupScope scope;
+    try {
+      scope = BackupScope.fromJson(manifest['scope']);
+    } on FormatException {
+      throw const FormatException('manifest_scope');
+    }
 
     final rawEntries = manifest['entries'];
     if (rawEntries is! Map) {
@@ -2546,6 +2646,11 @@ class DataSync {
         case BackupSchemaVerdict.forwardCompatible:
           break;
       }
+      // 库结构 2 只可能来自旧版 Kelivo：本仓库的库结构从 1 直接到 3，
+      // 从未导出过 2。这里明确拒绝，避免掉进我们的迁移链报一个看不懂的 SQL 错误。
+      if (schemaVersion == 2) {
+        throw const FormatException('kelivo_schema2_unsupported');
+      }
       final databaseFile = File(
         p.joinAll([extractDirPath, ..._databaseEntryName.split('/')]),
       );
@@ -2621,6 +2726,7 @@ class DataSync {
       secretsIncluded: true,
       businessEntityRowIds: businessEntityRowIds,
       normalizedManifestSha256: normalizedManifestSha256,
+      scope: scope,
       createdAtUtc: DateTime.tryParse(
         (manifest['createdAtUtc'] as String?) ?? '',
       )?.toUtc(),
@@ -3243,23 +3349,40 @@ class DataSync {
 
   /// 备份中属于设置的那一半，从给定仓库读取。
   static Future<({String settingsJson, Map<String, List<String>> entityRowIds})>
-  exportBusinessSettingsFrom(BusinessRepository repository) async {
+  exportBusinessSettingsFrom(
+    BusinessRepository repository, {
+    BackupScope scope = BackupScope.all,
+  }) async {
     final exported = BusinessSettingsRouter.exportSnapshotWithRowIds(
       BackupPortability.portable(await repository.readSnapshot()),
     );
     final settings = Map<String, Object>.from(exported.settings);
+    final entityRowIds = Map<String, List<String>>.from(exported.entityRowIds);
+    // 按范围剔掉被排除的实体类别；设置类别被关掉时只留实体列表。
+    final included = scope.entityKinds;
+    for (final kind in BusinessEntityKind.values) {
+      if (included.contains(kind)) continue;
+      settings.remove(kind.sourceKey);
+      entityRowIds.remove(kind.sourceKey);
+    }
+    if (!scope.includes(BackupCategory.settings)) {
+      final entityKeys = {
+        for (final kind in BusinessEntityKind.values) kind.sourceKey,
+      };
+      settings.removeWhere((key, _) => !entityKeys.contains(key));
+    }
     settings.removeWhere((key, _) => BackupSettingsValidator.shouldIgnore(key));
     BackupSettingsValidator.retainCloudAsrForExport(settings);
-    return (
-      settingsJson: jsonEncode(settings),
-      entityRowIds: exported.entityRowIds,
-    );
+    return (settingsJson: jsonEncode(settings), entityRowIds: entityRowIds);
   }
 
   static Future<void> _sanitizeBackupDatabase(File file) async {
     final database = AppDatabase.open(file: file);
     try {
       await BackupPortability.sanitizeDatabase(database);
+      for (final sql in MessageTimelineIndex.discardStatements) {
+        await database.customStatement(sql);
+      }
     } finally {
       await database.close();
     }
@@ -3473,6 +3596,11 @@ class DataSync {
         onProgress: onProgress,
       );
       BackupSettingsValidator.normalizeAndValidate(settings);
+      // 恢复范围 = 用户勾选的 ∩ 包里实际带的（旧包无范围字段 → 全选）。
+      final restoreScope = versionedBackup == null
+          ? effectiveConfig.scope
+          : effectiveConfig.scope.intersect(versionedBackup.scope);
+      _applyRestoreScope(settings, restoreScope);
 
       // --- 本机设置册子：无条件吸收 + 按模式分流写回 ---
       // 吸收在流程内完成（解包目录此刻还可读），且不受恢复模式影响：
@@ -3512,8 +3640,10 @@ class DataSync {
         if (isJoaiclient && (!includeChats || !includeFiles)) {
           throw const FormatException('joaiclient_not_full_snapshot');
         }
-        final restoreChats = effectiveConfig.includeChats && includeChats;
-        final restoreFiles = effectiveConfig.includeFiles && includeFiles;
+        final restoreChats =
+            restoreScope.includes(BackupCategory.chats) && includeChats;
+        // 附件按类别精确到目录：范围里没有任何附件目录时，不恢复文件。
+        final restoreFiles = restoreScope.assetRoots.isNotEmpty && includeFiles;
         if (mode == RestoreMode.merge && restoreChats) {
           // 聊天合并独立提交，因此在改动任一侧实时数据之前，
           // 先拒掉不匹配的业务载荷。
@@ -3558,6 +3688,7 @@ class DataSync {
             includeFiles: includeFiles,
             restoreChats: restoreChats,
             restoreFiles: restoreFiles,
+            assetRoots: restoreScope.assetRoots,
             validatedSettings: settings,
             onProgress: onProgress,
             cancelToken: cancelToken,
@@ -3935,7 +4066,9 @@ class _BackupPackArgs {
     required this.appVersion,
     required this.businessEntityRowIds,
     required this.assetRootPaths,
+    this.scope = BackupScope.all,
     this.ledgerDirectoryPath,
+    this.publishedDraftFiles = const {},
   });
 
   final String outPath;
@@ -3948,6 +4081,12 @@ class _BackupPackArgs {
   final String appVersion;
   final Map<String, List<String>> businessEntityRowIds;
   final Map<String, String> assetRootPaths;
+
+  /// 本包的导出范围（写进清单）。
+  final BackupScope scope;
+
+  /// 已随消息发出的草稿附件 URI；只有它们允许进包（见草稿私有目录）。
+  final Set<String> publishedDraftFiles;
 
   /// 本机设置册子的临时目录（内含 `device_local_settings/<指纹>.json`）。
   /// 为空表示“不带”档 —— 册子条目完全不进包。

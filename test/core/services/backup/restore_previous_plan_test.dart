@@ -77,7 +77,9 @@ void main() {
             'sessions': RestorePreviousAssetRootState.missing,
           },
           entries: const {
-            'upload/note.txt': RestoreFileDescriptor(bytes: 4, sha256: _hashC),
+            'upload/note.txt': RestoreAssetDescriptor.file(
+              RestoreFileDescriptor(bytes: 4, sha256: _hashC),
+            ),
           },
         ),
       );
@@ -185,7 +187,9 @@ void main() {
             'sessions': RestorePreviousAssetRootState.directory,
           },
           entries: const {
-            'upload/../secret': RestoreFileDescriptor(bytes: 1, sha256: _hashA),
+            'upload/../secret': RestoreAssetDescriptor.file(
+              RestoreFileDescriptor(bytes: 1, sha256: _hashA),
+            ),
           },
         ),
         throwsArgumentError,
@@ -196,6 +200,78 @@ void main() {
         ),
         throwsArgumentError,
       );
+    });
+
+    test('回滚计划记录链接、管道与套接字，不跟随链接', () {
+      final plan = RestorePreviousPlan.forPreparedReceipt(
+        receipt: _preparedReceipt(restoreFiles: true),
+        database: RestorePreviousDatabasePlan.file(
+          const RestoreFileDescriptor(bytes: 7, sha256: _hashA),
+        ),
+        assets: RestorePreviousAssetsPlan(
+          rootStates: const {
+            'upload': RestorePreviousAssetRootState.directory,
+            'images': RestorePreviousAssetRootState.missing,
+            'avatars': RestorePreviousAssetRootState.missing,
+            'fonts': RestorePreviousAssetRootState.missing,
+            'skills': RestorePreviousAssetRootState.missing,
+            'workspaces': RestorePreviousAssetRootState.missing,
+            'sessions': RestorePreviousAssetRootState.missing,
+          },
+          entries: const {
+            'upload/link': RestoreAssetDescriptor.link('../outside'),
+            'upload/fifo': RestoreAssetDescriptor.pipe(),
+            'upload/sock': RestoreAssetDescriptor.socket(),
+          },
+        ),
+      );
+
+      final restored = RestorePreviousPlan.fromJson(
+        plan.toJson(),
+        preparedReceipt: _preparedReceipt(restoreFiles: true),
+      );
+      final entries = restored.assets!.entries;
+      expect(entries['upload/link']!.type, RestoreAssetEntryType.link);
+      expect(entries['upload/link']!.linkTarget, '../outside');
+      expect(entries['upload/fifo']!.type, RestoreAssetEntryType.pipe);
+      expect(entries['upload/sock']!.type, RestoreAssetEntryType.socket);
+      expect(restored.toJson()['formatVersion'], 3);
+    });
+
+    test('旧格式（2）的回滚计划仍能读回，改写时保持旧格式', () {
+      final plan = RestorePreviousPlan.forPreparedReceipt(
+        receipt: _preparedReceipt(restoreFiles: true),
+        database: RestorePreviousDatabasePlan.file(
+          const RestoreFileDescriptor(bytes: 7, sha256: _hashA),
+        ),
+        assets: RestorePreviousAssetsPlan(
+          rootStates: const {
+            'upload': RestorePreviousAssetRootState.directory,
+            'images': RestorePreviousAssetRootState.missing,
+            'avatars': RestorePreviousAssetRootState.missing,
+            'fonts': RestorePreviousAssetRootState.missing,
+            'skills': RestorePreviousAssetRootState.missing,
+            'workspaces': RestorePreviousAssetRootState.missing,
+            'sessions': RestorePreviousAssetRootState.missing,
+          },
+          entries: const {
+            'upload/note.txt': RestoreAssetDescriptor.file(
+              RestoreFileDescriptor(bytes: 4, sha256: _hashC),
+            ),
+          },
+        ),
+      );
+
+      final restored = RestorePreviousPlan.fromJson(
+        plan.toJson(formatVersion: 2),
+        preparedReceipt: _preparedReceipt(restoreFiles: true),
+      );
+      expect(
+        restored.assets!.entries['upload/note.txt']!.type,
+        RestoreAssetEntryType.file,
+      );
+      // 续写必须沿用磁盘上的旧格式，因为回执绑定了它的字节哈希。
+      expect(restored.toJson()['formatVersion'], 2);
     });
   });
 }

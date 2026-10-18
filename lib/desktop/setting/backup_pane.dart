@@ -9,7 +9,9 @@ import '../../icons/lucide_adapter.dart' as lucide;
 import '../../l10n/app_localizations.dart';
 import '../../core/database/business_repository.dart';
 import '../../core/models/backup.dart';
+import '../../core/models/backup_scope.dart';
 import '../../core/services/backup/backup_cancel_token.dart';
+import '../../features/backup/widgets/backup_scope_tile.dart';
 import '../../core/providers/backup_provider.dart';
 import '../../core/providers/backup_reminder_provider.dart';
 import '../../core/providers/assistant_group_provider.dart';
@@ -66,8 +68,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
   late TextEditingController _s3Prefix;
   late TextEditingController _webDavUserAgent;
   late TextEditingController _s3UserAgent;
-  bool _includeChats = true;
-  bool _includeFiles = true;
+  BackupScope _scope = BackupScope.all;
   bool _includeLocalSettings = false;
   bool _s3PathStyle = true;
 
@@ -82,8 +83,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
     _password = TextEditingController(text: cfg.password);
     _path = TextEditingController(text: cfg.path);
     _webDavUserAgent = TextEditingController(text: cfg.userAgent);
-    _includeChats = cfg.includeChats;
-    _includeFiles = cfg.includeFiles;
+    _scope = cfg.scope;
 
     final s3 = settings.s3Config;
     _s3Endpoint = TextEditingController(text: s3.endpoint);
@@ -133,8 +133,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
       password: _password.text,
       path: _path.text.trim().isEmpty ? 'kelivo_backups' : _path.text.trim(),
       userAgent: _webDavUserAgent.text.trim(),
-      includeChats: _includeChats,
-      includeFiles: _includeFiles,
+      scope: _scope,
     );
   }
 
@@ -152,11 +151,19 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
     String? password,
     String? path,
     String? userAgent,
+    BackupScope? scope,
     bool? includeChats,
     bool? includeFiles,
   }) async {
     final settings = context.read<SettingsProvider>();
     final backupProvider = context.read<BackupProvider>();
+    var nextScope = scope ?? _scope;
+    if (includeChats != null) {
+      nextScope = nextScope.withCategory(BackupCategory.chats, includeChats);
+    }
+    if (includeFiles != null) {
+      nextScope = nextScope.withCategory(BackupCategory.files, includeFiles);
+    }
     final cfg = WebDavConfig(
       url: url ?? _url.text.trim(),
       username: username ?? _username.text.trim(),
@@ -165,8 +172,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
           path ??
           (_path.text.trim().isEmpty ? 'kelivo_backups' : _path.text.trim()),
       userAgent: userAgent ?? _webDavUserAgent.text.trim(),
-      includeChats: includeChats ?? _includeChats,
-      includeFiles: includeFiles ?? _includeFiles,
+      scope: nextScope,
     );
     await settings.setWebDavConfig(cfg);
     backupProvider.updateConfig(cfg);
@@ -187,8 +193,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
           : _s3Prefix.text.trim(),
       pathStyle: _s3PathStyle,
       userAgent: _s3UserAgent.text.trim(),
-      includeChats: _includeChats,
-      includeFiles: _includeFiles,
+      scope: _scope,
     );
   }
 
@@ -210,11 +215,19 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
     String? prefix,
     bool? pathStyle,
     String? userAgent,
+    BackupScope? scope,
     bool? includeChats,
     bool? includeFiles,
   }) async {
     final settings = context.read<SettingsProvider>();
     final s3BackupProvider = context.read<S3BackupProvider>();
+    var nextScope = scope ?? _scope;
+    if (includeChats != null) {
+      nextScope = nextScope.withCategory(BackupCategory.chats, includeChats);
+    }
+    if (includeFiles != null) {
+      nextScope = nextScope.withCategory(BackupCategory.files, includeFiles);
+    }
     final cfg = S3Config(
       endpoint: endpoint ?? _s3Endpoint.text.trim(),
       region:
@@ -231,8 +244,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
               : _s3Prefix.text.trim()),
       pathStyle: pathStyle ?? _s3PathStyle,
       userAgent: userAgent ?? _s3UserAgent.text.trim(),
-      includeChats: includeChats ?? _includeChats,
-      includeFiles: includeFiles ?? _includeFiles,
+      scope: nextScope,
     );
     await settings.setS3Config(cfg);
     s3BackupProvider.updateConfig(cfg);
@@ -695,34 +707,16 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                         ],
                       ),
                     ),
-                    _ItemRow(
-                      label: l10n.backupPageChatsLabel,
-                      vpad: 2,
-                      trailing: IosSwitch(
-                        value: _includeChats,
-                        onChanged: busy
-                            ? null
-                            : (v) async {
-                                setState(() => _includeChats = v);
-                                await _applyPartial(includeChats: v);
-                                await _applyS3Partial(includeChats: v);
-                              },
-                      ),
-                    ),
-                    _rowDivider(context),
-                    _ItemRow(
-                      label: l10n.backupPageFilesLabel,
-                      vpad: 2,
-                      trailing: IosSwitch(
-                        value: _includeFiles,
-                        onChanged: busy
-                            ? null
-                            : (v) async {
-                                setState(() => _includeFiles = v);
-                                await _applyPartial(includeFiles: v);
-                                await _applyS3Partial(includeFiles: v);
-                              },
-                      ),
+                    BackupScopeTile(
+                      scope: _scope,
+                      desktop: true,
+                      onChanged: busy
+                          ? (_) {}
+                          : (scope) async {
+                              setState(() => _scope = scope);
+                              await _applyPartial(scope: scope);
+                              await _applyS3Partial(scope: scope);
+                            },
                     ),
                   ],
                 ),

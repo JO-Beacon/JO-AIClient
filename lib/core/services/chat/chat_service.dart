@@ -7,7 +7,6 @@ import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../database/app_database.dart';
@@ -15,8 +14,10 @@ import '../../database/business_data.dart';
 import '../../database/business_repository.dart';
 import '../../database/chat_database_gateway.dart';
 import '../../database/chat_database_repository.dart';
+import '../../database/composer_draft_store.dart';
 import '../../database/generation_run.dart';
 import '../../models/chat_message.dart';
+import '../../models/composer_draft.dart';
 import '../../models/message_part.dart';
 import '../../models/conversation.dart';
 import '../../models/conversation_tree.dart';
@@ -31,7 +32,6 @@ import '../api/providers/claude/claude_history.dart';
 import '../api/providers/claude/claude_thinking_recovery.dart';
 import '../api/providers/google/gemini_thought_signature.dart';
 import '../api/providers/openai/responses_history.dart';
-import '../../utils/scheduler_idle.dart';
 
 final class LoadedTimelineSlot {
   const LoadedTimelineSlot({required this.identity, required this.message});
@@ -117,12 +117,6 @@ class ChatService extends ChangeNotifier {
   ChatDatabaseLease? _databaseLease;
   Future<void>? _assetReferenceMaintenanceFuture;
   Future<void>? _postStartupAssetMaintenanceFuture;
-
-  /// 首屏时间线不等待完整消息 ID 清单，由该后台任务补齐。
-  final Map<String, Future<void>> _messageOrderBackfillFutures = {};
-
-  /// close 或删除会话时取消空闲等待，避免延迟查询复活缓存。
-  final Map<String, Completer<void>> _messageOrderBackfillAbort = {};
 
   String? _currentConversationId;
   final Map<String, List<ChatMessage>> _messagesCache = {};
@@ -302,6 +296,10 @@ class ChatService extends ChangeNotifier {
 
   String? get currentConversationId => _currentConversationId;
 
+  /// 本机会话草稿存储；未初始化时为空。
+  ComposerDraftStore? get composerDrafts =>
+      _initialized ? _repo.composerDrafts : null;
+
   bool isTemporaryConversation(String? id) {
     return id != null &&
         (_temporaryConversationIds.contains(id) ||
@@ -339,6 +337,10 @@ class ChatService extends ChangeNotifier {
       // 带版本控制且事务化：正常启动会在扫描行之前返回。
       await _migrateSandboxPaths();
       await _loadConversationsCache();
+
+      // 本机草稿：建私有目录、清理遗留临时文件，变化时通知界面。
+      await _repo.composerDrafts.initialize();
+      _repo.composerDrafts.addListener(notifyListeners);
 
       // 重置上一次应用崩溃或强制退出后遗留的过期 isStreaming 标志。
       // 全新启动后，不可能有消息仍在主动流式传输。
@@ -392,20 +394,9 @@ class ChatService extends ChangeNotifier {
       } catch (_) {}
     }
     // Abort idle waits so close never waits for an animation to finish.
-    for (final abort in _messageOrderBackfillAbort.values) {
-      if (!abort.isCompleted) abort.complete();
-    }
-    _messageOrderBackfillAbort.clear();
-    final orderBackfills = List<Future<void>>.of(
-      _messageOrderBackfillFutures.values,
-    );
-    _messageOrderBackfillFutures.clear();
-    for (final backfill in orderBackfills) {
-      try {
-        await backfill;
-      } catch (_) {}
-    }
     _initialized = false;
+    // 存储已随数据库句柄一起关闭；先摘掉监听，避免关闭后的异步保存回调进来。
+    _repo.composerDrafts.removeListener(notifyListeners);
     for (final id in List<String>.of(_contextRevisionNotifiers.keys)) {
       _forgetContextRevision(id);
     }
@@ -484,120 +475,6 @@ class ChatService extends ChangeNotifier {
     _messageOrderIds[conversationId] = ids;
     _messageCounts[conversationId] = ids.length;
     return ids;
-  }
-
-  /// Idle-deferred full order backfill. Keeps `_messageOrderIds` absent until a
-  /// complete list is ready. Failure only logs — it never removes a concurrent
-  /// foreground-installed skeleton. Cancel/close leave an absent key absent.
-  ///
-  /// Does not start [getMessageIds] immediately — waits past the next frame,
-  /// then for an idle slot (same pattern as chat/home idle warm-ups).
-  /// Post-frame matters: an idle task alone can
-  /// still start during first-paint sibling awaits (e.g. visible-group preload)
-  /// and contend for SQLite. The registered future covers frame + idle wait +
-  /// query so tests and [close] can await it deterministically.
-  void _scheduleMessageOrderBackfill(String conversationId) {
-    if (_messageOrderIds.containsKey(conversationId)) return;
-    if (_messageOrderBackfillFutures.containsKey(conversationId)) return;
-
-    final abort = Completer<void>();
-    _messageOrderBackfillAbort[conversationId] = abort;
-
-    late final Future<void> backfill;
-    backfill = _runMessageOrderBackfill(conversationId, abort).whenComplete(() {
-      if (identical(_messageOrderBackfillFutures[conversationId], backfill)) {
-        _messageOrderBackfillFutures.remove(conversationId);
-      }
-      if (identical(_messageOrderBackfillAbort[conversationId], abort)) {
-        _messageOrderBackfillAbort.remove(conversationId);
-      }
-    });
-    _messageOrderBackfillFutures[conversationId] = backfill;
-    unawaited(backfill);
-  }
-
-  void _abortMessageOrderBackfill(String conversationId) {
-    final abort = _messageOrderBackfillAbort.remove(conversationId);
-    if (abort != null && !abort.isCompleted) {
-      abort.complete();
-    }
-  }
-
-  /// Returns `false` when [abort] wins before the idle slot is granted.
-  Future<bool> _awaitMessageOrderBackfillSlot(Completer<void> abort) async {
-    try {
-      final binding = SchedulerBinding.instance;
-      // 1) Past the next frame so first paint / visible-group preload DB work
-      // is not contended by a full-ID scan during their awaits.
-      final frame = Completer<void>();
-      binding.addPostFrameCallback((_) {
-        if (!frame.isCompleted) frame.complete();
-      });
-      binding.ensureVisualUpdate();
-      await Future.any<void>([frame.future, abort.future]);
-      if (abort.isCompleted) return false;
-
-      // 2) Wait alongside frames instead of spinning the event loop while
-      // a spinner, route transition or scroll animation keeps idle work paused.
-      return await waitForSchedulerIdle(cancelled: abort.future);
-    } catch (_) {
-      // No scheduler binding (rare bare isolates): proceed immediately.
-      return !abort.isCompleted;
-    }
-  }
-
-  Future<void> _runMessageOrderBackfill(
-    String conversationId,
-    Completer<void> abort,
-  ) async {
-    try {
-      if (!await _awaitMessageOrderBackfillSlot(abort)) return;
-      if (_messageOrderIds.containsKey(conversationId)) return;
-
-      // Race the query against abort so [close] never hangs on a gated /
-      // slow getMessageIds. Orphaned queries swallow late errors.
-      final query = Completer<List<String>>();
-      unawaited(() async {
-        try {
-          final ids = (await _repo.getMessageIds(
-            conversationId,
-          )).toList(growable: true);
-          if (!query.isCompleted) query.complete(ids);
-        } catch (error, stack) {
-          if (!query.isCompleted) query.completeError(error, stack);
-        }
-      }());
-      await Future.any<void>([query.future.then((_) {}), abort.future]);
-      if (abort.isCompleted) {
-        unawaited(query.future.catchError((Object _) => <String>[]));
-        return;
-      }
-      final ids = await query.future;
-
-      // Cancel / delete while in flight: do not resurrect a removed skeleton.
-      if (abort.isCompleted) return;
-      final raced = _messageOrderIds[conversationId];
-      if (raced != null) return;
-      if (!_conversationsCache.containsKey(conversationId) &&
-          !_draftConversations.containsKey(conversationId)) {
-        return;
-      }
-      // Existence == complete: install atomically with matching count.
-      _messageOrderIds[conversationId] = ids;
-      _messageCounts[conversationId] = ids.length;
-      // Re-project any already-cached messages through the complete order so
-      // getMessages matches the pre-Issue-7 awaited-skeleton ordering.
-      final cached = _messagesCache[conversationId];
-      if (cached != null) {
-        _cacheLoadedMessages(conversationId, cached);
-      }
-    } catch (error) {
-      // Do not remove caches on failure: this task never installs a partial
-      // skeleton (existence == complete), and a concurrent foreground
-      // `_loadMessageOrder` may have already written a full authoritative
-      // entry while our getMessageIds was in flight.
-      debugPrint('Message order backfill failed for $conversationId: $error');
-    }
   }
 
   Future<List<ChatMessage>> loadActiveTimelineMessages(
@@ -687,7 +564,6 @@ class ChatService extends ChangeNotifier {
         .toList(growable: false);
     _cacheLoadedMessages(conversationId, messages);
     await _cacheMessageArtifacts(messages);
-    _scheduleMessageOrderBackfill(conversationId);
     return page;
   }
 
@@ -979,6 +855,12 @@ class ChatService extends ChangeNotifier {
       (results[artifactKinds.indexOf('gemini_thought_signature') + 1]
           as Map<String, String>),
     );
+    for (final message in messages) {
+      message.hydrateProviderArtifacts(
+        _providerArtifactsCache[message.id] ?? const {},
+      );
+    }
+    _enforceMessageCacheLimits();
   }
 
   void _cacheLoadedMessages(
@@ -1000,6 +882,10 @@ class ChatService extends ChangeNotifier {
             for (final id in order)
               if (byId[id] != null) byId[id]!,
           ];
+    final cached = _messagesCache[conversationId]!;
+    if (order == null && cached.every((m) => m.storageOrder != null)) {
+      cached.sort((a, b) => a.storageOrder!.compareTo(b.storageOrder!));
+    }
     _touchMessageCache(conversationId);
     _enforceMessageCacheLimits();
   }
@@ -1010,19 +896,29 @@ class ChatService extends ChangeNotifier {
   }
 
   int _estimateCachedMessageBytes(ChatMessage message) {
+    // 直接按原始部件与已解码的工具结构计费，避免每次插入都重新编码 JSON。
+    // 共享字符串会被重复计入，这是有意的保守高估。
     var bytes =
-        message.content.length * 2 +
+        256 +
         (message.reasoningText?.length ?? 0) * 2 +
         (message.translation?.length ?? 0) * 2 +
         (message.reasoningSegmentsJson?.length ?? 0) * 2;
-    final toolEvents = _toolEventsCache[message.id];
-    if (toolEvents != null) {
-      for (final event in toolEvents) {
-        bytes += jsonEncode(event).length * 2;
-      }
+    for (final part in message.parts) {
+      bytes += part.encodePayload().length * (part is ToolCallPart ? 4 : 2);
+    }
+    final artifacts =
+        _providerArtifactsCache[message.id] ?? message.providerArtifactSnapshot;
+    for (final payload in artifacts.values) {
+      bytes += payload.length * 2;
     }
     return bytes;
   }
+
+  @visibleForTesting
+  int get debugCachedMessageBytes => _messagesCache.entries
+      .where((entry) => !_temporaryConversationIds.contains(entry.key))
+      .expand((entry) => entry.value)
+      .fold(0, (sum, message) => sum + _estimateCachedMessageBytes(message));
 
   void _enforceMessageCacheLimits() {
     bool isExempt(String conversationId) =>
@@ -1890,15 +1786,32 @@ class ChatService extends ChangeNotifier {
     String? title,
     String? assistantId,
     bool temporary = false,
+    bool reuseNewEntry = false,
   }) async {
     if (!_initialized) await init();
     _discardTemporaryConversation(_currentConversationId);
+    // 新会话草稿按助手挂靠：同一个助手再次新建时，回到上次那个未发送的会话。
+    final existing = temporary || !reuseNewEntry
+        ? null
+        : _repo.composerDrafts.newEntry(assistantId);
+    if (existing != null) {
+      final restored = _conversationsCache[existing.id] ?? existing;
+      if (!_conversationsCache.containsKey(restored.id)) {
+        _draftConversations[restored.id] = restored;
+      }
+      _currentConversationId = restored.id;
+      notifyListeners();
+      return restored;
+    }
     final conversation = Conversation(
       title: title ?? _defaultConversationTitle,
       assistantId: assistantId,
       extras: _extrasForNewConversation(assistantId),
     );
     _draftConversations[conversation.id] = conversation;
+    if (!temporary && reuseNewEntry) {
+      _repo.composerDrafts.registerNewEntry(conversation);
+    }
     if (temporary) {
       _temporaryConversationIds.add(conversation.id);
       _messagesCache[conversation.id] = <ChatMessage>[];
@@ -1933,6 +1846,9 @@ class ChatService extends ChangeNotifier {
     _messagesCache.remove(id);
     _temporaryConversationTrees.remove(id);
     _groupMessagesCache.remove(id);
+    unawaited(
+      _repo.composerDrafts.removePrivateDirectory(id).catchError((Object _) {}),
+    );
     if (_currentConversationId == id) {
       _currentConversationId = null;
     }
@@ -1968,6 +1884,7 @@ class ChatService extends ChangeNotifier {
   Future<bool> _deleteDraftConversation(String id) async {
     if (!_draftConversations.containsKey(id)) return false;
 
+    await _repo.composerDrafts.delete(id);
     _draftConversations.remove(id);
     if (_temporaryConversationIds.remove(id)) {
       _rememberDiscardedTemporaryConversation(id);
@@ -1997,8 +1914,6 @@ class ChatService extends ChangeNotifier {
 
     await _repo.deleteConversation(id);
     _conversationsCache.remove(id);
-    // 删除前先取消延迟回填，避免迟到的完整 ID 查询复活缓存。
-    _abortMessageOrderBackfill(id);
     final removedMessages = _messagesCache.remove(id);
     final removedGroupMessages = _groupMessagesCache.remove(id);
     final removedOrder = _messageOrderIds.remove(id);
@@ -2043,6 +1958,13 @@ class ChatService extends ChangeNotifier {
         .toList(growable: false);
 
     var deleted = false;
+    for (final id in _repo.composerDrafts.newEntriesForAssistant(targetId)) {
+      if (!draftConversationIds.contains(id) &&
+          !persistedConversationIds.contains(id)) {
+        await _repo.composerDrafts.delete(id);
+        deleted = true;
+      }
+    }
     for (final conversationId in draftConversationIds) {
       deleted = await _deleteDraftConversation(conversationId) || deleted;
     }
@@ -3067,10 +2989,14 @@ class ChatService extends ChangeNotifier {
     required List<MessagePart> userParts,
     required String modelId,
     required String providerId,
+    DraftSubmission? draftSubmission,
   }) async {
     if (!_initialized) await init();
     if (isTemporaryConversation(conversationId)) {
       throw StateError('temporary_generation_is_not_persisted');
+    }
+    if (draftSubmission != null && getConversation(conversationId) == null) {
+      throw StateError('conversation_missing');
     }
     final conversation =
         _conversationsCache[conversationId] ??
@@ -3084,6 +3010,7 @@ class ChatService extends ChangeNotifier {
       await _loadMessageOrder(conversationId);
     }
     final userMessage = ChatMessage(
+      id: draftSubmission?.id,
       role: 'user',
       parts: userParts,
       conversationId: conversationId,
@@ -3101,6 +3028,7 @@ class ChatService extends ChangeNotifier {
       userMessage: userMessage,
       assistantMessage: assistantMessage,
       runId: const Uuid().v4(),
+      draftSubmission: draftSubmission,
     );
     await _publishGenerationBegin(result);
     return result;
@@ -3571,6 +3499,29 @@ class ChatService extends ChangeNotifier {
     );
   }
 
+  /// 优先读缓存；缓存已逐出时从该消息快照里的工具部件解码，
+  /// 避免缓存淘汰后丢失工具记录。
+  List<Map<String, dynamic>> getToolEventsForMessage(ChatMessage message) {
+    final cached = getToolEvents(message.id);
+    if (cached.isNotEmpty || _temporaryToolEvents.containsKey(message.id)) {
+      return cached;
+    }
+    if (_toolEventsCache.containsKey(message.id)) return cached;
+    return [
+      for (final part in message.parts.whereType<ToolCallPart>())
+        ..._decodeToolCallPart(part),
+    ];
+  }
+
+  static List<Map<String, dynamic>> _decodeToolCallPart(ToolCallPart part) {
+    try {
+      final value = jsonDecode(part.payloadJson);
+      return value is Map ? [Map<String, dynamic>.from(value)] : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> setToolEvents(
     String assistantMessageId,
     List<Map<String, dynamic>> events,
@@ -3650,7 +3601,17 @@ class ChatService extends ChangeNotifier {
     if (!_initialized) return null;
     final temporary = _temporaryProviderArtifacts[messageId]?[kind];
     if (temporary != null && temporary.trim().isNotEmpty) return temporary;
-    return _providerArtifactsCache[messageId]?[kind];
+    return _providerArtifactsCache[messageId]?[kind] ??
+        _cachedMessage(messageId)?.providerArtifactSnapshot[kind];
+  }
+
+  ChatMessage? _cachedMessage(String id) {
+    for (final messages in _messagesCache.values) {
+      for (final message in messages) {
+        if (message.id == id) return message;
+      }
+    }
+    return null;
   }
 
   Future<void> setProviderArtifact(
@@ -3671,6 +3632,9 @@ class ChatService extends ChangeNotifier {
     final artifacts = _providerArtifactsCache.putIfAbsent(messageId, () => {});
     final previous = artifacts[kind];
     artifacts[kind] = payload;
+    final message = _cachedMessage(messageId);
+    final previousSnapshot = message?.providerArtifactSnapshot;
+    message?.hydrateProviderArtifacts({...?previousSnapshot, kind: payload});
     try {
       await _repo.setProviderArtifact(messageId, kind, payload);
     } catch (_) {
@@ -3678,6 +3642,9 @@ class ChatService extends ChangeNotifier {
         artifacts.remove(kind);
       } else {
         artifacts[kind] = previous;
+      }
+      if (previousSnapshot != null) {
+        message?.hydrateProviderArtifacts(previousSnapshot);
       }
       rethrow;
     }
@@ -4669,6 +4636,7 @@ class ChatService extends ChangeNotifier {
     required String messageId,
     String content = '',
     List<MessagePart>? parts,
+    DraftSubmission? draftSubmission,
   }) async {
     if (!_initialized) await init();
     final temporaryOriginal = _cachedTemporaryMessage(messageId);
@@ -4760,6 +4728,7 @@ class ChatService extends ChangeNotifier {
       messageId: messageId,
       content: content,
       parts: parts,
+      draftSubmission: draftSubmission,
     );
     if (result == null) return null;
     final newMsg = result.message;

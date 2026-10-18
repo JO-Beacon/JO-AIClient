@@ -3823,7 +3823,7 @@ abstract class AppLocalizations {
   /// No description provided for @backupPageOverwriteModeDescription.
   ///
   /// In en, this message translates to:
-  /// **'Replace the selected components; keep unselected components and unrelated local settings'**
+  /// **'Replace the selected categories with the backup, and clear the unselected ones. Choose Merge to keep local data.'**
   String get backupPageOverwriteModeDescription;
 
   /// No description provided for @backupPageDeepSeekOverwriteModeDescription.
@@ -3835,7 +3835,7 @@ abstract class AppLocalizations {
   /// No description provided for @backupPageMergeMode.
   ///
   /// In en, this message translates to:
-  /// **'Smart merge'**
+  /// **'Merge'**
   String get backupPageMergeMode;
 
   /// No description provided for @backupPageMergeModeDescription.
@@ -18208,7 +18208,7 @@ abstract class AppLocalizations {
   /// No description provided for @backupPageForwardCompatBody.
   ///
   /// In en, this message translates to:
-  /// **'This backup was created by a newer version of JO-AIClient (data format {backupVersion}; this version supports {currentVersion}), and it does not say whether older versions can read it.\n\nYou can continue: anything this version does not recognise will be skipped, and the backup file itself is not modified. But if the newer version changed how existing data is stored, some content may be imported incorrectly.\n\nUpdating JO-AIClient first is the safer choice.'**
+  /// **'This backup was created by a newer version of JO-AIClient (backup package version {backupVersion}; this version supports {currentVersion}), and it does not say whether older versions can read it.\n\nYou can continue: anything this version does not recognise will be skipped, and the backup file itself is not modified. But if the newer version changed how existing data is stored, some content may be imported incorrectly.\n\nUpdating JO-AIClient first is the safer choice.'**
   String backupPageForwardCompatBody(int backupVersion, int currentVersion);
 
   /// No description provided for @backupPageForwardCompatContinue.
@@ -18226,7 +18226,7 @@ abstract class AppLocalizations {
   /// No description provided for @backupPageSchemaTooNewMessage.
   ///
   /// In en, this message translates to:
-  /// **'This backup was created by a newer version of JO-AIClient and cannot be read by this version. Please update JO-AIClient and try again.'**
+  /// **'The chat data structure in this backup is newer than this version can read. Please update JO-AIClient and try again.'**
   String get backupPageSchemaTooNewMessage;
 
   /// No description provided for @messageEditPageSave.
@@ -24993,8 +24993,182 @@ abstract class AppLocalizations {
   /// No description provided for @messageEditAssistantRoundEndPart.
   ///
   /// In en, this message translates to:
-  /// **'End of reply round'**
+  /// **'Continuation boundary'**
   String get messageEditAssistantRoundEndPart;
+
+  /// No description provided for @composerDraftLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get composerDraftLabel;
+
+  /// No description provided for @composerDraftRecovered.
+  ///
+  /// In en, this message translates to:
+  /// **'An unsent message was recovered.'**
+  String get composerDraftRecovered;
+
+  /// No description provided for @composerDraftRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue editing'**
+  String get composerDraftRestore;
+
+  /// No description provided for @composerDraftDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get composerDraftDiscard;
+
+  /// No description provided for @composerDraftSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your latest draft could not be saved. It is still in this window.'**
+  String get composerDraftSaveFailed;
+
+  /// No description provided for @composerDraftRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry saving'**
+  String get composerDraftRetry;
+
+  /// No description provided for @composerDraftConflictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation already has a draft'**
+  String get composerDraftConflictTitle;
+
+  /// No description provided for @composerDraftConflictBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Append keeps both texts and attachments. Replace discards the existing draft. Nothing is sent automatically.'**
+  String get composerDraftConflictBody;
+
+  /// No description provided for @composerDraftAppend.
+  ///
+  /// In en, this message translates to:
+  /// **'Append'**
+  String get composerDraftAppend;
+
+  /// No description provided for @composerDraftReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace draft'**
+  String get composerDraftReplace;
+
+  /// No description provided for @composerDraftMissingFile.
+  ///
+  /// In en, this message translates to:
+  /// **'An attachment is unavailable. Remove it or choose the file again.'**
+  String get composerDraftMissingFile;
+
+  /// No description provided for @composerDraftMessageMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The message being edited no longer exists. Copy the text to a new message or discard this edit.'**
+  String get composerDraftMessageMissing;
+
+  /// No description provided for @composerDraftDeleteNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsent drafts in these conversations will also be deleted.'**
+  String get composerDraftDeleteNotice;
+
+  /// No description provided for @backupRestoreOldKelivoUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup comes from an older Kelivo version and cannot be imported. Restore it in the latest Kelivo, then export it again.'**
+  String get backupRestoreOldKelivoUnsupported;
+
+  /// No description provided for @backupScopeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup contents'**
+  String get backupScopeTitle;
+
+  /// No description provided for @backupScopeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} of {total} selected'**
+  String backupScopeSummary(int selected, int total);
+
+  /// No description provided for @backupScopeDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get backupScopeDone;
+
+  /// No description provided for @backupScopeAssistants.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistants'**
+  String get backupScopeAssistants;
+
+  /// No description provided for @backupScopeProviders.
+  ///
+  /// In en, this message translates to:
+  /// **'Providers'**
+  String get backupScopeProviders;
+
+  /// No description provided for @backupScopeMcp.
+  ///
+  /// In en, this message translates to:
+  /// **'MCP'**
+  String get backupScopeMcp;
+
+  /// No description provided for @backupScopeSkills.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills'**
+  String get backupScopeSkills;
+
+  /// No description provided for @backupScopeWorldBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'World books'**
+  String get backupScopeWorldBooks;
+
+  /// No description provided for @backupScopeMemories.
+  ///
+  /// In en, this message translates to:
+  /// **'Memories'**
+  String get backupScopeMemories;
+
+  /// No description provided for @backupScopeQuickPhrases.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick phrases'**
+  String get backupScopeQuickPhrases;
+
+  /// No description provided for @backupScopeInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Instructions'**
+  String get backupScopeInstructions;
+
+  /// No description provided for @backupScopeWorkspaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspaces'**
+  String get backupScopeWorkspaces;
+
+  /// No description provided for @backupScopeSearchServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Search services'**
+  String get backupScopeSearchServices;
+
+  /// No description provided for @backupScopeSpeechServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech services'**
+  String get backupScopeSpeechServices;
+
+  /// No description provided for @backupScopeSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get backupScopeSettings;
 }
 
 class _AppLocalizationsDelegate

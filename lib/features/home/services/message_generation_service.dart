@@ -631,6 +631,7 @@ class MessageGenerationService {
       userParts: userParts,
       modelId: modelId,
       providerId: providerKey,
+      draftSubmission: input.draftSubmission,
     );
     return (
       userMessage: result.userMessage!,

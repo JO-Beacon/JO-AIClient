@@ -170,6 +170,15 @@ class MessageBuilderService {
   final String? Function(ChatMessage message, String kind)?
   providerArtifactLookup;
 
+  /// 已冻结的原生回放数据跟随消息快照，包括显式空快照。
+  /// 之后的缓存淘汰或流式更新不得改变它。
+  String? _providerArtifact(ChatMessage message, String kind) {
+    if (message.hasProviderArtifactSnapshot) {
+      return message.providerArtifactSnapshot[kind];
+    }
+    return providerArtifactLookup?.call(message, kind);
+  }
+
   /// 文档文本提取缓存，避免每条消息都重新读取文件。
   /// 按路径索引，通过（修改时间 + 大小）校验以避免复用过期数据。
   final Map<String, _DocTextCacheEntry> _docTextCache =
@@ -345,7 +354,7 @@ class MessageBuilderService {
       // 只在构建工具历史时收集：普通正文轮次不参与回放。
       if (includeToolMessages && !preserveToolTurns && m.role == 'assistant') {
         thinkingRecovery.readArtifact(
-          providerArtifactLookup?.call(m, claudeThinkingRecoveryArtifactKind),
+          _providerArtifact(m, claudeThinkingRecoveryArtifactKind),
         );
       }
       // 原生 Responses 条目优先：命中时本轮由原生历史重建。
@@ -353,9 +362,9 @@ class MessageBuilderService {
           includeToolMessages &&
           responsesScope != null) {
         final history = buildResponsesHistory(
-          payload: providerArtifactLookup?.call(m, responsesTurnArtifactKind),
+          payload: _providerArtifact(m, responsesTurnArtifactKind),
           scope: responsesScope,
-          toolEvents: chatService.getToolEvents(m.id),
+          toolEvents: chatService.getToolEventsForMessage(m),
           content: m.content,
         );
         if (history != null) {
@@ -385,8 +394,8 @@ class MessageBuilderService {
               claudeSource != null &&
               m.providerId == claudeSource.providerId &&
               m.modelId == claudeSource.modelId &&
-              chatService.getToolEvents(m.id).isEmpty
-          ? providerArtifactLookup?.call(m, claudeTurnArtifactKind)
+              chatService.getToolEventsForMessage(m).isEmpty
+          ? _providerArtifact(m, claudeTurnArtifactKind)
           : null;
       String? assistantReasoningContent;
       dynamic reasoningDetails;
@@ -419,7 +428,7 @@ class MessageBuilderService {
           reasoningDetails = null;
         }
       } else if (includeToolMessages && m.role == 'assistant') {
-        final events = chatService.getToolEvents(m.id);
+        final events = chatService.getToolEventsForMessage(m);
         if (events.isNotEmpty) {
           // 只有每个调用都有结果后，工具调用历史才有效。
           final hasPendingToolEvent = events.any((e) => e['content'] == null);
@@ -473,16 +482,13 @@ class MessageBuilderService {
               };
               // 原生记录挂在这条合成的“工具前助手消息”上，
               // 否则续跑时 Claude 会缺少带签名的原生块。
-              final turn = providerArtifactLookup?.call(
-                m,
-                claudeTurnArtifactKind,
-              );
+              final turn = _providerArtifact(m, claudeTurnArtifactKind);
               if (turn != null && turn.isNotEmpty) {
                 assistantToolMessage[multimodalInternalClaudeTurnKey] = turn;
                 hasClaudeToolTurn = claudeSource != null;
               }
               // 跑过代码却没有最终消息的轮次，容器也挂在这里。
-              final container = providerArtifactLookup?.call(
+              final container = _providerArtifact(
                 m,
                 claudeContainerArtifactKind,
               );
@@ -548,10 +554,7 @@ class MessageBuilderService {
         if (plainClaudeTurn?.isNotEmpty == true) {
           message[multimodalInternalClaudeTurnKey] = plainClaudeTurn;
         }
-        final container = providerArtifactLookup?.call(
-          m,
-          claudeContainerArtifactKind,
-        );
+        final container = _providerArtifact(m, claudeContainerArtifactKind);
         if (container != null && container.isNotEmpty) {
           message[multimodalInternalClaudeContainerKey] = container;
         }

@@ -1977,18 +1977,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backupPageOverwriteMode => '完全覆盖';
 
   @override
-  String get backupPageOverwriteModeDescription => '仅替换已选组件；保留未选组件及无关本地设置';
+  String get backupPageOverwriteModeDescription =>
+      '把已选类别替换成备份里的内容，并清除未选中的类别；想保留本机数据请改用合并。';
 
   @override
   String get backupPageDeepSeekOverwriteModeDescription =>
       '保留原有会话；如有需要，额外创建或更新归属于正确 DeepSeek 助手的副本。不会影响非 DeepSeek 数据。';
 
   @override
-  String get backupPageMergeMode => '智能合并';
+  String get backupPageMergeMode => '合并';
 
   @override
   String get backupPageMergeModeDescription =>
-      '保留本地数据并智能合并备份；相同消息自动去重，新消息并入原会话，内容冲突则保留为独立会话。';
+      '保留本地数据并合并备份；相同消息自动去重，新消息并入原会话，内容冲突则保留为独立会话。';
 
   @override
   String get backupPageDeepSeekMergeModeDescription =>
@@ -9716,7 +9717,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String backupPageForwardCompatBody(int backupVersion, int currentVersion) {
-    return '这份备份由更新版本的 JO-AIClient 创建（数据格式 $backupVersion，当前版本支持 $currentVersion），且未声明旧版本能否读取。\n\n你可以继续导入：当前版本不认识的内容会被跳过，备份文件本身不会被修改。但如果新版本改变了已有数据的存储方式，部分内容可能会被错误导入。\n\n更稳妥的做法是先升级 JO-AIClient。';
+    return '这份备份由更新版本的 JO-AIClient 创建（备份包版本 $backupVersion，当前版本支持 $currentVersion），且未声明旧版本能否读取。\n\n你可以继续导入：当前版本不认识的内容会被跳过，备份文件本身不会被修改。但如果新版本改变了已有数据的存储方式，部分内容可能会被错误导入。\n\n更稳妥的做法是先升级 JO-AIClient。';
   }
 
   @override
@@ -9727,7 +9728,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backupPageSchemaTooNewMessage =>
-      '这份备份由更新版本的 JO-AIClient 创建，当前版本无法读取。请先升级 JO-AIClient 后重试。';
+      '这份备份里的聊天数据结构版本较新，当前版本读不了。请先升级 JO-AIClient 后重试。';
 
   @override
   String get messageEditPageSave => '保存';
@@ -13390,7 +13391,97 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mcpOAuthExchangingToken => '正在完成登录…';
 
   @override
-  String get messageEditAssistantRoundEndPart => '本轮回复结束';
+  String get messageEditAssistantRoundEndPart => '续答分界';
+
+  @override
+  String get composerDraftLabel => '草稿';
+
+  @override
+  String get composerDraftRecovered => '已恢复一条尚未发送的内容。';
+
+  @override
+  String get composerDraftRestore => '继续编辑';
+
+  @override
+  String get composerDraftDiscard => '丢弃';
+
+  @override
+  String get composerDraftSaveFailed => '最新草稿保存失败，内容仍保留在当前窗口。';
+
+  @override
+  String get composerDraftRetry => '重试保存';
+
+  @override
+  String get composerDraftConflictTitle => '这个对话已有草稿';
+
+  @override
+  String get composerDraftConflictBody => '追加会保留两边的文字和附件；替换会丢弃原来的草稿。内容不会自动发送。';
+
+  @override
+  String get composerDraftAppend => '追加';
+
+  @override
+  String get composerDraftReplace => '替换草稿';
+
+  @override
+  String get composerDraftMissingFile => '有附件无法读取，请移除或重新选择该文件。';
+
+  @override
+  String get composerDraftMessageMissing => '正在编辑的原消息已不存在。请复制内容到新消息，或取消本次编辑。';
+
+  @override
+  String get composerDraftDeleteNotice => '这些对话中未发送的草稿也会一起删除。';
+
+  @override
+  String get backupRestoreOldKelivoUnsupported =>
+      '这是旧版 Kelivo 的备份，当前版本无法导入。可以先在最新版 Kelivo 里恢复，再重新导出一份备份。';
+
+  @override
+  String get backupScopeTitle => '备份内容';
+
+  @override
+  String backupScopeSummary(int selected, int total) {
+    return '已选 $selected/$total 项';
+  }
+
+  @override
+  String get backupScopeDone => '完成';
+
+  @override
+  String get backupScopeAssistants => '助手';
+
+  @override
+  String get backupScopeProviders => '供应商';
+
+  @override
+  String get backupScopeMcp => 'MCP';
+
+  @override
+  String get backupScopeSkills => '技能';
+
+  @override
+  String get backupScopeWorldBooks => '世界书';
+
+  @override
+  String get backupScopeMemories => '记忆';
+
+  @override
+  String get backupScopeQuickPhrases => '快捷短语';
+
+  @override
+  String get backupScopeInstructions => '指令';
+
+  @override
+  String get backupScopeWorkspaces => '工作区';
+
+  @override
+  String get backupScopeSearchServices => '搜索服务';
+
+  @override
+  String get backupScopeSpeechServices => '语音服务';
+
+  @override
+  String get backupScopeSettings => '设置';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -15366,18 +15457,19 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get backupPageOverwriteMode => '完全覆盖';
 
   @override
-  String get backupPageOverwriteModeDescription => '仅替换已选组件；保留未选组件及无关本地设置';
+  String get backupPageOverwriteModeDescription =>
+      '把已选类别替换成备份里的内容，并清除未选中的类别；想保留本机数据请改用合并。';
 
   @override
   String get backupPageDeepSeekOverwriteModeDescription =>
       '保留原有会话；如有需要，额外创建或更新归属于正确 DeepSeek 助手的副本。不会影响非 DeepSeek 数据。';
 
   @override
-  String get backupPageMergeMode => '智能合并';
+  String get backupPageMergeMode => '合并';
 
   @override
   String get backupPageMergeModeDescription =>
-      '保留本地数据并智能合并备份；相同消息自动去重，新消息并入原会话，内容冲突则保留为独立会话。';
+      '保留本地数据并合并备份；相同消息自动去重，新消息并入原会话，内容冲突则保留为独立会话。';
 
   @override
   String get backupPageDeepSeekMergeModeDescription =>
@@ -23105,7 +23197,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String backupPageForwardCompatBody(int backupVersion, int currentVersion) {
-    return '这份备份由更新版本的 JO-AIClient 创建（数据格式 $backupVersion，当前版本支持 $currentVersion），且未声明旧版本能否读取。\n\n你可以继续导入：当前版本不认识的内容会被跳过，备份文件本身不会被修改。但如果新版本改变了已有数据的存储方式，部分内容可能会被错误导入。\n\n更稳妥的做法是先升级 JO-AIClient。';
+    return '这份备份由更新版本的 JO-AIClient 创建（备份包版本 $backupVersion，当前版本支持 $currentVersion），且未声明旧版本能否读取。\n\n你可以继续导入：当前版本不认识的内容会被跳过，备份文件本身不会被修改。但如果新版本改变了已有数据的存储方式，部分内容可能会被错误导入。\n\n更稳妥的做法是先升级 JO-AIClient。';
   }
 
   @override
@@ -23116,7 +23208,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get backupPageSchemaTooNewMessage =>
-      '这份备份由更新版本的 JO-AIClient 创建，当前版本无法读取。请先升级 JO-AIClient 后重试。';
+      '这份备份里的聊天数据结构版本较新，当前版本读不了。请先升级 JO-AIClient 后重试。';
 
   @override
   String get messageEditPageSave => '保存';
@@ -26779,7 +26871,97 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get mcpOAuthExchangingToken => '正在完成登录…';
 
   @override
-  String get messageEditAssistantRoundEndPart => '本轮回复结束';
+  String get messageEditAssistantRoundEndPart => '续答分界';
+
+  @override
+  String get composerDraftLabel => '草稿';
+
+  @override
+  String get composerDraftRecovered => '已恢复一条尚未发送的内容。';
+
+  @override
+  String get composerDraftRestore => '继续编辑';
+
+  @override
+  String get composerDraftDiscard => '丢弃';
+
+  @override
+  String get composerDraftSaveFailed => '最新草稿保存失败，内容仍保留在当前窗口。';
+
+  @override
+  String get composerDraftRetry => '重试保存';
+
+  @override
+  String get composerDraftConflictTitle => '这个对话已有草稿';
+
+  @override
+  String get composerDraftConflictBody => '追加会保留两边的文字和附件；替换会丢弃原来的草稿。内容不会自动发送。';
+
+  @override
+  String get composerDraftAppend => '追加';
+
+  @override
+  String get composerDraftReplace => '替换草稿';
+
+  @override
+  String get composerDraftMissingFile => '有附件无法读取，请移除或重新选择该文件。';
+
+  @override
+  String get composerDraftMessageMissing => '正在编辑的原消息已不存在。请复制内容到新消息，或取消本次编辑。';
+
+  @override
+  String get composerDraftDeleteNotice => '这些对话中未发送的草稿也会一起删除。';
+
+  @override
+  String get backupRestoreOldKelivoUnsupported =>
+      '这是旧版 Kelivo 的备份，当前版本无法导入。可以先在最新版 Kelivo 里恢复，再重新导出一份备份。';
+
+  @override
+  String get backupScopeTitle => '备份内容';
+
+  @override
+  String backupScopeSummary(int selected, int total) {
+    return '已选 $selected/$total 项';
+  }
+
+  @override
+  String get backupScopeDone => '完成';
+
+  @override
+  String get backupScopeAssistants => '助手';
+
+  @override
+  String get backupScopeProviders => '供应商';
+
+  @override
+  String get backupScopeMcp => 'MCP';
+
+  @override
+  String get backupScopeSkills => '技能';
+
+  @override
+  String get backupScopeWorldBooks => '世界书';
+
+  @override
+  String get backupScopeMemories => '记忆';
+
+  @override
+  String get backupScopeQuickPhrases => '快捷短语';
+
+  @override
+  String get backupScopeInstructions => '指令';
+
+  @override
+  String get backupScopeWorkspaces => '工作区';
+
+  @override
+  String get backupScopeSearchServices => '搜索服务';
+
+  @override
+  String get backupScopeSpeechServices => '语音服务';
+
+  @override
+  String get backupScopeSettings => '设置';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -28756,18 +28938,19 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get backupPageOverwriteMode => '完全覆蓋';
 
   @override
-  String get backupPageOverwriteModeDescription => '僅替換已選元件；保留未選元件及無關的本機設定';
+  String get backupPageOverwriteModeDescription =>
+      '將已選類別替換為備份內容，並清除未選取的類別；想保留本機資料請改用合併。';
 
   @override
   String get backupPageDeepSeekOverwriteModeDescription =>
       '保留原有對話；如有需要，額外建立或更新歸屬於正確 DeepSeek 助理的副本。不會影響非 DeepSeek 資料。';
 
   @override
-  String get backupPageMergeMode => '智慧合併';
+  String get backupPageMergeMode => '合併';
 
   @override
   String get backupPageMergeModeDescription =>
-      '保留本機資料並智慧合併備份；相同訊息會自動去重，新訊息併入原對話，內容衝突則保留為獨立對話。';
+      '保留本機資料並合併備份；相同訊息會自動去重，新訊息併入原對話，內容衝突則保留為獨立對話。';
 
   @override
   String get backupPageDeepSeekMergeModeDescription =>
@@ -36496,7 +36679,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String backupPageForwardCompatBody(int backupVersion, int currentVersion) {
-    return '這份備份由更新版本的 JO-AIClient 建立（資料格式 $backupVersion，目前版本支援 $currentVersion），且未聲明舊版本能否讀取。\n\n你可以繼續匯入：目前版本不認識的內容會被略過，備份檔案本身不會被修改。但如果新版本改變了既有資料的儲存方式，部分內容可能會被錯誤匯入。\n\n更穩妥的做法是先升級 JO-AIClient。';
+    return '這份備份由更新版本的 JO-AIClient 建立（備份包版本 $backupVersion，目前版本支援 $currentVersion），且未聲明舊版本能否讀取。\n\n你可以繼續匯入：目前版本不認識的內容會被略過，備份檔案本身不會被修改。但如果新版本改變了既有資料的儲存方式，部分內容可能會被錯誤匯入。\n\n更穩妥的做法是先升級 JO-AIClient。';
   }
 
   @override
@@ -36507,7 +36690,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get backupPageSchemaTooNewMessage =>
-      '這份備份由更新版本的 JO-AIClient 建立，目前版本無法讀取。請先升級 JO-AIClient 後重試。';
+      '這份備份裡的聊天資料結構版本較新，目前版本讀不了。請先升級 JO-AIClient 後重試。';
 
   @override
   String get messageEditPageSave => '儲存';
@@ -40174,5 +40357,95 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get mcpOAuthExchangingToken => '正在完成登入…';
 
   @override
-  String get messageEditAssistantRoundEndPart => '本輪回覆結束';
+  String get messageEditAssistantRoundEndPart => '續答分界';
+
+  @override
+  String get composerDraftLabel => '草稿';
+
+  @override
+  String get composerDraftRecovered => '已還原一則尚未傳送的內容。';
+
+  @override
+  String get composerDraftRestore => '繼續編輯';
+
+  @override
+  String get composerDraftDiscard => '捨棄';
+
+  @override
+  String get composerDraftSaveFailed => '最新草稿儲存失敗，內容仍保留在目前視窗。';
+
+  @override
+  String get composerDraftRetry => '重試儲存';
+
+  @override
+  String get composerDraftConflictTitle => '這個對話已有草稿';
+
+  @override
+  String get composerDraftConflictBody => '附加會保留兩邊的文字和附件；取代會捨棄原來的草稿。內容不會自動傳送。';
+
+  @override
+  String get composerDraftAppend => '附加';
+
+  @override
+  String get composerDraftReplace => '取代草稿';
+
+  @override
+  String get composerDraftMissingFile => '有附件無法讀取，請移除或重新選擇該檔案。';
+
+  @override
+  String get composerDraftMessageMissing => '正在編輯的原訊息已不存在。請複製內容到新訊息，或取消本次編輯。';
+
+  @override
+  String get composerDraftDeleteNotice => '這些對話中未傳送的草稿也會一起刪除。';
+
+  @override
+  String get backupRestoreOldKelivoUnsupported =>
+      '這是舊版 Kelivo 的備份，目前版本無法匯入。可以先在最新版 Kelivo 裡還原，再重新匯出一份備份。';
+
+  @override
+  String get backupScopeTitle => '備份內容';
+
+  @override
+  String backupScopeSummary(int selected, int total) {
+    return '已選 $selected/$total 項';
+  }
+
+  @override
+  String get backupScopeDone => '完成';
+
+  @override
+  String get backupScopeAssistants => '助手';
+
+  @override
+  String get backupScopeProviders => '供應商';
+
+  @override
+  String get backupScopeMcp => 'MCP';
+
+  @override
+  String get backupScopeSkills => '技能';
+
+  @override
+  String get backupScopeWorldBooks => '世界書';
+
+  @override
+  String get backupScopeMemories => '記憶';
+
+  @override
+  String get backupScopeQuickPhrases => '快速短語';
+
+  @override
+  String get backupScopeInstructions => '指令';
+
+  @override
+  String get backupScopeWorkspaces => '工作區';
+
+  @override
+  String get backupScopeSearchServices => '搜尋服務';
+
+  @override
+  String get backupScopeSpeechServices => '語音服務';
+
+  @override
+  String get backupScopeSettings => '設定';
 }

@@ -250,6 +250,29 @@ class TimelineVisibleBlock {
   bool get isThinking => thinkingSteps.isNotEmpty;
 }
 
+/// 部件在纯文本流式快照之间是不可变且稳定的；以弱引用做键，
+/// 让移出窗口的部件与其解码结果一起被回收。
+TimelineToolRef? parseTimelineToolPart(
+  ToolCallPart part, {
+  int fallbackOrdinal = 0,
+}) {
+  var parsed = _toolPayloadMemo[part];
+  if (parsed == null) {
+    parsed = parseTimelineToolPayload(part.payloadJson);
+    if (parsed == null) return null;
+    parsed = parsed.copyWith(memoToken: identityHashCode(part));
+    _toolPayloadMemo[part] = parsed;
+  }
+  return fallbackOrdinal == 0
+      ? parsed
+      : parsed.copyWith(
+          fallbackOrdinal: fallbackOrdinal,
+          memoToken: Object.hash(parsed.memoToken, fallbackOrdinal),
+        );
+}
+
+final _toolPayloadMemo = Expando<TimelineToolRef>('timeline tool payload');
+
 /// 以与渲染器相同的方式解析持久化的 tool_call 载荷。
 TimelineToolRef? parseTimelineToolPayload(
   String payloadJson, {
@@ -661,11 +684,8 @@ List<TimelineProjectedBlock> _projectFromParts({
             reasoningOverlayIndex: provided == null ? null : overlayIndex,
           ),
         );
-      case ToolCallPart(:final payloadJson):
-        final parsed = parseTimelineToolPayload(
-          payloadJson,
-          fallbackOrdinal: toolCount,
-        );
+      case ToolCallPart():
+        final parsed = parseTimelineToolPart(part, fallbackOrdinal: toolCount);
         if (parsed == null || parsed.toolName == kBuiltinSearchToolName) {
           continue;
         }

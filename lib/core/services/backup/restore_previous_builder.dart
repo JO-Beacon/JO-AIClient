@@ -174,10 +174,11 @@ final class RestorePreviousBuilder {
 
   static Future<RestorePreviousAssetsPlan> inspectAssets(Directory root) async {
     final rootStates = <String, RestorePreviousAssetRootState>{};
-    final entries = <String, RestoreFileDescriptor>{};
+    final entries = <String, RestoreAssetDescriptor>{};
     final foldedNames = <String>{};
     final pendingFiles = <({File file, String name, FileStat stat})>[];
     var totalPathBytes = 0;
+    var entryCount = 0;
     var totalBytes = 0;
 
     for (final rootName in assetRootNames) {
@@ -216,11 +217,34 @@ final class RestorePreviousBuilder {
         if (type == FileSystemEntityType.directory) {
           continue;
         }
-        if (type != FileSystemEntityType.file) {
-          throw StateError('restore_previous_asset_entry_type');
-        }
-        if (pendingFiles.length >= _maximumAssetEntries) {
+        if (++entryCount > _maximumAssetEntries) {
           throw StateError('restore_previous_asset_budget');
+        }
+        if (type == FileSystemEntityType.link) {
+          final target = await Link(entity.path).target();
+          final targetBytes = utf8.encode(target).length;
+          totalPathBytes += targetBytes;
+          totalBytes += targetBytes;
+          if (targetBytes > _maximumSinglePathBytes ||
+              totalPathBytes > _maximumAssetPathBytes ||
+              totalBytes > _maximumTotalBytes) {
+            throw StateError('restore_previous_asset_budget');
+          }
+          entries[relativeName] = RestoreAssetDescriptor.link(target);
+          continue;
+        }
+        if (type == FileSystemEntityType.pipe) {
+          entries[relativeName] = const RestoreAssetDescriptor.pipe();
+          continue;
+        }
+        if (type == FileSystemEntityType.unixDomainSock) {
+          entries[relativeName] = const RestoreAssetDescriptor.socket();
+          continue;
+        }
+        if (type != FileSystemEntityType.file) {
+          throw StateError(
+            'restore_previous_asset_entry_type:$relativeName:$type',
+          );
         }
         final stat = await File(entity.path).stat();
         totalBytes += stat.size;
@@ -242,7 +266,7 @@ final class RestorePreviousBuilder {
       if (descriptor.bytes != pending.stat.size) {
         throw StateError('restore_previous_file_changed');
       }
-      entries[pending.name] = descriptor;
+      entries[pending.name] = RestoreAssetDescriptor.file(descriptor);
     }
     return RestorePreviousAssetsPlan(rootStates: rootStates, entries: entries);
   }
@@ -283,6 +307,7 @@ final class RestorePreviousBuilder {
             .toList()
           ..sort((left, right) => left.key.compareTo(right.key));
     for (final entry in selectedEntries) {
+      if (entry.value.type != RestoreAssetEntryType.file) continue;
       await durability.syncFile(
         File(p.joinAll([root.path, ...entry.key.split('/')])),
       );
@@ -358,7 +383,7 @@ final class RestorePreviousBuilder {
     final values = leftEntries.toList(growable: false);
     if (values.length != rightEntries.length) return false;
     return values.every(
-      (entry) => _sameDescriptor(entry.value, rightEntries[entry.key]),
+      (entry) => entry.value.matches(rightEntries[entry.key]),
     );
   }
 

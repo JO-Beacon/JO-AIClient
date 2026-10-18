@@ -144,6 +144,11 @@ class StreamController {
   /// （例如分页重新遍历整个窗口）会跳过它们，直到其状态被清除。
   final Set<String> _restoredUiMessageIds = <String>{};
 
+  /// 已被清出窗口的消息里用户选过的展开／收起状态。
+  /// 不清掉它，回到窗口时用户的选择会丢失。
+  final Map<String, ({bool? reasoning, List<bool> segments})>
+  _offWindowExpansion = {};
+
   int _reasoningPayloadDecodeCount = 0;
 
   /// 实际执行的 reasoningSegmentsJson 负载解码次数。
@@ -282,6 +287,7 @@ class StreamController {
 
   /// 清除消息的所有状态（推理、片段、工具）。
   void clearMessageState(String messageId) {
+    _offWindowExpansion.remove(messageId);
     _reasoning.remove(messageId);
     _reasoningSegments.remove(messageId);
     _reasoningSegmentIds.remove(messageId);
@@ -298,6 +304,7 @@ class StreamController {
   /// 清除缓存的界面状态，但放过仍由 ChatActions 持有的生成。
   void clearAllState({Set<String> keepMessageIds = const {}}) {
     bool discard(String id) => !keepMessageIds.contains(id);
+    _offWindowExpansion.removeWhere((id, _) => discard(id));
     _reasoning.removeWhere((id, _) => discard(id));
     _reasoningSegments.removeWhere((id, _) => discard(id));
     _reasoningSegmentIds.removeWhere((id, _) => discard(id));
@@ -1628,6 +1635,49 @@ class StreamController {
     final details = payload.reasoningDetails;
     if (details != null) {
       _reasoningDetails[messageId] = details;
+    }
+    final expanded = _offWindowExpansion.remove(messageId);
+    if (expanded != null) {
+      if (expanded.reasoning != null && _reasoning[messageId] != null) {
+        _reasoning[messageId]!.expanded = expanded.reasoning!;
+      }
+      final segments =
+          _reasoningSegments[messageId] ?? const <ReasoningSegmentData>[];
+      for (
+        var i = 0;
+        i < segments.length && i < expanded.segments.length;
+        i++
+      ) {
+        segments[i].expanded = expanded.segments[i];
+      }
+    }
+  }
+
+  /// 释放已移出窗口的解码负载，但记住用户选过的展开／收起状态。
+  /// 仍在后台生成的运行不归这里管。
+  void pruneOffWindowState(Set<String> visibleMessageIds) {
+    final retained = {...visibleMessageIds, ..._activeStreamingIds};
+    final ids = {
+      ..._reasoning.keys,
+      ..._reasoningSegments.keys,
+      ..._contentSplits.keys,
+      ..._toolParts.keys,
+      ..._reasoningDetails.keys,
+      ..._decodedReasoningPayloads.keys,
+      ..._restoredUiMessageIds,
+    };
+    for (final id in ids) {
+      if (retained.contains(id)) continue;
+      final reasoning = _reasoning[id]?.expanded;
+      final segments = [
+        for (final segment
+            in _reasoningSegments[id] ?? const <ReasoningSegmentData>[])
+          segment.expanded,
+      ];
+      clearMessageState(id);
+      if (reasoning != null || segments.isNotEmpty) {
+        _offWindowExpansion[id] = (reasoning: reasoning, segments: segments);
+      }
     }
   }
 

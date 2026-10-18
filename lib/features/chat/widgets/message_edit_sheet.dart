@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:Kelivo/shared/text_input/message_editing_controller.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/models/message_part.dart';
 import '../models/message_edit_result.dart';
@@ -9,6 +10,7 @@ import '../../../shared/widgets/ios_tactile.dart';
 import '../../../core/services/haptics.dart';
 import '../../../theme/app_font_weights.dart';
 import 'message_parts_editor.dart';
+import '../utils/round_structure.dart';
 import 'message_edit_close_confirmation.dart';
 
 Future<MessageEditResult?> showMessageEditSheet(
@@ -47,16 +49,17 @@ class _MessageEditSheet extends StatefulWidget {
 }
 
 class _MessageEditSheetState extends State<_MessageEditSheet> {
-  late final TextEditingController _controller;
+  late final MessageEditingController _controller;
   late List<MessagePart> _editedParts;
   bool _allowClose = false;
   bool _confirmingClose = false;
+  bool _saving = false;
   double _headerDragDistance = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.message.content);
+    _controller = MessageEditingController(text: widget.message.content);
     _editedParts = List<MessagePart>.of(widget.message.parts);
   }
 
@@ -70,16 +73,34 @@ class _MessageEditSheetState extends State<_MessageEditSheet> {
     required bool shouldSend,
     MessageEditSaveMode saveMode = MessageEditSaveMode.newBranch,
   }) {
-    final text = _editedParts
-        .whereType<TextPart>()
-        .map((part) => part.text)
-        .join();
+    // 保存前把空段的分界收掉：它们不再带任何可回放的内容。
+    final parts = normalizeRoundBoundaries(_editedParts);
+    final text = parts.whereType<TextPart>().map((part) => part.text).join();
     return MessageEditResult(
       content: text,
-      parts: _editedParts,
+      parts: parts,
       shouldSend: shouldSend,
       saveMode: saveMode,
     );
+  }
+
+  /// 保存前先把键盘已经接受、但还没送回来的编辑等完，
+  /// 否则弹窗关掉时最后一笔会丢。
+  Future<void> _save({
+    required bool send,
+    MessageEditSaveMode saveMode = MessageEditSaveMode.newBranch,
+  }) async {
+    if (_saving) return;
+    _saving = true;
+    Haptics.light();
+    try {
+      await _controller.retireMessageInput();
+      if (!mounted) return;
+      _closeWithResult(_result(shouldSend: send, saveMode: saveMode));
+    } catch (_) {
+      _saving = false;
+      rethrow;
+    }
   }
 
   void _closeWithResult(MessageEditResult? result) {
@@ -213,8 +234,7 @@ class _MessageEditSheetState extends State<_MessageEditSheet> {
                             if (widget.message.role == 'user')
                               IosCardPress(
                                 onTap: () {
-                                  Haptics.light();
-                                  _closeWithResult(_result(shouldSend: true));
+                                  unawaited(_save(send: true));
                                 },
                                 borderRadius: BorderRadius.circular(20),
                                 baseColor: Colors.transparent,
@@ -237,8 +257,7 @@ class _MessageEditSheetState extends State<_MessageEditSheet> {
                               ),
                             IosCardPress(
                               onTap: () {
-                                Haptics.light();
-                                _closeWithResult(_result(shouldSend: false));
+                                unawaited(_save(send: false));
                               },
                               borderRadius: BorderRadius.circular(20),
                               baseColor: Colors.transparent,

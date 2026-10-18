@@ -65,38 +65,30 @@ void main() {
     expect(preferences.getString('theme_mode_v1'), 'dark');
   });
 
-  test(
-    'recoverable migration validation failure degrades instead of throwing',
-    () async {
-      final legacy = _LegacyPreferences({
-        'assistants_v1': jsonEncode([
-          {'id': 'assistant-a', 'name': 'Assistant A'},
-        ]),
-        'theme_mode_v1': 'dark',
-      });
+  test('校验类迁移失败也不再降级，旧数据原样保留', () async {
+    final legacy = _LegacyPreferences({
+      'assistants_v1': jsonEncode([
+        {'id': 'assistant-a', 'name': 'Assistant A'},
+      ]),
+      'theme_mode_v1': 'dark',
+    });
 
-      // Simulate the validation-class failure the real engine raises when the
-      // router round-trip is not stable for some legacy value. The engine's
-      // transaction rolls back, so the database stays empty and unreceipted.
-      final preferences = await BusinessStartupGate.migrateAndLoad(
+    // 以前这里会带默认值进入；空助手列表会让初始化重建身份，
+    // 把旧会话指向的助手顶掉。现在与其它失败一样直接抛出。
+    await expectLater(
+      BusinessStartupGate.migrateAndLoad(
         repository: repository,
         legacyPreferences: legacy,
         debugRunMigration: () async =>
             throw StateError('business_migration_count:assistant'),
-      );
+      ),
+      throwsA(isA<StateError>()),
+    );
 
-      // The user enters the app with defaults rather than being locked out.
-      expect(preferences.isLoaded, isTrue);
-      expect(
-        BusinessStartupGate.lastDegradedReason,
-        'business_migration_count:assistant',
-      );
-      // Legacy data is retained for a fixed future build to retry, and the DB
-      // holds no partial migration or receipt.
-      expect(legacy.values, containsPair('theme_mode_v1', 'dark'));
-      expect(await repository.hasMigrationReceipt(), isFalse);
-    },
-  );
+    expect(legacy.values, containsPair('theme_mode_v1', 'dark'));
+    expect(await repository.hasMigrationReceipt(), isFalse);
+    expect((await repository.preferenceSnapshot()), isEmpty);
+  });
 
   test('unrecoverable migration failure still fails closed', () async {
     final legacy = _LegacyPreferences({'theme_mode_v1': 'dark'});
@@ -109,7 +101,6 @@ void main() {
       ),
       throwsA(isA<StateError>()),
     );
-    expect(BusinessStartupGate.lastDegradedReason, isNull);
   });
 
   test('fresh installs return a loaded empty facade with a receipt', () async {

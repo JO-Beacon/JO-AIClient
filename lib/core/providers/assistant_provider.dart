@@ -20,6 +20,8 @@ import '../../utils/app_directories.dart';
 class AssistantProvider extends ChangeNotifier {
   static const String _assistantsKey = 'assistants_v1';
   static const String _currentAssistantKey = 'current_assistant_id_v1';
+  static const String _orphanedAssistantKey =
+      'orphaned_conversations_assistant_id_v1';
 
   final BusinessPreferences preferences;
   final List<Assistant> _assistants = <Assistant>[];
@@ -27,6 +29,7 @@ class AssistantProvider extends ChangeNotifier {
   List<AssistantListItem> _assistantDirectory = const <AssistantListItem>[];
   int _directoryRevision = 0;
   String? _currentAssistantId;
+  String? _orphanedAssistantId;
   final ChatService? chatService;
   final BusinessRepository? businessRepository;
 
@@ -35,7 +38,7 @@ class AssistantProvider extends ChangeNotifier {
   /// 列表和搜索使用的轻量目录，不包含完整助手配置。
   List<AssistantListItem> get assistantDirectory => _assistantDirectory;
   int get assistantDirectoryRevision => _directoryRevision;
-  String? get currentAssistantId => _currentAssistantId;
+  String? get currentAssistantId => currentAssistant?.id;
   Assistant? get currentAssistant {
     final selectedId = _currentAssistantId;
     if (selectedId != null) {
@@ -164,9 +167,43 @@ class AssistantProvider extends ChangeNotifier {
     if (savedId != null && _assistantsById.containsKey(savedId)) {
       _currentAssistantId = savedId;
     } else {
-      _currentAssistantId = null;
+      _currentAssistantId = _assistants.isNotEmpty
+          ? _assistants.first.id
+          : null;
+    }
+    await _ensureOrphanedAssistant();
+    // 选中的助手不存在（或本就没选）时，把实际生效的那个写回，
+    // 避免下次启动又回到另一个。
+    if (_currentAssistantId != null && savedValue != _currentAssistantId) {
+      await preferences.setString(_currentAssistantKey, _currentAssistantId!);
     }
     notifyListeners();
+  }
+
+  /// 记住“找不到归属的会话”统一挂到哪个助手。
+  ///
+  /// 优先沿用已保存的那个（如果它还在）；不在了才换成列表第一个。
+  /// 这样重排、重启、切换选中都不会让孤立会话的归属漂移。
+  Future<void> _ensureOrphanedAssistant() async {
+    final savedValue = preferences.get(_orphanedAssistantKey);
+    final savedId = savedValue is String ? savedValue : null;
+    _orphanedAssistantId =
+        (savedId == null ? null : getById(savedId))?.id ??
+        (_assistants.isNotEmpty ? _assistants.first.id : null);
+    if (_orphanedAssistantId != null && savedValue != _orphanedAssistantId) {
+      await preferences.setString(_orphanedAssistantKey, _orphanedAssistantId!);
+    }
+  }
+
+  /// 所有“这个会话属于谁”的唯一解析。
+  ///
+  /// 未绑定归属的会话跟着当前选中的助手；归属助手不存在时用持久化的
+  /// 恢复助手顶替，但不改写会话里存的归属。
+  Assistant? resolveConversationAssistant(String? assistantId) {
+    if (assistantId == null) return currentAssistant;
+    return getById(assistantId) ??
+        getById(_orphanedAssistantId ?? '') ??
+        (_assistants.isNotEmpty ? _assistants.first : null);
   }
 
   /// 已废弃的“全局思考预算”存储键。
@@ -177,15 +214,13 @@ class AssistantProvider extends ChangeNotifier {
   static const String _retiredGlobalThinkingBudgetKey = 'thinking_budget_v1';
 
   List<Assistant> _decodeAssistants(String raw) {
-    try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      return [
-        for (final e in decoded)
-          if (e is Map) Assistant.fromJson(e.cast<String, dynamic>()),
-      ];
-    } catch (_) {
-      return const <Assistant>[];
-    }
+    // 解码失败不等于“没有任何助手”：如果吞掉错误返回空列表，
+    // 初始化会重建默认身份，把旧会话指向的助手顶掉。
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return [
+      for (final e in decoded)
+        Assistant.fromJson((e as Map).cast<String, dynamic>()),
+    ];
   }
 
   List<Assistant> _decodeAssistantRows(List<BusinessEntityValue> rows) {
@@ -337,6 +372,7 @@ class AssistantProvider extends ChangeNotifier {
       _currentAssistantId = _assistants.first.id;
       await preferences.setString(_currentAssistantKey, _currentAssistantId!);
     }
+    await _ensureOrphanedAssistant();
     notifyListeners();
   }
 
@@ -500,6 +536,8 @@ class AssistantProvider extends ChangeNotifier {
 
   Future<void> setCurrentAssistant(String id) async {
     await loaded;
+    await _ensureOrphanedAssistant();
+    if (getById(id) == null) return;
     if (_currentAssistantId == id) return;
     _currentAssistantId = id;
     notifyListeners();
@@ -832,6 +870,7 @@ class AssistantProvider extends ChangeNotifier {
     } else {
       await preferences.remove(_currentAssistantKey);
     }
+    await _ensureOrphanedAssistant();
     notifyListeners();
     return true;
   }

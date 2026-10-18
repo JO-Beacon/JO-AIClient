@@ -20,8 +20,11 @@ import 'package:Kelivo/core/database/business_repository.dart';
 import 'package:Kelivo/core/database/business_restore_service.dart';
 import 'package:Kelivo/core/database/chat_database_repository.dart';
 import 'package:Kelivo/core/models/backup.dart';
+import 'package:Kelivo/core/models/backup_scope.dart';
+import 'package:Kelivo/core/models/chat_input_data.dart';
 import 'package:Kelivo/core/models/chat_message.dart';
 import 'package:Kelivo/core/models/conversation.dart';
+import 'package:Kelivo/core/models/composer_draft.dart';
 import 'package:Kelivo/core/models/message_part.dart';
 import 'package:Kelivo/core/services/backup/data_sync.dart';
 import 'package:Kelivo/core/services/backup/joaiclient_archive.dart';
@@ -29,6 +32,7 @@ import 'package:Kelivo/core/services/backup/restore_receipt.dart';
 import 'package:Kelivo/core/services/backup/restore_startup_gate.dart';
 import 'package:Kelivo/core/services/chat/chat_service.dart';
 import 'package:Kelivo/core/services/instruction_injection_store.dart';
+import 'package:Kelivo/utils/sandbox_path_resolver.dart';
 import 'package:Kelivo/features/migration/sqlite_schema_migration_service.dart';
 
 import '../../../support/jo_015_business_fixture.dart';
@@ -142,6 +146,7 @@ Future<File> _createSqliteBackupFixture({
   bool includeFiles = false,
   String? assetContent,
   Object? businessEntityRowIds,
+  int? schemaVersionOverride,
 }) async {
   if (assetContent != null && !includeFiles) {
     throw ArgumentError.value(assetContent, 'assetContent');
@@ -222,7 +227,7 @@ Future<File> _createSqliteBackupFixture({
         'businessEntityRowIds': businessEntityRowIds,
       'database': {
         'entry': 'database/kelivo.db',
-        'schemaVersion': snapshotInfo.schemaVersion,
+        'schemaVersion': schemaVersionOverride ?? snapshotInfo.schemaVersion,
         'conversationCount': snapshotInfo.conversationCount,
         'messageCount': snapshotInfo.messageCount,
       },
@@ -283,6 +288,289 @@ void main() {
         await root.delete(recursive: true);
       }
     });
+
+    // 恢复端的范围过滤待开发：合并模式需保留未选类别的本机数据，
+    test('覆盖模式清除未选类别，其余照常恢复', () async {
+      await BusinessRestoreService(businessRepository).overwrite({
+        'provider_configs_v1': jsonEncode({
+          'openai': {'id': 'openai', 'name': 'Source Provider'},
+        }),
+        'assistants_v1': jsonEncode([
+          {'id': 'source-assistant', 'name': 'Source Assistant'},
+        ]),
+      });
+      final sync = DataSync(
+        businessRepository: businessRepository,
+        chatService: ChatService(),
+      );
+      final backupFile = await sync.prepareBackupFile(
+        const WebDavConfig(includeChats: false, includeFiles: false),
+      );
+      addTearDown(() => DataSync.cleanupTemporaryBackupFile(backupFile));
+
+      await BusinessRestoreService(businessRepository).overwrite({
+        'provider_configs_v1': jsonEncode({
+          'openai': {'id': 'openai', 'name': 'Target Provider'},
+        }),
+        'assistants_v1': jsonEncode([
+          {'id': 'target-assistant', 'name': 'Target Assistant'},
+        ]),
+      });
+
+      // 默认是覆盖模式：排除供应商后，本机供应商必须留下。
+      await sync.restoreFromLocalFile(
+        backupFile,
+        const WebDavConfig(
+          includeChats: false,
+          includeFiles: false,
+          scope: BackupScope(excluded: {BackupCategory.providers}),
+        ),
+      );
+
+      final restored = await BusinessRestoreService(
+        businessRepository,
+      ).exportSettings();
+      // 未选中的类别在覆盖模式下被清除（而不是保留本机）。
+      final providers =
+          jsonDecode(restored['provider_configs_v1'] as String) as Map;
+      expect(providers, isEmpty);
+      final assistants =
+          jsonDecode(restored['assistants_v1'] as String) as List;
+      expect(assistants.single['id'], 'source-assistant');
+    });
+
+    test('导出的清单带上范围', () async {
+      final sync = DataSync(
+        businessRepository: businessRepository,
+        chatService: ChatService(),
+      );
+      final backupFile = await sync.prepareBackupFile(
+        const WebDavConfig(
+          includeChats: false,
+          includeFiles: false,
+          scope: BackupScope(excluded: {BackupCategory.providers}),
+        ),
+      );
+      addTearDown(() => DataSync.cleanupTemporaryBackupFile(backupFile));
+
+      final stream = InputFileStream(backupFile.path);
+      final archive = ZipDecoder().decodeStream(stream);
+      try {
+        final manifest =
+            jsonDecode(
+                  utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
+                )
+                as Map<String, dynamic>;
+        final scope = manifest['scope'] as Map;
+        expect(scope['providers'], isFalse);
+        expect(scope['chats'], isTrue);
+      } finally {
+        archive.clear();
+        await stream.close();
+      }
+    });
+
+    test('合并模式未选类别保留本机', () async {
+      await BusinessRestoreService(businessRepository).overwrite({
+        'provider_configs_v1': jsonEncode({
+          'openai': {'id': 'openai', 'name': 'Source Provider'},
+        }),
+        'assistants_v1': jsonEncode([
+          {'id': 'source-assistant', 'name': 'Source Assistant'},
+        ]),
+      });
+      final sync = DataSync(
+        businessRepository: businessRepository,
+        chatService: ChatService(),
+      );
+      final backupFile = await sync.prepareBackupFile(
+        const WebDavConfig(includeChats: false, includeFiles: false),
+      );
+      addTearDown(() => DataSync.cleanupTemporaryBackupFile(backupFile));
+
+      await BusinessRestoreService(businessRepository).overwrite({
+        'provider_configs_v1': jsonEncode({
+          'openai': {'id': 'openai', 'name': 'Target Provider'},
+        }),
+        'assistants_v1': jsonEncode([
+          {'id': 'target-assistant', 'name': 'Target Assistant'},
+        ]),
+      });
+
+      await sync.restoreFromLocalFile(
+        backupFile,
+        const WebDavConfig(
+          includeChats: false,
+          includeFiles: false,
+          scope: BackupScope(excluded: {BackupCategory.providers}),
+        ),
+        mode: RestoreMode.merge,
+      );
+
+      final restored = await BusinessRestoreService(
+        businessRepository,
+      ).exportSettings();
+      final providers =
+          jsonDecode(restored['provider_configs_v1'] as String) as Map;
+      expect((providers['openai'] as Map)['name'], 'Target Provider');
+      final assistants =
+          jsonDecode(restored['assistants_v1'] as String) as List;
+      expect(
+        assistants.map((entry) => (entry as Map)['id']),
+        containsAll(<String>['target-assistant', 'source-assistant']),
+      );
+    });
+
+    for (final includeChats in [true, false]) {
+      test(
+        'backup excludes private draft bytes (includeChats=$includeChats)',
+        () async {
+          SandboxPathResolver.debugSetDirs(
+            docsDir: root.path,
+            supportDir: root.path,
+          );
+          addTearDown(
+            () => SandboxPathResolver.debugSetDirs(
+              docsDir: null,
+              supportDir: null,
+            ),
+          );
+          final chat = ChatService();
+          await chat.init();
+          try {
+            final conversation = await chat.createDraftConversation();
+            final drafts = chat.composerDrafts!;
+            await drafts.load(conversation.id);
+            final source = await File(
+              '${root.path}/selected.txt',
+            ).writeAsString('published attachment');
+            final input = ComposerDraftInput(
+              text: 'published',
+              documents: [
+                DocumentAttachment(
+                  path: source.path,
+                  fileName: 'selected.txt',
+                  mime: 'text/plain',
+                ),
+              ],
+            );
+            final first = await drafts.beginSubmission(conversation.id, input);
+            final sent = await drafts.prepareSubmissionInput(
+              input.toInput(submission: first),
+            );
+            await chat.beginSendGeneration(
+              conversationId: conversation.id,
+              userParts: [
+                TextPart('published'),
+                FilePart(
+                  uri: SandboxPathResolver.canonicalize(
+                    sent.documents.single.path,
+                  ),
+                  name: 'selected.txt',
+                  mime: 'text/plain',
+                ),
+              ],
+              modelId: 'model',
+              providerId: 'provider',
+              draftSubmission: first,
+            );
+            await drafts.finishSubmission(first);
+            final secretFile = await File(
+              '${root.path}/unsent.txt',
+            ).writeAsString('draft-file-secret-2718');
+            final privateInput = ComposerDraftInput(
+              text: 'draft-text-secret-3141',
+              documents: [
+                DocumentAttachment(
+                  path: secretFile.path,
+                  fileName: 'unsent.txt',
+                  mime: 'text/plain',
+                ),
+              ],
+            );
+            final second = await drafts.beginSubmission(
+              conversation.id,
+              privateInput,
+            );
+            final interrupted = await drafts.prepareSubmissionInput(
+              privateInput.toInput(submission: second),
+            );
+            final tempFolder = Directory('${root.path}/drafts/temporary-chat');
+            await tempFolder.create(recursive: true);
+            await File(
+              '${tempFolder.path}/private.txt',
+            ).writeAsString('temporary-secret');
+            expect(await File(sent.documents.single.path).exists(), isTrue);
+            expect(
+              await drafts.publishedFiles(),
+              contains(
+                'kelivo-file:///upload/${p.basename(sent.documents.single.path)}',
+              ),
+            );
+            final sync = DataSync(
+              businessRepository: businessRepository,
+              chatService: chat,
+            );
+            final backup = await sync.prepareBackupFile(
+              WebDavConfig(includeChats: includeChats, includeFiles: true),
+            );
+            final stream = InputFileStream(backup.path);
+            final archive = ZipDecoder().decodeStream(stream);
+            try {
+              expect(
+                archive.findFile(
+                  'upload/${p.basename(sent.documents.single.path)}',
+                ),
+                isNotNull,
+              );
+              expect(
+                archive.findFile(
+                  'upload/${p.basename(interrupted.documents.single.path)}',
+                ),
+                isNull,
+              );
+              expect(
+                archive.files.where(
+                  (entry) => entry.name.startsWith('drafts/'),
+                ),
+                isEmpty,
+              );
+              for (final entry in archive.files.where(
+                (entry) => entry.isFile,
+              )) {
+                final bytes = entry.readBytes()!;
+                expect(
+                  _containsContiguousBytes(
+                    bytes,
+                    utf8.encode('draft-file-secret-2718'),
+                  ),
+                  isFalse,
+                  reason: entry.name,
+                );
+                expect(
+                  _containsContiguousBytes(
+                    bytes,
+                    utf8.encode('draft-text-secret-3141'),
+                  ),
+                  isFalse,
+                  reason: entry.name,
+                );
+              }
+            } finally {
+              archive.clear();
+              await stream.close();
+              await backup.delete();
+            }
+            expect(
+              (await drafts.load(conversation.id)).pending?.text,
+              'draft-text-secret-3141',
+            );
+          } finally {
+            await chat.close();
+          }
+        },
+      );
+    }
 
     test(
       'startup restore stages a valid snapshot without live services',
@@ -2297,6 +2585,31 @@ void main() {
       expect(
         await BusinessRestoreService(businessRepository).exportSettings(),
         before,
+      );
+    });
+
+    test('rejects old Kelivo backups that declare schema 2', () async {
+      final backupFile = await _createSqliteBackupFixture(
+        root: root,
+        prefix: 'old_kelivo_schema2',
+        settings: const {},
+        schemaVersionOverride: 2,
+      );
+      await expectLater(
+        DataSync(
+          businessRepository: businessRepository,
+          chatService: ChatService(),
+        ).restoreFromLocalFile(
+          backupFile,
+          const WebDavConfig(includeChats: true, includeFiles: false),
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            'kelivo_schema2_unsupported',
+          ),
+        ),
       );
     });
 

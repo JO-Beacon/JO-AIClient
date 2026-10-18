@@ -129,6 +129,7 @@ class MainActivity : FlutterActivity() {
          kelivo.backgroundRuntime.attachActivity(this)
          deviceLocalToolsHandler = kelivo.deviceTools.also { it.attachActivity(this) }
          workspacePlugin = kelivo.workspace.also { it.attachActivity(this) }
+         kelivo.messageInput.attachActivity(this)
         processTextChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, processTextChannelName)
         processTextChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -196,6 +197,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        kelivo.messageInput.detachActivity(this)
         deviceLocalToolsHandler?.detachActivity(this)
         kelivo.backgroundRuntime.detachActivity(this)
         OAuthHandler.detachActivity(this)

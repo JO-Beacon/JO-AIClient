@@ -3,6 +3,7 @@ package io.github.jobeacon.joaiclient
 import android.app.Application
 import android.os.Build
 import io.github.jobeacon.joaiclient.background.BackgroundRuntime
+import io.github.jobeacon.joaiclient.input.NativeMessageInputPlugin
 import io.github.jobeacon.joaiclient.workspace.WorkspacePlugin
 import io.github.jobeacon.joaiclient.scheduled.ScheduledTasks
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,6 +15,8 @@ class KelivoApplication : Application() {
     val scheduledTasks by lazy { ScheduledTasks(this) }
     val workspace by lazy { WorkspacePlugin(this) }
     val deviceTools by lazy { DeviceLocalToolsHandler(this) }
+    lateinit var messageInput: NativeMessageInputPlugin
+        private set
 
     private val engineHolder = lazy {
         // Android 11 的 Impeller（OpenGL）路径在带实时毛玻璃时超出 120Hz 的
@@ -30,6 +33,7 @@ class KelivoApplication : Application() {
             scheduledTasks.configure(messenger)
             workspace.configure(messenger)
             deviceTools.configure(messenger)
+            messageInput = NativeMessageInputPlugin(this, messenger)
             engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
         }
     }

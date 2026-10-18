@@ -25,6 +25,26 @@ class ChatMessage extends HiveObject {
   /// [content] 派生自 [TextPart]。
   final List<MessagePart> parts;
 
+  // SQLite 排序元数据：用来在有限缓存里排序，而不必加载整条历史的 id。
+  // 不参与序列化：message_rows 仍是排序权威。
+  int? _storageOrder;
+  int? get storageOrder => _storageOrder;
+  void hydrateStorageOrder(int? order) => _storageOrder = order;
+
+  // 已水合的请求数据属于这份消息快照，不是第二份持久化表示：
+  // provider_artifact_rows 才是存储权威。把它挂在快照上，
+  // 缓存被逐出后请求／导出／改写仍能拿到工具记录。
+  Map<String, String>? _providerArtifactSnapshot;
+  Map<String, String> get providerArtifactSnapshot =>
+      _providerArtifactSnapshot ?? const {};
+  bool get hasProviderArtifactSnapshot => _providerArtifactSnapshot != null;
+
+  void hydrateProviderArtifacts(Map<String, String>? artifacts) {
+    _providerArtifactSnapshot = artifacts == null
+        ? null
+        : Map<String, String>.unmodifiable(artifacts);
+  }
+
   /// 派生文本正文：按 [parts] 顺序连接每个 [TextPart]。
   ///
   /// 拼接结果在首次访问时算好并保留：长流式回复会在每一帧读取该值，
@@ -272,32 +292,36 @@ class ChatMessage extends HiveObject {
       nextParts = this.parts;
     }
     return ChatMessage(
-      id: id ?? this.id,
-      role: role ?? this.role,
-      parts: nextParts,
-      timestamp: timestamp ?? this.timestamp,
-      modelId: modelId ?? this.modelId,
-      providerId: providerId ?? this.providerId,
-      totalTokens: totalTokens ?? this.totalTokens,
-      conversationId: conversationId ?? this.conversationId,
-      isStreaming: isStreaming ?? this.isStreaming,
-      reasoningText: reasoningText ?? this.reasoningText,
-      reasoningStartAt: reasoningStartAt ?? this.reasoningStartAt,
-      reasoningFinishedAt: reasoningFinishedAt ?? this.reasoningFinishedAt,
-      translation: translation ?? this.translation,
-      reasoningSegmentsJson:
-          reasoningSegmentsJson ?? this.reasoningSegmentsJson,
-      groupId: groupId ?? this.groupId,
-      version: version ?? this.version,
-      promptTokens: promptTokens ?? this.promptTokens,
-      completionTokens: completionTokens ?? this.completionTokens,
-      cachedTokens: cachedTokens ?? this.cachedTokens,
-      durationMs: durationMs ?? this.durationMs,
-      reasoningTokens: reasoningTokens ?? this.reasoningTokens,
-      cacheWriteTokens: cacheWriteTokens ?? this.cacheWriteTokens,
-      finishUsage: finishUsage ?? this.finishUsage,
-      firstTokenMs: firstTokenMs ?? this.firstTokenMs,
-    );
+        id: id ?? this.id,
+        role: role ?? this.role,
+        parts: nextParts,
+        timestamp: timestamp ?? this.timestamp,
+        modelId: modelId ?? this.modelId,
+        providerId: providerId ?? this.providerId,
+        totalTokens: totalTokens ?? this.totalTokens,
+        conversationId: conversationId ?? this.conversationId,
+        isStreaming: isStreaming ?? this.isStreaming,
+        reasoningText: reasoningText ?? this.reasoningText,
+        reasoningStartAt: reasoningStartAt ?? this.reasoningStartAt,
+        reasoningFinishedAt: reasoningFinishedAt ?? this.reasoningFinishedAt,
+        translation: translation ?? this.translation,
+        reasoningSegmentsJson:
+            reasoningSegmentsJson ?? this.reasoningSegmentsJson,
+        groupId: groupId ?? this.groupId,
+        version: version ?? this.version,
+        promptTokens: promptTokens ?? this.promptTokens,
+        completionTokens: completionTokens ?? this.completionTokens,
+        cachedTokens: cachedTokens ?? this.cachedTokens,
+        durationMs: durationMs ?? this.durationMs,
+        reasoningTokens: reasoningTokens ?? this.reasoningTokens,
+        cacheWriteTokens: cacheWriteTokens ?? this.cacheWriteTokens,
+        finishUsage: finishUsage ?? this.finishUsage,
+        firstTokenMs: firstTokenMs ?? this.firstTokenMs,
+      )
+      .._storageOrder = (id == null || id == this.id) ? _storageOrder : null
+      .._providerArtifactSnapshot = (id == null || id == this.id)
+          ? _providerArtifactSnapshot
+          : null;
   }
 
   Map<String, dynamic> toJson() {

@@ -16,6 +16,8 @@ void main() {
     'backupPageImportKelivoBackup',
     'backupPageKelivoCompatibleBackup',
     'backupPageKelivoFormat',
+    // 恢复时拒绝旧版 Kelivo（聊天数据结构版本 2）的包，文案需要点名对方
+    'backupRestoreOldKelivoUnsupported',
     // 关于页：致谢与来源说明
     'aboutPageKelivoSectionTitle',
     'aboutPageAppDescription',

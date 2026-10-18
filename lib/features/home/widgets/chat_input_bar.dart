@@ -8,6 +8,8 @@ import '../../../core/models/reasoning_request.dart';
 import '../../../core/services/api/reasoning/reasoning_level_options.dart';
 import '../../../core/services/incoming_share_service.dart';
 import 'composer_attachment_card.dart';
+import '../services/composer_clipboard.dart';
+import 'package:Kelivo/shared/text_input/message_editing_controller.dart';
 import 'dart:collection';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
@@ -28,6 +30,8 @@ import '../../../shared/responsive/breakpoints.dart';
 import 'dart:async';
 import 'dart:io';
 import '../../../core/models/chat_input_data.dart';
+import '../../../core/models/composer_draft.dart';
+import '../../../core/database/composer_draft_store.dart';
 import '../../../utils/clipboard_images.dart';
 import '../../../core/providers/asr_provider.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -51,20 +55,161 @@ import '../../../desktop/desktop_context_menu.dart';
 import 'package:Kelivo/theme/app_font_weights.dart';
 
 class ChatInputBarController {
+  ChatInputBarController();
+  ChatInputBarController._captured(
+    this._origin,
+    this._owner,
+    this._edit,
+    this._inputEpoch, {
+    this.persistent = true,
+  });
+  ChatInputBarController? _origin;
+  String? _owner;
+  String? _edit;
+  int? _inputEpoch;
+  ChatInputBarController get _root => _origin ?? this;
+  bool persistent = false;
+  int _localInputEpoch = 0;
+  bool get isValid {
+    if (_origin == null) return true;
+    if (!persistent) {
+      return _root._localInputEpoch == _inputEpoch &&
+          _root.draftOwnerId == _owner;
+    }
+    return _root.draftStore?.isInputCurrent(
+          _owner!,
+          _inputEpoch!,
+          editMessageId: _edit,
+        ) ??
+        false;
+  }
+
+  bool get _currentTarget =>
+      isValid &&
+      _root.isAttached &&
+      !_root.restoringDraft &&
+      (_origin == null ||
+          (_root.draftOwnerId == _owner &&
+              (!persistent ||
+                  _root.draftStore?.peek(_owner!)?.editMessageId == _edit)));
+  ChatInputBarController capture() {
+    final owner = _root.draftOwnerId;
+    if (owner == null || _root.draftStore?.peek(owner) == null) {
+      return ChatInputBarController._captured(
+        _root,
+        owner,
+        null,
+        _root._localInputEpoch,
+        persistent: false,
+      );
+    }
+    final edit = _root.draftStore?.peek(owner)?.editMessageId;
+    return ChatInputBarController._captured(
+      _root,
+      owner,
+      edit,
+      _root.draftStore?.inputEpoch(owner, editMessageId: edit) ?? 0,
+    );
+  }
+
+  void _mutate(ComposerDraftInput Function(ComposerDraftInput) change) {
+    final owner = _owner ?? draftOwnerId;
+    if (!isValid) return;
+    if (owner == null ||
+        (_origin != null && !persistent) ||
+        _root.draftStore?.peek(owner) == null) {
+      final root = _root;
+      final next = change(
+        root.snapshotDraft(
+          root._state?._controller.text ?? root._pendingDraft?.text ?? '',
+        ),
+      );
+      root.restoreDraft(next, resetHistory: false);
+      root.onDraftChanged?.call();
+      return;
+    }
+    final edit = _origin == null
+        ? _root.draftStore?.peek(owner)?.editMessageId
+        : _edit;
+    _root.draftStore?.mutateCaptured(
+      owner,
+      _inputEpoch ?? _root.draftStore!.inputEpoch(owner, editMessageId: edit),
+      edit,
+      change,
+    );
+    if (_root._state == null &&
+        _root.draftOwnerId == owner &&
+        _root.draftStore?.peek(owner)?.editMessageId == edit) {
+      _root._pendingDraft = _root.draftStore?.peek(owner)?.active;
+    }
+  }
+
+  ComposerDraftStore? draftStore;
+  String? draftOwnerId;
+  bool _restoringDraft = false;
+  // 覆盖导入会独立于“加载中/加载失败”暂停编辑；解除暂停不得改变恢复状态。
+  bool get restoringDraft => _restoringDraft || draftStore?.suspended == true;
+  set restoringDraft(bool value) => _restoringDraft = value;
+  VoidCallback? onDraftChanged;
+  VoidCallback? onRecoverDraft;
+  VoidCallback? onDiscardRecoveredDraft;
+  VoidCallback? onRetrySave;
+  Future<DraftSubmission?> Function(ComposerDraftInput)? onBeginSubmission;
+  ComposerDraftInput snapshotDraft(String text) =>
+      _state?._snapshotDraft(text) ??
+      _pendingDraft?.copyWith(text: text) ??
+      ComposerDraftInput(text: text);
+  ComposerDraftInput? _pendingDraft;
+  void restoreDraft(ComposerDraftInput input, {bool resetHistory = true}) {
+    if (resetHistory) _localInputEpoch++;
+    if (_state == null) {
+      _pendingDraft = input;
+    } else {
+      _state!._restoreDraft(input, resetHistory: resetHistory);
+    }
+  }
+
+  Future<Directory> uploadDirectory() =>
+      _root.draftStore != null && (_owner ?? _root.draftOwnerId) != null
+      ? _root.draftStore!.directoryFor((_owner ?? _root.draftOwnerId)!)
+      : AppDirectories.getUploadDirectory();
   final shareImport = ValueNotifier<ShareImportProgress?>(null);
   final sharedDraftAction = ValueNotifier<VoidCallback?>(null);
   VoidCallback? cancelShareImport;
 
   _ChatInputBarState? _state;
-  void _bind(_ChatInputBarState s) => _state = s;
-  void _unbind(_ChatInputBarState s) {
-    if (identical(_state, s)) _state = null;
+  void _bind(_ChatInputBarState s) {
+    _state = s;
+    final pending = _pendingDraft;
+    _pendingDraft = null;
+    if (pending != null) s._restoreDraft(pending);
   }
 
-  bool get allowImagesApiRouting => _state?._allowImagesApiRouting ?? true;
+  void _unbind(_ChatInputBarState s) {
+    if (!identical(_state, s)) return;
+    _pendingDraft = s._snapshotDraft(s._controller.text);
+    _state = null;
+  }
+
+  bool get allowImagesApiRouting =>
+      _state?._allowImagesApiRouting ??
+      _pendingDraft?.allowImagesApiRouting ??
+      true;
   bool get isAttached => _state != null;
-  bool get hasDraftMedia => _state?._hasDraftMedia ?? false;
-  bool get hasUnreadyImages => _state?._hasUnreadyImages ?? false;
+  bool get hasDraftMedia =>
+      _state?._hasDraftMedia ??
+      ((_pendingDraft?.images.isNotEmpty ?? false) ||
+          (_pendingDraft?.documents.isNotEmpty ?? false));
+  void finishInputSession() {
+    final state = _root._state;
+    state?._nativeOwner?.detachView();
+    state?._abandonVoiceSession();
+  }
+
+  bool get hasUnreadyImages =>
+      _state?._hasUnreadyImages ??
+      (_pendingDraft?.images.any((image) => image.processing || image.failed) ??
+          false);
 
   /// 用于在异步草稿移交过程中比对媒体项的快照。
   /// 与 snapshotInput 不同，这里包含尚未就绪的图片与待处理的粘贴项。
@@ -81,23 +226,301 @@ class ChatInputBarController {
     ];
   }
 
-  void addImages(List<String> paths) => _state?._addImages(paths);
+  void addImages(List<String> paths) {
+    if (_currentTarget) {
+      _root._state?._addImages(paths);
+    } else {
+      _mutate(
+        (input) => input.copyWith(
+          images: [
+            ...input.images,
+            for (final path in paths) DraftImage(path: path),
+          ],
+        ),
+      );
+    }
+  }
+
   void enqueueImages(
     List<String> paths,
     ImageCompressConfig config, {
     bool deleteSourcesAfterProcessing = false,
-  }) => _state?._enqueueImages(
-    paths,
-    config,
-    deleteSourcesAfterProcessing: deleteSourcesAfterProcessing,
-  );
+  }) {
+    if (_currentTarget) {
+      _root._state?._enqueueImages(
+        paths,
+        config,
+        deleteSourcesAfterProcessing: deleteSourcesAfterProcessing,
+      );
+    } else {
+      _mutate(
+        (input) => input.copyWith(
+          images: [
+            ...input.images,
+            for (final path in paths) DraftImage(path: path, processing: true),
+          ],
+        ),
+      );
+      unawaited(
+        _processCapturedImages(paths, config, deleteSourcesAfterProcessing),
+      );
+    }
+  }
+
+  Future<void> _processCapturedImages(
+    List<String> paths,
+    ImageCompressConfig config,
+    bool deleteSources,
+  ) async {
+    for (final path in paths) {
+      UploadWrite? saved;
+      try {
+        saved = await ImageCompressor.compressToUploadDir(
+          path,
+          await uploadDirectory(),
+          config,
+        );
+      } catch (_) {}
+      replaceProcessedImage(path, saved?.path);
+      // 私有源副本在后续持久快照之后才会被回收。
+      if (deleteSources &&
+          _root.draftStore == null &&
+          saved?.path != path &&
+          saved != null) {
+        await UploadDedupe.deleteIfUnshared(path);
+      }
+    }
+  }
+
+  void replaceProcessedImage(String source, String? result) {
+    _mutate(
+      (input) => input.copyWith(
+        images: [
+          for (final image in input.images)
+            if ((image.path == source ||
+                    (_owner != null &&
+                        (_root.draftStore?.sameOwnedFile(
+                              _owner!,
+                              image.path,
+                              source,
+                            ) ??
+                            false))) &&
+                image.processing)
+              DraftImage(path: result ?? source, failed: result == null)
+            else
+              image,
+        ],
+      ),
+    );
+  }
+
   void clearImages() => _state?._clearImages();
-  void addFiles(List<DocumentAttachment> docs) => _state?._addFiles(docs);
+  void addFiles(List<DocumentAttachment> docs) {
+    if (_currentTarget) {
+      _root._state?._addFiles(docs);
+    } else {
+      _mutate(
+        (input) => input.copyWith(documents: [...input.documents, ...docs]),
+      );
+    }
+  }
+
+  void insertText(String text) {
+    if (_currentTarget) {
+      _root._state?._insertPastedText(text);
+    } else {
+      _mutate(
+        (input) => input.copyWith(
+          text: input.text + text,
+          selectionBase: input.text.length + text.length,
+          selectionExtent: input.text.length + text.length,
+        ),
+      );
+    }
+  }
+
   void clearFiles() => _state?._clearFiles();
   void restoreInput(ChatInputData input) => _state?._restoreInput(input);
-  ChatInputData snapshotInput(String text) =>
-      _state?._snapshotInput(text) ?? ChatInputData(text: text.trim());
-  void clearDraft() => _state?._clearDraft();
+  ChatInputData snapshotInput(String text) {
+    if (_state != null) return _state!._snapshotInput(text);
+    final draft = snapshotDraft(text);
+    return ChatInputData(
+      text: text.trim(),
+      imagePaths: [
+        for (final image in draft.images)
+          if (!image.processing && !image.failed) image.path,
+      ],
+      documents: draft.documents,
+      allowImagesApiRouting: draft.allowImagesApiRouting,
+    );
+  }
+
+  void clearDraft() {
+    _localInputEpoch++;
+    final owner = draftOwnerId;
+    if (owner != null) {
+      draftStore?.invalidateInputOperations(
+        owner,
+        editMessageId: draftStore?.peek(owner)?.editMessageId,
+      );
+    }
+    _state?._clearDraft();
+  }
+}
+
+/// Keeps accepted clipboard/content work alive without retaining a renderer's
+/// context. View-only commands are detached when their composer goes away;
+/// the untouched document is then saved by its owner instead of sent elsewhere.
+class _NativeComposerOwner extends ChangeNotifier {
+  _NativeComposerOwner(this.document, this.media, this.conversationId);
+  final MessageEditingController document;
+  final ChatInputBarController media;
+  final String? conversationId;
+  late ImageCompressConfig config;
+  bool longPasteAsFile = false;
+  int longPasteThreshold = 0;
+  int pending = 0;
+  ValueChanged<TextEditingValue>? submit;
+  VoidCallback? escape;
+
+  void detachView() {
+    submit = null;
+    escape = null;
+  }
+
+  Future<void> command(String command, TextEditingValue snapshot) async {
+    switch (command) {
+      case 'submit':
+        if (pending == 0) submit?.call(snapshot);
+      case 'escape':
+        if (snapshot.composing.isCollapsed) escape?.call();
+      case 'paste':
+        final target = media.capture();
+        final compression = config;
+        final asFile = longPasteAsFile;
+        final threshold = longPasteThreshold;
+        pending++;
+        notifyListeners();
+        try {
+          final data = await ComposerClipboard.read();
+          if (!target.isValid) return;
+          if (data.bytes != null) {
+            await _registerImage(
+              target,
+              compression,
+              data.format!,
+              data.bytes!,
+            );
+          } else if (data.paths.isNotEmpty) {
+            target.enqueueImages(
+              data.paths,
+              compression,
+              deleteSourcesAfterProcessing: true,
+            );
+          } else if (data.text case final text? when text.isNotEmpty) {
+            await _registerText(target, text, asFile, threshold);
+          }
+        } on PlatformException catch (error) {
+          debugPrint('Clipboard paste failed: $error');
+        } on FileSystemException catch (error) {
+          debugPrint('Clipboard attachment failed: $error');
+        } finally {
+          pending--;
+          notifyListeners();
+        }
+    }
+  }
+
+  Future<void> insertContent(KeyboardInsertedContent content) async {
+    final format = switch (content.mimeType.toLowerCase()) {
+      'image/png' => 'png',
+      'image/jpeg' || 'image/jpg' => 'jpg',
+      'image/gif' => 'gif',
+      'image/webp' => 'webp',
+      _ => null,
+    };
+    final bytes = content.data;
+    if (format == null || bytes == null || bytes.isEmpty) return;
+    final target = media.capture();
+    final compression = config;
+    pending++;
+    notifyListeners();
+    try {
+      await _registerImage(target, compression, format, bytes);
+    } on FileSystemException catch (error) {
+      debugPrint('Keyboard attachment failed: $error');
+    } finally {
+      pending--;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _registerImage(
+    ChatInputBarController target,
+    ImageCompressConfig compression,
+    String format,
+    Uint8List bytes,
+  ) async {
+    final file = await ComposerClipboard.reserve(
+      await target.uploadDirectory(),
+      'paste',
+      format == 'jpeg' ? 'jpg' : format,
+    );
+    var registered = false;
+    try {
+      await file.writeAsBytes(bytes, flush: true);
+      if (!target.isValid) return;
+      target.enqueueImages(
+        [file.path],
+        compression,
+        deleteSourcesAfterProcessing: true,
+      );
+      registered = true;
+    } finally {
+      if (!registered) await ComposerClipboard.discard(file);
+    }
+  }
+
+  Future<void> _registerText(
+    ChatInputBarController target,
+    String text,
+    bool asFile,
+    int threshold,
+  ) async {
+    if (asFile && text.characters.take(threshold + 1).length > threshold) {
+      File? file;
+      var registered = false;
+      try {
+        file = await ComposerClipboard.reserve(
+          await target.uploadDirectory(),
+          'pasted',
+          'txt',
+        );
+        await file.writeAsString(text, flush: true);
+        if (!target.isValid) return;
+        target.addFiles([
+          DocumentAttachment(
+            path: file.path,
+            fileName: p.basename(file.path),
+            mime: 'text/plain',
+          ),
+        ]);
+        registered = true;
+        return;
+      } on FileSystemException {
+        // Preserve text if creating a text attachment fails.
+      } finally {
+        if (!registered && file != null) await ComposerClipboard.discard(file);
+      }
+    }
+    if (!target.isValid) return;
+    final range = document.selection.isValid
+        ? document.selection
+        : TextSelection.collapsed(offset: document.text.length);
+    document.value = document.value
+        .replaced(range, text)
+        .copyWith(composing: TextRange.empty);
+  }
 }
 
 class _DraftImage {
@@ -113,11 +536,13 @@ class _ImageProcessingTask {
     required this.sourcePath,
     required this.config,
     required this.deleteSourceAfterProcessing,
+    this.target,
   });
 
   final int id;
   final String sourcePath;
   final ImageCompressConfig config;
+  final ChatInputBarController? target;
 
   /// 仅对应用拥有的临时来源（剪贴板粘贴临时文件）为 true；
   /// 用户选择的文件绝不能标记为待删除。
@@ -275,7 +700,23 @@ class _ChatInputBarState extends State<ChatInputBar>
   InteractiveDrawerController? _hostDrawer;
   final GlobalKey _composerKey = GlobalKey();
   final GlobalKey _textAreaKey = GlobalKey();
-  final _longEditorKey = GlobalKey<LongMessageEditorState>();
+  GlobalKey<LongMessageEditorState> _longEditorKey =
+      GlobalKey<LongMessageEditorState>();
+
+  void _resetInputHistory() {
+    final controller = _controller;
+    if (controller is MessageEditingController && controller.history != null) {
+      controller.resetHistory();
+    } else {
+      // 原生后端的历史在它的控件树里；连同渲染绑定一起换掉。
+      _longEditorKey = GlobalKey<LongMessageEditorState>();
+    }
+  }
+
+  final _ownedNativeMedia = ChatInputBarController();
+  _NativeComposerOwner? _nativeOwner;
+  ChatInputBarController get _nativeMedia =>
+      widget.mediaController ?? _ownedNativeMedia;
   late final AnimationController _expandController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 320),
@@ -337,7 +778,9 @@ class _ChatInputBarState extends State<ChatInputBar>
   String? _lastImageModeModelKey;
   String? _dismissedImageModeModelKey;
 
-  bool get _composerLocked => widget.hasQueuedInput;
+  bool get _composerLocked =>
+      widget.hasQueuedInput ||
+      (widget.mediaController?.restoringDraft ?? false);
 
   Color _inputFillColor({
     required ThemeData theme,
@@ -409,7 +852,58 @@ class _ChatInputBarState extends State<ChatInputBar>
       _processingImageIds.isNotEmpty ||
       _failedImageIds.isNotEmpty ||
       _pendingImagePasteIds.isNotEmpty ||
-      _pendingTextPasteIds.isNotEmpty;
+      _pendingTextPasteIds.isNotEmpty ||
+      (_nativeOwner?.pending ?? 0) != 0;
+
+  void _onNativeOwnerChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _configureNativeOwner(BuildContext context) {
+    final controller = _controller;
+    if (controller is! MessageEditingController ||
+        !controller.nativeInputEnabled) {
+      return;
+    }
+    if (controller.isInputPaused) return;
+    final settings = context.read<SettingsProvider>();
+    var owner = _nativeOwner;
+    if (owner == null ||
+        owner.conversationId != widget.conversationId ||
+        !identical(owner.document, controller)) {
+      owner?.detachView();
+      owner?.removeListener(_onNativeOwnerChanged);
+      owner = _NativeComposerOwner(
+        controller,
+        _nativeMedia,
+        widget.conversationId,
+      );
+      _nativeOwner = owner;
+      owner.addListener(_onNativeOwnerChanged);
+    }
+    owner.config = settings.resolveImageCompressConfig();
+    owner.longPasteAsFile = settings.longPasteAsFile;
+    owner.longPasteThreshold = settings.longPasteAsFileThreshold;
+    owner.submit = (snapshot) {
+      unawaited(_handleSend(orderedValue: snapshot));
+    };
+    owner.escape = () {
+      if (mounted && _isExpanded && _controller.value.composing.isCollapsed) {
+        _setExpanded(false);
+      }
+    };
+    final wide = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
+    controller.configureOwner(
+      onCommand: owner.command,
+      onContent: owner.insertContent,
+      enter: wide
+          ? (settings.desktopSendShortcut == DesktopSendShortcut.ctrlEnter
+                ? 'controlSend'
+                : 'send')
+          : 'newline',
+      commands: const ['undo', 'redo', 'paste', 'escape', 'submit'],
+    );
+  }
 
   // 为 onChanged 使用实例方法，避免每次构建重新创建回调
   void _onTextChanged(String _) => setState(() {});
@@ -440,6 +934,7 @@ class _ChatInputBarState extends State<ChatInputBar>
             sourcePath: path,
             config: config,
             deleteSourceAfterProcessing: deleteSourcesAfterProcessing,
+            target: widget.mediaController?.capture(),
           ),
         );
       }
@@ -461,7 +956,9 @@ class _ChatInputBarState extends State<ChatInputBar>
   Future<void> _processImage(_ImageProcessingTask task) async {
     UploadWrite? saved;
     try {
-      final dir = await AppDirectories.getUploadDirectory();
+      final dir =
+          await (task.target?.uploadDirectory() ??
+              AppDirectories.getUploadDirectory());
       saved = await ImageCompressor.compressToUploadDir(
         task.sourcePath,
         dir,
@@ -484,10 +981,22 @@ class _ChatInputBarState extends State<ChatInputBar>
 
     final savedPath = saved?.path;
 
+    if (task.target?._root.draftStore != null && !task.target!._currentTarget) {
+      task.target!.replaceProcessedImage(task.sourcePath, savedPath);
+      if (mounted) _pumpImageProcessingQueue();
+      return;
+    }
+
     final index = mounted
         ? _images.indexWhere((image) => image.id == task.id)
         : -1;
     final taskIsActive = index >= 0 && _processingImageIds.contains(task.id);
+    // 只有这个任务自己创建、且没有别的导入同时指向它的副本才能清理。
+    if (!taskIsActive && task.target?._root.draftStore != null) {
+      task.target!.replaceProcessedImage(task.sourcePath, savedPath);
+      if (mounted) _pumpImageProcessingQueue();
+      return;
+    }
     if (!taskIsActive &&
         savedPath != null &&
         saved != null &&
@@ -608,6 +1117,74 @@ class _ChatInputBarState extends State<ChatInputBar>
     });
   }
 
+  /// 快照成可持久化的草稿：包含光标位置与图片的“处理中/失败”标记。
+  ComposerDraftInput _snapshotDraft(String text) => ComposerDraftInput(
+    text: text,
+    selectionBase: _controller.selection.baseOffset,
+    selectionExtent: _controller.selection.extentOffset,
+    images: [
+      for (final image in _images)
+        DraftImage(
+          path: image.path,
+          processing: _processingImageIds.contains(image.id),
+          failed: _failedImageIds.contains(image.id),
+        ),
+    ],
+    documents: List.of(_docs),
+    allowImagesApiRouting: _allowImagesApiRouting,
+  );
+
+  /// 从保存的草稿恢复编辑器：图片缺失或上次处理失败的会标出来，
+  /// 正在处理的重新排队，避免恢复后永远转圈。
+  void _restoreDraft(ComposerDraftInput input, {bool resetHistory = true}) {
+    if (resetHistory) _resetInputHistory();
+    final config = context
+        .read<SettingsProvider>()
+        .resolveImageCompressConfig();
+    setState(() {
+      _draftReplacementRevision++;
+      if (resetHistory) {
+        _abandonVoiceSession();
+        _pendingImagePasteIds.clear();
+        _pendingTextPasteIds.clear();
+      }
+      _discardImageState(_images.map((image) => image.id));
+      _images.clear();
+      for (final saved in input.images) {
+        final path = SandboxPathResolver.fix(saved.path);
+        final image = _DraftImage(id: _nextImageId++, path: path);
+        _images.add(image);
+        if (saved.failed ||
+            (!isRemoteOrDataUri(path) && !File(path).existsSync())) {
+          _failedImageIds.add(image.id);
+        } else if (saved.processing) {
+          _processingImageIds.add(image.id);
+          _imageProcessingQueue.add(
+            _ImageProcessingTask(
+              id: image.id,
+              sourcePath: path,
+              config: config,
+              deleteSourceAfterProcessing: false,
+              target: widget.mediaController?.capture(),
+            ),
+          );
+        }
+      }
+      _docs
+        ..clear()
+        ..addAll(
+          input.documents.map(
+            (doc) => DocumentAttachment(
+              path: SandboxPathResolver.fix(doc.path),
+              fileName: doc.fileName,
+              mime: doc.mime,
+            ),
+          ),
+        );
+    });
+    _pumpImageProcessingQueue();
+  }
+
   void _removeImageAt(int index) {
     setState(() {
       final image = _images.removeAt(index);
@@ -637,10 +1214,11 @@ class _ChatInputBarState extends State<ChatInputBar>
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller ?? TextEditingController();
+    _controller = widget.controller ?? MessageEditingController();
     _controller.addListener(_syncUsageDraft);
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncUsageDraft());
     widget.mediaController?._bind(this);
+    if (widget.mediaController == null) _ownedNativeMedia._bind(this);
     widget.asrProvider?.addListener(_handleAsrChanged);
     WidgetsBinding.instance.addObserver(this);
   }
@@ -670,6 +1248,11 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   @override
   void dispose() {
+    // 多选会暂时移除输入栏；先把完整草稿交出去，再清图片的处理/失败标记。
+    widget.mediaController?._unbind(this);
+    if (widget.mediaController == null) _ownedNativeMedia._unbind(this);
+    _nativeOwner?.detachView();
+    _nativeOwner?.removeListener(_onNativeOwnerChanged);
     _controller.removeListener(_syncUsageDraft);
     WidgetsBinding.instance.removeObserver(this);
     _stopVoiceLevelSampling();
@@ -688,7 +1271,6 @@ class _ChatInputBarState extends State<ChatInputBar>
     _imageProcessingQueue.clear();
     _processingImageIds.clear();
     _failedImageIds.clear();
-    widget.mediaController?._unbind(this);
     // A host told the composer is expanded must hear it ended, or it keeps
     // ignoring the input bar's height after this one is replaced.
     if (!_expandController.isDismissed) widget.onExpandedChanged?.call(false);
@@ -1328,43 +1910,117 @@ class _ChatInputBarState extends State<ChatInputBar>
     );
   }
 
-  Future<void> _handleSend() async {
-    if (_isSubmitting ||
+  Future<void> _handleSend({TextEditingValue? orderedValue}) async {
+    final controller = _controller;
+    if (orderedValue == null && controller is MessageEditingController) {
+      if (controller.isInputPaused) return;
+      if (controller.hasNativeInput) {
+        await controller.performCommand('submit');
+        return;
+      }
+    }
+    if (_composerLocked ||
+        _isSubmitting ||
         _hasUnreadyImages ||
         _ownsVoiceSession ||
         _finishingVoice) {
       return;
     }
-    final submittedValue = _controller.value;
+    final draftStore = widget.mediaController?.draftStore;
+    if (draftStore != null &&
+        _docs.any(
+          (doc) =>
+              !isRemoteOrDataUri(doc.path) &&
+              !File(SandboxPathResolver.fix(doc.path)).existsSync(),
+        )) {
+      showAppSnackBar(
+        context,
+        message: AppLocalizations.of(context)!.composerDraftMissingFile,
+        type: NotificationType.warning,
+      );
+      return;
+    }
+    final submittedValue = orderedValue ?? _controller.value;
     final submittedText = submittedValue.text;
+    final send = widget.onSend;
     final text = submittedText.trim();
     if (text.isEmpty && _images.isEmpty && _docs.isEmpty) return;
     final submittedImages = List<_DraftImage>.of(_images);
     final submittedImageIds = submittedImages.map((image) => image.id).toSet();
     final submittedDocuments = List<DocumentAttachment>.of(_docs);
+    final submittedDraft = _snapshotDraft(submittedText);
     final submittedDraftRevision = _draftReplacementRevision;
     final submitSerial = ++_submitSerial;
     _isSubmitting = true;
+    // 先登记待确认提交：拿到稳定的消息 id，即使进程在落库后被杀死，
+    // 也能认出“这条待发内容已经变成消息”，不会重复发送。
+    final beginSubmission = widget.mediaController?.onBeginSubmission;
+    Future<DraftSubmission?>? pendingSubmission;
+    var persistentSubmission = false;
+    try {
+      pendingSubmission = beginSubmission?.call(submittedDraft);
+      persistentSubmission =
+          widget.mediaController?.draftStore
+              ?.peek(widget.mediaController?.draftOwnerId ?? '')
+              ?.pending !=
+          null;
+    } catch (_) {
+      _isSubmitting = false;
+      return;
+    }
     // 发送调用现在在消息对落库后就返回，附件应随本次提交立即离开输入框。
     // 如果提交被拒绝，下面会把本次快照恢复，同时保留用户期间新增的内容。
     setState(() {
+      _resetInputHistory();
       _controller.clear();
       _images.removeWhere((image) => submittedImageIds.contains(image.id));
       for (final document in submittedDocuments) {
         _docs.remove(document);
       }
     });
+    Future<void> restoreRejected() async {
+      if (persistentSubmission) return;
+      if (controller is MessageEditingController && controller.isDraining) {
+        await controller.flushInput();
+      }
+      // 网络回复不是输入工作。它可能在关闭或切草稿期间抵达；
+      // 只等已接受的输入落定之后，再把快照还给它的主人。
+      if (!mounted ||
+          submitSerial != _submitSerial ||
+          _draftReplacementRevision != submittedDraftRevision ||
+          !identical(controller, _controller)) {
+        return;
+      }
+      setState(
+        () => _restoreSubmittedDraft(
+          submittedValue,
+          submittedImages,
+          submittedDocuments,
+        ),
+      );
+    }
+
     try {
-      final result =
-          await widget.onSend?.call(
-            ChatInputData(
-              text: text,
-              imagePaths: submittedImages.map((image) => image.path).toList(),
-              documents: List<DocumentAttachment>.of(submittedDocuments),
-              allowImagesApiRouting: _allowImagesApiRouting,
-            ),
-          ) ??
-          ChatInputSubmissionResult.rejected;
+      final ChatInputSubmissionResult result;
+      try {
+        final draftSubmission = await pendingSubmission;
+        result =
+            await send?.call(
+              ChatInputData(
+                text: text,
+                imagePaths: submittedImages.map((image) => image.path).toList(),
+                documents: List<DocumentAttachment>.of(submittedDocuments),
+                allowImagesApiRouting: submittedDraft.allowImagesApiRouting,
+                draftSubmission: draftSubmission,
+              ),
+            ) ??
+            ChatInputSubmissionResult.rejected;
+      } catch (_) {
+        await restoreRejected();
+        // 持久化提交的存储错误会在编辑器旁提示，不当作发送失败重发。
+        if (!persistentSubmission) rethrow;
+        return;
+      }
       if (!mounted || submitSerial != _submitSerial) return;
       if (result == ChatInputSubmissionResult.sent ||
           result == ChatInputSubmissionResult.queued) {
@@ -1386,28 +2042,9 @@ class _ChatInputBarState extends State<ChatInputBar>
             widget.focusNode?.requestFocus();
           }
         } catch (_) {}
-      } else if (_draftReplacementRevision == submittedDraftRevision) {
-        setState(
-          () => _restoreSubmittedDraft(
-            submittedValue,
-            submittedImages,
-            submittedDocuments,
-          ),
-        );
+      } else {
+        await restoreRejected();
       }
-    } catch (_) {
-      if (mounted &&
-          submitSerial == _submitSerial &&
-          _draftReplacementRevision == submittedDraftRevision) {
-        setState(
-          () => _restoreSubmittedDraft(
-            submittedValue,
-            submittedImages,
-            submittedDocuments,
-          ),
-        );
-      }
-      rethrow;
     } finally {
       if (submitSerial == _submitSerial) {
         _isSubmitting = false;
@@ -1810,6 +2447,12 @@ class _ChatInputBarState extends State<ChatInputBar>
   }
 
   void _handleInsertedContent(KeyboardInsertedContent content) {
+    if (widget.mediaController?.restoringDraft ?? false) return;
+    final document = _controller;
+    if (document is MessageEditingController && document.nativeInputEnabled) {
+      if (!document.isInputPaused) unawaited(document.insertContent(content));
+      return;
+    }
     final format = switch (content.mimeType.toLowerCase()) {
       'image/png' => 'png',
       'image/jpeg' || 'image/jpg' => 'jpeg',
@@ -1852,6 +2495,13 @@ class _ChatInputBarState extends State<ChatInputBar>
   }
 
   Future<void> _handlePasteFromClipboard() async {
+    if (widget.mediaController?.restoringDraft ?? false) return;
+    final document = _controller;
+    if (document is MessageEditingController && document.nativeInputEnabled) {
+      if (document.isInputPaused) return;
+      await document.performCommand('paste');
+      return;
+    }
     final compressConfig = context
         .read<SettingsProvider>()
         .resolveImageCompressConfig();
@@ -2979,6 +3629,7 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   @override
   Widget build(BuildContext context) {
+    _configureNativeOwner(context);
     final theme = Theme.of(context);
     final settings = context.watch<SettingsProvider>();
     final selectedAsrService = settings.selectedAsrService;

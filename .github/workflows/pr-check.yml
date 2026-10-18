@@ -1,5 +1,9 @@
 name: PR Checks
 
+# 只在有人提拉取请求（PR）时运行。本仓库不走 PR 流程（改动直接提交到 main），
+# 所以它平时不会触发，也不负责把关 main 上的提交；保留它是为了外部贡献。
+# 详见 AGENTS.md 3.7.2。
+
 env:
   FLUTTER_VERSION: '3.44.9'
 

@@ -8,6 +8,9 @@ import '../../shared/widgets/snackbar.dart';
 
 String backupRestoreErrorMessage(AppLocalizations localizations, Object error) {
   final code = backupRestoreDiagnosticCode(error);
+  if (code == 'kelivo_schema2_unsupported') {
+    return localizations.backupRestoreOldKelivoUnsupported;
+  }
   if (_isJoaiclientArchiveError(code)) {
     return localizations.backupRestoreCorruptArchiveMessage(code);
   }

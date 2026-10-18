@@ -70,7 +70,7 @@ void main() {
     },
   );
 
-  test('ignores a non-string persisted current assistant id', () async {
+  test('repairs a non-string persisted current assistant id', () async {
     await session.preferences.setString(
       'assistants_v1',
       jsonEncode(const [
@@ -82,7 +82,13 @@ void main() {
     final provider = AssistantProvider(preferences: session.preferences);
 
     await expectLater(provider.loaded, completes);
-    expect(provider.currentAssistantId, isNull);
+    // 选中项坏掉时落到第一个助手，并把实际生效的那个写回，
+    // 不再维持“列表有助手、选中却是空”的状态。
+    expect(provider.currentAssistantId, 'assistant-a');
     expect(provider.currentAssistant?.id, 'assistant-a');
+    expect(
+      session.preferences.getString('current_assistant_id_v1'),
+      'assistant-a',
+    );
   });
 }

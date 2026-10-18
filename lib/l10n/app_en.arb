@@ -893,9 +893,9 @@
   "backupPageDeepSeekSelectImportMode": "Select DeepSeek Import Mode",
   "backupPageDeepSeekSelectImportModeDescription": "Choose how to import DeepSeek conversations. Other assistants, conversations, groups, and settings are not affected.",
   "backupPageOverwriteMode": "Complete Overwrite",
-  "backupPageOverwriteModeDescription": "Replace the selected components; keep unselected components and unrelated local settings",
+  "backupPageOverwriteModeDescription": "Replace the selected categories with the backup, and clear the unselected ones. Choose Merge to keep local data.",
   "backupPageDeepSeekOverwriteModeDescription": "Keep the original conversation, and create or update an additional copy under the correct DeepSeek assistant when needed. Non-DeepSeek data is not affected.",
-  "backupPageMergeMode": "Smart merge",
+  "backupPageMergeMode": "Merge",
   "backupPageMergeModeDescription": "Keep local data while merging the backup. Matching messages are deduplicated, new messages join the existing conversation, and conflicts stay separate.",
   "backupPageDeepSeekMergeModeDescription": "Match conversations by DeepSeek conversation ID. Existing conversations are skipped without moving them; new conversations are imported under their dedicated DeepSeek assistants.",
   "backupPageRestore": "Restore",
@@ -4595,7 +4595,7 @@
   "startupDatabaseUpdateRequiredDowngradeStep3": "After you have confirmed the data on this device is backed up, install the older version and import the converted backup.",
   "startupDatabaseUpdateRequiredOpenTool": "Open conversion tool",
   "backupPageForwardCompatTitle": "Backup is from a newer version",
-  "backupPageForwardCompatBody": "This backup was created by a newer version of JO-AIClient (data format {backupVersion}; this version supports {currentVersion}), and it does not say whether older versions can read it.\n\nYou can continue: anything this version does not recognise will be skipped, and the backup file itself is not modified. But if the newer version changed how existing data is stored, some content may be imported incorrectly.\n\nUpdating JO-AIClient first is the safer choice.",
+  "backupPageForwardCompatBody": "This backup was created by a newer version of JO-AIClient (backup package version {backupVersion}; this version supports {currentVersion}), and it does not say whether older versions can read it.\n\nYou can continue: anything this version does not recognise will be skipped, and the backup file itself is not modified. But if the newer version changed how existing data is stored, some content may be imported incorrectly.\n\nUpdating JO-AIClient first is the safer choice.",
   "@backupPageForwardCompatBody": {
     "placeholders": {
       "backupVersion": {
@@ -4608,7 +4608,7 @@
   },
   "backupPageForwardCompatContinue": "Import anyway",
   "backupPageForwardCompatCancel": "Cancel",
-  "backupPageSchemaTooNewMessage": "This backup was created by a newer version of JO-AIClient and cannot be read by this version. Please update JO-AIClient and try again.",
+  "backupPageSchemaTooNewMessage": "The chat data structure in this backup is newer than this version can read. Please update JO-AIClient and try again.",
   "messageEditPageSave": "Save",
   "messageEditPageSaveAndSend": "Save & Send",
   "userMessageEditSaveOnly": "Save Only",
@@ -6237,5 +6237,40 @@
   "mcpOAuthRegistering": "Preparing authorization…",
   "mcpOAuthWaitingBrowser": "Waiting for browser authorization…",
   "mcpOAuthExchangingToken": "Completing sign-in…",
-  "messageEditAssistantRoundEndPart": "End of reply round"
+  "messageEditAssistantRoundEndPart": "Continuation boundary",
+  "composerDraftLabel": "Draft",
+  "composerDraftRecovered": "An unsent message was recovered.",
+  "composerDraftRestore": "Continue editing",
+  "composerDraftDiscard": "Discard",
+  "composerDraftSaveFailed": "Your latest draft could not be saved. It is still in this window.",
+  "composerDraftRetry": "Retry saving",
+  "composerDraftConflictTitle": "This conversation already has a draft",
+  "composerDraftConflictBody": "Append keeps both texts and attachments. Replace discards the existing draft. Nothing is sent automatically.",
+  "composerDraftAppend": "Append",
+  "composerDraftReplace": "Replace draft",
+  "composerDraftMissingFile": "An attachment is unavailable. Remove it or choose the file again.",
+  "composerDraftMessageMissing": "The message being edited no longer exists. Copy the text to a new message or discard this edit.",
+  "composerDraftDeleteNotice": "Unsent drafts in these conversations will also be deleted.",
+  "backupRestoreOldKelivoUnsupported": "This backup comes from an older Kelivo version and cannot be imported. Restore it in the latest Kelivo, then export it again.",
+  "backupScopeTitle": "Backup contents",
+  "backupScopeSummary": "{selected} of {total} selected",
+  "@backupScopeSummary": {
+    "placeholders": {
+      "selected": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "backupScopeDone": "Done",
+  "backupScopeAssistants": "Assistants",
+  "backupScopeProviders": "Providers",
+  "backupScopeMcp": "MCP",
+  "backupScopeSkills": "Skills",
+  "backupScopeWorldBooks": "World books",
+  "backupScopeMemories": "Memories",
+  "backupScopeQuickPhrases": "Quick phrases",
+  "backupScopeInstructions": "Instructions",
+  "backupScopeWorkspaces": "Workspaces",
+  "backupScopeSearchServices": "Search services",
+  "backupScopeSpeechServices": "Speech services",
+  "backupScopeSettings": "Settings"
 }

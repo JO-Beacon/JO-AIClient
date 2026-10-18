@@ -65,4 +65,12 @@ void main() {
     // 展开后是同一个包装组件（行内那个仍在底下，因此按个数判断）。
     expect(find.byType(LongMessageEditor), findsWidgets);
   });
+
+  testWidgets('部件列表不提供拖动排序', (tester) async {
+    await pumpEditor(tester, enabled: false);
+
+    // 顺序就是事实顺序，换序会把续写挪到工具结果前面；只能删了重加。
+    expect(find.byType(ReorderableListView), findsNothing);
+    expect(find.byIcon(Lucide.GripVertical), findsNothing);
+  });
 }

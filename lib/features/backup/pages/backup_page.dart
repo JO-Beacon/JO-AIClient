@@ -29,6 +29,7 @@ import '../../../core/services/chat/chat_service.dart';
 import '../../../core/services/backup/data_sync.dart';
 import '../../../core/services/backup/backup_progress_timeline.dart';
 import '../widgets/backup_progress_dialog.dart';
+import '../widgets/backup_scope_tile.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
@@ -323,33 +324,15 @@ class _BackupPageState extends State<BackupPage> {
                 header(l10n.backupPageBackupManagement, first: true),
                 _iosSectionCard(
                   children: [
-                    _iosSwitchRow(
-                      context,
-                      icon: Lucide.MessageSquare,
-                      label: l10n.backupPageChatsLabel,
-                      value: cfg.includeChats,
-                      onChanged: (v) async {
-                        final newCfg = cfg.copyWith(includeChats: v);
+                    // 备份范围：逐类勾选（导出与恢复共用）。
+                    BackupScopeTile(
+                      scope: cfg.scope,
+                      onChanged: (scope) async {
+                        final newCfg = cfg.copyWith(scope: scope);
                         await settings.setWebDavConfig(newCfg);
                         vm.updateConfig(newCfg);
 
-                        final newS3Cfg = s3Cfg.copyWith(includeChats: v);
-                        await settings.setS3Config(newS3Cfg);
-                        s3Vm.updateConfig(newS3Cfg);
-                      },
-                    ),
-                    _iosDivider(context),
-                    _iosSwitchRow(
-                      context,
-                      icon: Lucide.FileText,
-                      label: l10n.backupPageFilesLabel,
-                      value: cfg.includeFiles,
-                      onChanged: (v) async {
-                        final newCfg = cfg.copyWith(includeFiles: v);
-                        await settings.setWebDavConfig(newCfg);
-                        vm.updateConfig(newCfg);
-
-                        final newS3Cfg = s3Cfg.copyWith(includeFiles: v);
+                        final newS3Cfg = s3Cfg.copyWith(scope: scope);
                         await settings.setS3Config(newS3Cfg);
                         s3Vm.updateConfig(newS3Cfg);
                       },

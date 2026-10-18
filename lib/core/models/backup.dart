@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'backup_scope.dart';
+
 enum RestoreMode {
   overwrite, // 完全覆盖：清空本地后恢复
   merge, // 增量合并：智能去重
@@ -11,8 +13,16 @@ class WebDavConfig {
   final String password;
   final String path;
   final String userAgent;
-  final bool includeChats; // Hive 数据箱
-  final bool includeFiles; // uploads/
+  final bool includeChats;
+  final bool includeFiles;
+  final BackupScope? _scopeOverride;
+
+  /// 实际生效的范围：显式给定的优先，否则由两个旧布尔推出。
+  BackupScope get scope =>
+      _scopeOverride ??
+      BackupScope.all
+          .withCategory(BackupCategory.chats, includeChats)
+          .withCategory(BackupCategory.files, includeFiles);
 
   const WebDavConfig({
     this.url = '',
@@ -22,7 +32,8 @@ class WebDavConfig {
     this.userAgent = '',
     this.includeChats = true,
     this.includeFiles = true,
-  });
+    BackupScope? scope,
+  }) : _scopeOverride = scope;
 
   WebDavConfig copyWith({
     String? url,
@@ -30,17 +41,26 @@ class WebDavConfig {
     String? password,
     String? path,
     String? userAgent,
+    BackupScope? scope,
     bool? includeChats,
     bool? includeFiles,
   }) {
+    var nextScope = scope ?? this.scope;
+    if (includeChats != null) {
+      nextScope = nextScope.withCategory(BackupCategory.chats, includeChats);
+    }
+    if (includeFiles != null) {
+      nextScope = nextScope.withCategory(BackupCategory.files, includeFiles);
+    }
     return WebDavConfig(
       url: url ?? this.url,
       username: username ?? this.username,
       password: password ?? this.password,
       path: path ?? this.path,
       userAgent: userAgent ?? this.userAgent,
-      includeChats: includeChats ?? this.includeChats,
-      includeFiles: includeFiles ?? this.includeFiles,
+      includeChats: nextScope.includes(BackupCategory.chats),
+      includeFiles: nextScope.includes(BackupCategory.files),
+      scope: nextScope,
     );
   }
 
@@ -50,6 +70,8 @@ class WebDavConfig {
     'password': password,
     'path': path,
     'userAgent': userAgent,
+    'scope': scope.toJson(),
+    // 旧版本不认 scope，保留两个布尔便于它们照旧读。
     'includeChats': includeChats,
     'includeFiles': includeFiles,
   };
@@ -65,6 +87,7 @@ class WebDavConfig {
       userAgent: (json['userAgent'] as String?) ?? '',
       includeChats: json['includeChats'] as bool? ?? true,
       includeFiles: json['includeFiles'] as bool? ?? true,
+      scope: json['scope'] != null ? BackupScope.fromJson(json['scope']) : null,
     );
   }
 
@@ -93,6 +116,13 @@ class S3Config {
   final String userAgent;
   final bool includeChats;
   final bool includeFiles;
+  final BackupScope? _scopeOverride;
+
+  BackupScope get scope =>
+      _scopeOverride ??
+      BackupScope.all
+          .withCategory(BackupCategory.chats, includeChats)
+          .withCategory(BackupCategory.files, includeFiles);
 
   const S3Config({
     this.endpoint = '',
@@ -106,7 +136,8 @@ class S3Config {
     this.userAgent = '',
     this.includeChats = true,
     this.includeFiles = true,
-  });
+    BackupScope? scope,
+  }) : _scopeOverride = scope;
 
   S3Config copyWith({
     String? endpoint,
@@ -118,9 +149,17 @@ class S3Config {
     String? prefix,
     bool? pathStyle,
     String? userAgent,
+    BackupScope? scope,
     bool? includeChats,
     bool? includeFiles,
   }) {
+    var nextScope = scope ?? this.scope;
+    if (includeChats != null) {
+      nextScope = nextScope.withCategory(BackupCategory.chats, includeChats);
+    }
+    if (includeFiles != null) {
+      nextScope = nextScope.withCategory(BackupCategory.files, includeFiles);
+    }
     return S3Config(
       endpoint: endpoint ?? this.endpoint,
       region: region ?? this.region,
@@ -131,8 +170,9 @@ class S3Config {
       prefix: prefix ?? this.prefix,
       pathStyle: pathStyle ?? this.pathStyle,
       userAgent: userAgent ?? this.userAgent,
-      includeChats: includeChats ?? this.includeChats,
-      includeFiles: includeFiles ?? this.includeFiles,
+      includeChats: nextScope.includes(BackupCategory.chats),
+      includeFiles: nextScope.includes(BackupCategory.files),
+      scope: nextScope,
     );
   }
 
@@ -146,6 +186,7 @@ class S3Config {
     'prefix': prefix,
     'pathStyle': pathStyle,
     'userAgent': userAgent,
+    'scope': scope.toJson(),
     'includeChats': includeChats,
     'includeFiles': includeFiles,
   };
@@ -167,6 +208,7 @@ class S3Config {
       userAgent: (json['userAgent'] as String?) ?? '',
       includeChats: json['includeChats'] as bool? ?? true,
       includeFiles: json['includeFiles'] as bool? ?? true,
+      scope: json['scope'] != null ? BackupScope.fromJson(json['scope']) : null,
     );
   }
 

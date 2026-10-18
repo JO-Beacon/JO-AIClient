@@ -312,9 +312,7 @@ Future<ModelSelection?> showModelSelectorWithCurrentChatFallback(
       : chats.getConversation(conversationId);
   final assistants = context.read<AssistantProvider>();
   final assistantId = conversation?.assistantId;
-  final assistant = assistantId != null
-      ? assistants.getById(assistantId)
-      : assistants.currentAssistant;
+  final assistant = assistants.resolveConversationAssistant(assistantId);
   final current = resolveChatModel(
     settings,
     conversation: conversation,

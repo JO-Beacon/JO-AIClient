@@ -17,6 +17,8 @@ import 'package:Kelivo/core/models/chat_input_data.dart';
 import 'package:Kelivo/core/models/chat_message.dart';
 import 'package:Kelivo/core/models/message_part.dart';
 import 'package:Kelivo/core/models/conversation.dart';
+import 'package:Kelivo/core/models/composer_draft.dart';
+import 'package:Kelivo/core/models/preset_message.dart';
 import 'package:Kelivo/core/providers/assistant_provider.dart';
 import 'package:Kelivo/core/providers/mcp_provider.dart';
 import 'package:Kelivo/core/providers/settings_provider.dart';
@@ -33,7 +35,7 @@ import 'package:Kelivo/features/home/services/ask_user_interaction_service.dart'
 import 'package:Kelivo/features/home/widgets/chat_input_bar.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
 
-class _CancelFailureChatService extends ChatService {
+class _CancelFailureChatService extends ChatService with _GatedChat {
   _CancelFailureChatService(ChatDatabaseRepository repository)
     : super(existingRepository: repository);
   bool failCancellation = false;
@@ -64,6 +66,118 @@ class _CancelFailureChatService extends ChatService {
   }
 }
 
+mixin _GatedChat on ChatService {
+  Completer<void>? versionSaveHold;
+  bool versionSaveEntered = false;
+  bool holdAfterVersionSave = false;
+  Completer<void>? regenerationHold;
+  bool regenerationEntered = false;
+  bool failAfterVersionSave = false;
+  Completer<void>? presetHold;
+  String? presetConversationId;
+
+  @override
+  Future<ChatMessage> addMessage({
+    required String conversationId,
+    required String role,
+    String content = '',
+    List<MessagePart>? parts,
+    String? modelId,
+    String? providerId,
+    int? totalTokens,
+    String? translation,
+    String? reasoningSegmentsJson,
+    int? promptTokens,
+    int? completionTokens,
+    int? cachedTokens,
+    int? durationMs,
+    bool isStreaming = false,
+    String? reasoningText,
+    DateTime? reasoningStartAt,
+    DateTime? reasoningFinishedAt,
+    String? groupId,
+    int? version,
+    bool selectVersion = false,
+    String? parentMessageId,
+    String? branchId,
+  }) async {
+    if (content == 'preset question' && presetHold != null) {
+      presetConversationId = conversationId;
+      await presetHold!.future;
+    }
+    return super.addMessage(
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      parts: parts,
+      modelId: modelId,
+      providerId: providerId,
+      totalTokens: totalTokens,
+      translation: translation,
+      reasoningSegmentsJson: reasoningSegmentsJson,
+      promptTokens: promptTokens,
+      completionTokens: completionTokens,
+      cachedTokens: cachedTokens,
+      durationMs: durationMs,
+      isStreaming: isStreaming,
+      reasoningText: reasoningText,
+      reasoningStartAt: reasoningStartAt,
+      reasoningFinishedAt: reasoningFinishedAt,
+      groupId: groupId,
+      version: version,
+      selectVersion: selectVersion,
+      parentMessageId: parentMessageId,
+      branchId: branchId,
+    );
+  }
+
+  @override
+  Future<GenerationBeginResult> beginAssistantGeneration({
+    required String conversationId,
+    required String modelId,
+    required String providerId,
+    required bool truncateFuture,
+    String? parentMessageId,
+    String? branchId,
+  }) async {
+    regenerationEntered = true;
+    await regenerationHold?.future;
+    return super.beginAssistantGeneration(
+      conversationId: conversationId,
+      modelId: modelId,
+      providerId: providerId,
+      truncateFuture: truncateFuture,
+      parentMessageId: parentMessageId,
+      branchId: branchId,
+    );
+  }
+
+  @override
+  Future<ChatMessage?> appendMessageVersion({
+    required String messageId,
+    String content = '',
+    List<MessagePart>? parts,
+    DraftSubmission? draftSubmission,
+  }) async {
+    if (!holdAfterVersionSave) {
+      versionSaveEntered = true;
+      await versionSaveHold?.future;
+    }
+    final message = await super.appendMessageVersion(
+      messageId: messageId,
+      content: content,
+      parts: parts,
+      draftSubmission: draftSubmission,
+    );
+    if (holdAfterVersionSave) {
+      versionSaveEntered = true;
+      await versionSaveHold?.future;
+    }
+    if (failAfterVersionSave) throw StateError('post-commit callback failed');
+    return message;
+  }
+}
+
 class _FakePathProviderPlatform extends PathProviderPlatform {
   _FakePathProviderPlatform(this.path);
 
@@ -89,7 +203,7 @@ void main() {
   late Directory directory;
   late PathProviderPlatform previousPathProvider;
   late ChatDatabaseRepository repository;
-  late ChatService service;
+  late _CancelFailureChatService service;
   late HttpServer server;
   late SettingsProvider settings;
   late AssistantProvider assistantProvider;
@@ -291,13 +405,16 @@ void main() {
   Future<HomePageController> pumpHarness(
     WidgetTester tester, {
     bool withSuggestions = false,
+    bool withComposer = false,
   }) async {
     HomePageController? controller;
+    late Zone sendZone;
     final baseUrl = 'http://${server.address.address}:${server.port}/v1';
     // Futures only complete for awaits on the zone that created them, and the
     // send path runs inside runAsync: build and fully configure every provider
     // there so its loaded/write futures belong to the real-async zone.
     await tester.runAsync(() async {
+      sendZone = Zone.current;
       final settingsPrefs = createBusinessTestPreferences();
       await settingsPrefs.load();
       settings = SettingsProvider(settingsPrefs);
@@ -349,7 +466,12 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: _ControllerHarness(onCreated: (value) => controller = value),
+          home: _ControllerHarness(
+            onCreated: (value) => controller = value,
+            withComposer: withComposer,
+            onSend: (input) =>
+                sendZone.run(() => controller!.sendMessage(input)),
+          ),
         ),
       ),
     );
@@ -369,6 +491,36 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
     fail('timed out waiting for $description');
+  }
+
+  Future<void> waitForWidget(
+    WidgetTester tester,
+    bool Function() condition,
+    String description,
+  ) async {
+    for (var i = 0; i < 300 && !condition(); i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+    }
+    expect(condition(), isTrue, reason: 'timed out waiting for $description');
+  }
+
+  Future<void> finishWidget(WidgetTester tester, Future<void> future) async {
+    var done = false;
+    Object? failure;
+    future.then<void>(
+      (_) {
+        done = true;
+      },
+      onError: (Object error) {
+        failure = error;
+        done = true;
+      },
+    );
+    await waitForWidget(tester, () => done, 'asynchronous operation');
+    if (failure != null) throw failure!;
   }
 
   testWidgets('concurrent sends persist a single user/assistant pair', (
@@ -508,7 +660,7 @@ void main() {
         );
         newTasks = background.activeTaskIds.difference(previousTasks);
         expect(newTasks, isNotEmpty);
-        (service as _CancelFailureChatService).failCancellation = true;
+        service.failCancellation = true;
         await expectLater(
           controller.cancelStreaming(),
           throwsA(
@@ -525,7 +677,7 @@ void main() {
           isFalse,
         );
       } finally {
-        (service as _CancelFailureChatService).failCancellation = false;
+        service.failCancellation = false;
         await controller.cancelStreaming();
         releaseToolResponse!.complete();
         for (final id in newTasks) {
@@ -1158,6 +1310,168 @@ void main() {
         containsAll(<String>[editedUser.id, newAssistant.id]),
       );
     });
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final targetText in ['', 'existing target draft']) {
+    testWidgets(
+      'share keeps its target through preset loading and animated navigation (target: $targetText)',
+      (tester) async {
+        final controller = await pumpHarness(tester, withComposer: true);
+        final state = tester.state<_ControllerHarnessState>(
+          find.byType(_ControllerHarness),
+        );
+        late Conversation b;
+        await tester.runAsync(() async {
+          b = await service.createConversation(title: 'B');
+          await controller.debugViewModel.switchConversation(b.id);
+          await waitFor(
+            () => state._mediaController.draftOwnerId == b.id,
+            'B draft',
+          );
+          await assistantProvider.updateAssistant(
+            assistantProvider.currentAssistant!.copyWith(
+              presetMessages: [
+                PresetMessage(role: 'user', content: 'preset question'),
+              ],
+            ),
+          );
+        });
+        service.presetHold = Completer<void>();
+        bool? accepted;
+        Object? failure;
+        final delivery = controller
+            .openIncomingShareDraft(
+              const ChatInputData(text: 'shared input'),
+              shareIds: ['share-owner-test'],
+            )
+            .then<void>(
+              (value) {
+                accepted = value;
+              },
+              onError: (Object error) {
+                failure = error;
+              },
+            );
+        await waitForWidget(
+          tester,
+          () => service.presetConversationId != null,
+          'preset insertion',
+        );
+        final target = service.presetConversationId!;
+        expect(target, isNot(b.id));
+        await waitForWidget(
+          tester,
+          () => state._mediaController.draftOwnerId == target,
+          'share target binding',
+        );
+        state._inputController.text = targetText;
+        await finishWidget(tester, controller.switchConversationAnimated(b.id));
+        await waitForWidget(
+          tester,
+          () => state._mediaController.draftOwnerId == b.id,
+          'B binding',
+        );
+        expect(state._inputController.text, isEmpty);
+        service.presetHold!.complete();
+        await finishWidget(tester, delivery);
+        expect(controller.currentConversation!.id, b.id);
+        expect(state._inputController.text, isEmpty);
+        expect(service.composerDrafts!.peek(b.id)!.active.isEmpty, isTrue);
+        expect(find.byType(AlertDialog), findsNothing);
+        if (targetText.isEmpty) {
+          expect(failure, isNull);
+          expect(accepted, isTrue);
+          expect(
+            service.composerDrafts!.peek(target)!.active.text,
+            'shared input',
+          );
+          await tester.runAsync(() async {
+            expect(
+              await service.composerDrafts!.hasShareReceipt('share-owner-test'),
+              isTrue,
+            );
+            expect(
+              (await service.loadMessages(target)).single.content,
+              'preset question',
+            );
+          });
+          await finishWidget(
+            tester,
+            controller.switchConversationAnimated(target),
+          );
+          await waitForWidget(
+            tester,
+            () => state._mediaController.draftOwnerId == target,
+            'shared draft restore',
+          );
+          expect(state._inputController.text, 'shared input');
+        } else {
+          expect(failure, isStateError);
+          expect(accepted, isNull);
+          expect(service.composerDrafts!.peek(target)!.active.text, targetText);
+          await tester.runAsync(() async {
+            expect(
+              await service.composerDrafts!.hasShareReceipt('share-owner-test'),
+              isFalse,
+            );
+          });
+        }
+        await tester.pumpWidget(const SizedBox());
+        // 滚到底部的延迟计时器属于会话创建；等它跑完再结束测试。
+        await tester.pump(const Duration(milliseconds: 300));
+        await finishWidget(tester, service.composerDrafts!.flush());
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('new entry reopens preset messages without reinjecting them', (
+    tester,
+  ) async {
+    final controller = await pumpHarness(tester, withComposer: true);
+    final state = tester.state<_ControllerHarnessState>(
+      find.byType(_ControllerHarness),
+    );
+    await tester.runAsync(() async {
+      await assistantProvider.updateAssistant(
+        assistantProvider.currentAssistant!.copyWith(
+          presetMessages: [
+            PresetMessage(role: 'user', content: 'preset question'),
+            PresetMessage(role: 'assistant', content: 'preset answer'),
+          ],
+        ),
+      );
+      await controller.debugViewModel.createNewConversation();
+      final entry = controller.currentConversation!;
+      await waitFor(
+        () => state._mediaController.draftOwnerId == entry.id,
+        'new entry binding',
+      );
+      state._inputController.text = 'unsent question';
+      await service.composerDrafts!.flush();
+      expect(service.getMessageCount(entry.id), 2);
+      final other = await service.createConversation(title: 'other');
+      await controller.debugViewModel.switchConversation(other.id);
+      await waitFor(
+        () => state._mediaController.draftOwnerId == other.id,
+        'other conversation binding',
+      );
+      await controller.debugViewModel.createNewConversation();
+      await waitFor(
+        () => state._mediaController.draftOwnerId == entry.id,
+        'restored entry binding',
+      );
+      expect(controller.currentConversation!.id, entry.id);
+      expect(controller.messages.map((m) => m.content), [
+        'preset question',
+        'preset answer',
+      ]);
+      expect(service.getMessageCount(entry.id), 2);
+      expect(state._inputController.text, 'unsent question');
+    });
+    await tester.pumpWidget(const SizedBox());
+    await finishWidget(tester, service.composerDrafts!.flush());
     expect(tester.takeException(), isNull);
   });
 
@@ -1922,9 +2236,15 @@ void main() {
 }
 
 class _ControllerHarness extends StatefulWidget {
-  const _ControllerHarness({required this.onCreated});
+  const _ControllerHarness({
+    required this.onCreated,
+    this.withComposer = false,
+    this.onSend,
+  });
 
   final ValueChanged<HomePageController> onCreated;
+  final bool withComposer;
+  final Future<ChatInputSubmissionResult> Function(ChatInputData)? onSend;
 
   @override
   State<_ControllerHarness> createState() => _ControllerHarnessState();
@@ -1966,5 +2286,23 @@ class _ControllerHarnessState extends State<_ControllerHarness>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(key: _scaffoldKey);
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) => Scaffold(
+      key: _scaffoldKey,
+      body: widget.withComposer
+          ? Align(
+              alignment: Alignment.bottomCenter,
+              child: ChatInputBar(
+                key: _inputBarKey,
+                controller: _inputController,
+                mediaController: _mediaController,
+                focusNode: _inputFocus,
+                conversationId: _controller.currentConversation?.id,
+                onSend: widget.onSend ?? _controller.sendMessage,
+              ),
+            )
+          : null,
+    ),
+  );
 }

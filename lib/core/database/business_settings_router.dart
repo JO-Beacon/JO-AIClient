@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
+import '../models/assistant.dart';
 import 'business_data.dart';
 
 enum BusinessKeyDisposition {
@@ -55,6 +56,7 @@ final class BusinessKeyRegistry {
     'desktop_scheduled_tasks_v1',
     'scheduled_task_results_v1',
     'current_assistant_id_v1',
+    'orphaned_conversations_assistant_id_v1',
     'selected_model_v1',
     'per_chat_model_enabled_v1',
     'send_markdown_image_links_as_images_v1',
@@ -367,6 +369,9 @@ final class BusinessSettingsRouter {
                   ? projectedMemoryIds[row.id]!
                   : row.id;
             }
+            if (kind == BusinessEntityKind.assistant) {
+              _validateRuntimeAssistant(payload);
+            }
             return payload;
           }(),
       ]);
@@ -481,6 +486,9 @@ final class BusinessSettingsRouter {
     final id = hasPayloadId
         ? rawId.toString()
         : rowId ?? _stableGeneratedId(kind.sourceKey, index, payload);
+    if (kind == BusinessEntityKind.assistant) {
+      _validateRuntimeAssistant({...payload, 'id': id});
+    }
     String? assistantId;
     if (kind == BusinessEntityKind.assistantMemory) {
       final rawAssistantId = payload['assistantId'];
@@ -495,6 +503,20 @@ final class BusinessSettingsRouter {
       payload: jsonEncode(payload),
       assistantId: assistantId,
     );
+  }
+
+  // 用与 AssistantProvider 相同的解码器校验，且发生在迁移清理之前：
+  // 无法解码的助手不能变成“空列表 → 重建身份”。保留原始 payload，
+  // 包括未知字段和仅供运行时使用的 id。
+  static void _validateRuntimeAssistant(Map<String, Object?> payload) {
+    try {
+      Assistant.fromJson(payload.cast<String, dynamic>());
+    } catch (error) {
+      throw FormatException(
+        BusinessEntityKind.assistant.sourceKey,
+        'assistant=${payload['id']}; $error',
+      );
+    }
   }
 
   // 镜像运行时 decoder 的转换边界，而不对 payload 做规范化。

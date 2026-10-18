@@ -233,7 +233,7 @@ void main() {
       );
     });
 
-    test('rejects links without following them', () async {
+    test('preserves links without following their targets', () async {
       if (Platform.isWindows) return;
       final outside = File(p.join(root.parent.path, 'outside_asset.txt'));
       await outside.writeAsBytes([1, 2, 3]);
@@ -242,13 +242,15 @@ void main() {
       final link = Link(p.join(upload.path, 'linked.txt'));
       await link.create(outside.path);
       try {
-        await expectLater(
-          RestorePreviousBuilder.build(
-            appDataDirectory: root,
-            preparedReceipt: _receipt(files: true),
-          ),
-          throwsA(isA<StateError>()),
+        final bundle = await RestorePreviousBuilder.build(
+          appDataDirectory: root,
+          preparedReceipt: _receipt(files: true),
         );
+        final entry = bundle.plan.assets!.entries['upload/linked.txt']!;
+        expect(entry.type, RestoreAssetEntryType.link);
+        expect(entry.linkTarget, outside.path);
+        // 不跟随：记录的是链接本身，不是目标文件的大小与哈希。
+        expect(entry.file, isNull);
       } finally {
         if (await outside.exists()) await outside.delete();
       }

@@ -2061,14 +2061,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupPageOverwriteModeDescription =>
-      'Replace the selected components; keep unselected components and unrelated local settings';
+      'Replace the selected categories with the backup, and clear the unselected ones. Choose Merge to keep local data.';
 
   @override
   String get backupPageDeepSeekOverwriteModeDescription =>
       'Keep the original conversation, and create or update an additional copy under the correct DeepSeek assistant when needed. Non-DeepSeek data is not affected.';
 
   @override
-  String get backupPageMergeMode => 'Smart merge';
+  String get backupPageMergeMode => 'Merge';
 
   @override
   String get backupPageMergeModeDescription =>
@@ -10175,7 +10175,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String backupPageForwardCompatBody(int backupVersion, int currentVersion) {
-    return 'This backup was created by a newer version of JO-AIClient (data format $backupVersion; this version supports $currentVersion), and it does not say whether older versions can read it.\n\nYou can continue: anything this version does not recognise will be skipped, and the backup file itself is not modified. But if the newer version changed how existing data is stored, some content may be imported incorrectly.\n\nUpdating JO-AIClient first is the safer choice.';
+    return 'This backup was created by a newer version of JO-AIClient (backup package version $backupVersion; this version supports $currentVersion), and it does not say whether older versions can read it.\n\nYou can continue: anything this version does not recognise will be skipped, and the backup file itself is not modified. But if the newer version changed how existing data is stored, some content may be imported incorrectly.\n\nUpdating JO-AIClient first is the safer choice.';
   }
 
   @override
@@ -10186,7 +10186,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupPageSchemaTooNewMessage =>
-      'This backup was created by a newer version of JO-AIClient and cannot be read by this version. Please update JO-AIClient and try again.';
+      'The chat data structure in this backup is newer than this version can read. Please update JO-AIClient and try again.';
 
   @override
   String get messageEditPageSave => 'Save';
@@ -14041,5 +14041,101 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mcpOAuthExchangingToken => 'Completing sign-in…';
 
   @override
-  String get messageEditAssistantRoundEndPart => 'End of reply round';
+  String get messageEditAssistantRoundEndPart => 'Continuation boundary';
+
+  @override
+  String get composerDraftLabel => 'Draft';
+
+  @override
+  String get composerDraftRecovered => 'An unsent message was recovered.';
+
+  @override
+  String get composerDraftRestore => 'Continue editing';
+
+  @override
+  String get composerDraftDiscard => 'Discard';
+
+  @override
+  String get composerDraftSaveFailed =>
+      'Your latest draft could not be saved. It is still in this window.';
+
+  @override
+  String get composerDraftRetry => 'Retry saving';
+
+  @override
+  String get composerDraftConflictTitle =>
+      'This conversation already has a draft';
+
+  @override
+  String get composerDraftConflictBody =>
+      'Append keeps both texts and attachments. Replace discards the existing draft. Nothing is sent automatically.';
+
+  @override
+  String get composerDraftAppend => 'Append';
+
+  @override
+  String get composerDraftReplace => 'Replace draft';
+
+  @override
+  String get composerDraftMissingFile =>
+      'An attachment is unavailable. Remove it or choose the file again.';
+
+  @override
+  String get composerDraftMessageMissing =>
+      'The message being edited no longer exists. Copy the text to a new message or discard this edit.';
+
+  @override
+  String get composerDraftDeleteNotice =>
+      'Unsent drafts in these conversations will also be deleted.';
+
+  @override
+  String get backupRestoreOldKelivoUnsupported =>
+      'This backup comes from an older Kelivo version and cannot be imported. Restore it in the latest Kelivo, then export it again.';
+
+  @override
+  String get backupScopeTitle => 'Backup contents';
+
+  @override
+  String backupScopeSummary(int selected, int total) {
+    return '$selected of $total selected';
+  }
+
+  @override
+  String get backupScopeDone => 'Done';
+
+  @override
+  String get backupScopeAssistants => 'Assistants';
+
+  @override
+  String get backupScopeProviders => 'Providers';
+
+  @override
+  String get backupScopeMcp => 'MCP';
+
+  @override
+  String get backupScopeSkills => 'Skills';
+
+  @override
+  String get backupScopeWorldBooks => 'World books';
+
+  @override
+  String get backupScopeMemories => 'Memories';
+
+  @override
+  String get backupScopeQuickPhrases => 'Quick phrases';
+
+  @override
+  String get backupScopeInstructions => 'Instructions';
+
+  @override
+  String get backupScopeWorkspaces => 'Workspaces';
+
+  @override
+  String get backupScopeSearchServices => 'Search services';
+
+  @override
+  String get backupScopeSpeechServices => 'Speech services';
+
+  @override
+  String get backupScopeSettings => 'Settings';
 }

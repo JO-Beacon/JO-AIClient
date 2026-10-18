@@ -139,6 +139,7 @@ class McpToolService extends ChangeNotifier {
     McpToolRouteSnapshot? routeSnapshot,
     Set<String> reservedNames = const {},
   }) async {
+    // try servers selected for the assistant
     final a = (assistantId != null)
         ? assistants.getById(assistantId)
         : assistants.currentAssistant;
@@ -158,7 +159,6 @@ class McpToolService extends ChangeNotifier {
         );
         if (route == null) return const McpToolResult();
         final s = route.server;
-        // debugPrint('[MCP/Call/Select] using server=${s.id} name=${s.name} transport=${s.transport.name}');
         final res = await mcpProvider.callTool(
           s.id,
           route.tool.name,
@@ -257,45 +257,51 @@ class McpToolService extends ChangeNotifier {
           continue;
         }
         if (c is mcp.ResourceContent) {
-          final text = (c.text ?? '').toString();
-          if (text.trim().isNotEmpty) {
-            _writeEscapedToolText(buf, text);
+          final t = (c.text ?? '').toString();
+          if (t.trim().isNotEmpty) {
+            _writeEscapedToolText(buf, t);
           } else {
-            final uri = c.uri.toString();
-            if (uri.isNotEmpty) _writeEscapedToolText(buf, 'resource: $uri');
+            final uri = (c.uri).toString();
+            if (uri.isNotEmpty) {
+              _writeEscapedToolText(buf, 'resource: $uri');
+            }
           }
           continue;
         }
         if (c is mcp.ImageContent) {
           final data = (c.data ?? '').toString();
-          final mime = c.mimeType.toString();
           String? uri;
           if (data.isNotEmpty) {
-            uri = await McpImageSnapshot.save(mime, data);
+            uri = await McpImageSnapshot.save(data);
           } else {
             final url = (c.url ?? '').toString();
             uri = await remoteSnapshots.putIfAbsent(
               url,
-              () => McpImageSnapshot.download(url, mime: mime),
+              () => McpImageSnapshot.download(url),
             );
           }
           if (uri != null && uri.isNotEmpty) {
             if (seen.add(uri)) imageUris.add(uri);
             if (buf.isNotEmpty && !_endsWithLineBreak(buf)) buf.writeln();
             buf.writeln('![](${encodeMarkdownImageDestination(uri)})');
+          } else {
+            _writeEscapedToolText(
+              buf,
+              '(Image omitted: unavailable, invalid, unsupported, or too large.)',
+            );
           }
           continue;
         }
         final dyn = c as dynamic;
         try {
-          final text = dyn.text as String?;
-          if (text != null && text.trim().isNotEmpty) {
-            _writeEscapedToolText(buf, text);
+          final txt = (dyn.text as String?);
+          if (txt != null && txt.trim().isNotEmpty) {
+            _writeEscapedToolText(buf, txt);
             continue;
           }
         } catch (_) {}
         try {
-          final uri = dyn.uri as String?;
+          final uri = (dyn.uri as String?);
           if (uri != null && uri.isNotEmpty) {
             _writeEscapedToolText(buf, 'resource: $uri');
             continue;
@@ -309,8 +315,10 @@ class McpToolService extends ChangeNotifier {
           );
           continue;
         } catch (_) {}
-        final value = c.toString();
-        if (!value.startsWith('Instance of')) _writeEscapedToolText(buf, value);
+        final s = c.toString();
+        if (!s.startsWith('Instance of')) {
+          _writeEscapedToolText(buf, s);
+        }
       } catch (_) {
         ToolCallCancellation.current?.throwIfCancelled();
       }
@@ -325,8 +333,8 @@ class McpToolService extends ChangeNotifier {
 
   bool _endsWithLineBreak(StringBuffer buf) {
     if (buf.isEmpty) return false;
-    final text = buf.toString();
-    final last = text.codeUnitAt(text.length - 1);
+    final s = buf.toString();
+    final last = s.codeUnitAt(s.length - 1);
     return last == 0x0A || last == 0x0D;
   }
 
@@ -422,6 +430,7 @@ class McpToolService extends ChangeNotifier {
       final base = conflicted
           ? _qualifiedToolName(entry.server.name, entry.tool.name)
           : entry.tool.name;
+      // Pre-seeded unique originals must not suffix as a self-collision.
       if (!conflicted) {
         usedNames.remove(entry.tool.name);
       }

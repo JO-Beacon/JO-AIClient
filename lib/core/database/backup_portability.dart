@@ -93,6 +93,12 @@ final class BackupPortability {
       await database.customStatement(
         "DELETE FROM extension_entity_rows WHERE kind = 'externalMounts';",
       );
+      // 草稿、新会话草稿、分享回执与私有附件记录只属于这台设备，不随备份流转。
+      await database.customStatement(
+        "DELETE FROM extension_entity_rows WHERE kind IN ('composerDraft',"
+        "'composerNewEntry','composerShareReceipt','composerPrivateFile',"
+        "'composerPublishedFile');",
+      );
       // Chat history remains readable, but imported chats cannot inherit a
       // directory grant or silently authorize shell execution on this device.
       await database.customStatement('''
