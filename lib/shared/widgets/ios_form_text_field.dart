@@ -17,6 +17,7 @@ class IosFormTextField extends StatelessWidget {
     this.keyboardType,
     this.textAlign,
     this.autofocus = false,
+    this.obscureText = false,
     this.enabled = true,
     this.onChanged,
     this.onSubmitted,
@@ -28,6 +29,7 @@ class IosFormTextField extends StatelessWidget {
     this.textCapitalization = TextCapitalization.none,
     this.autocorrect = true,
     this.enableSuggestions = true,
+    this.editorBuilder,
   });
 
   final String label;
@@ -41,6 +43,7 @@ class IosFormTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final TextAlign? textAlign;
   final bool autofocus;
+  final bool obscureText;
   final bool enabled;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
@@ -52,6 +55,10 @@ class IosFormTextField extends StatelessWidget {
   final TextCapitalization textCapitalization;
   final bool autocorrect;
   final bool enableSuggestions;
+
+  /// 替换内部输入框（用于长文本按行编辑器）。为空时保持原来的 [TextField]。
+  /// 外壳（标签、底色、间距）仍由本组件负责。
+  final Widget Function(BuildContext context)? editorBuilder;
 
   bool get _useInlineLabel => inlineLabel ?? (maxLines == 1);
 
@@ -67,7 +74,7 @@ class IosFormTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fieldBg = context.appColors.surfaceFill;
+    final fieldBg = context.appColors.surfaceCardFill;
     final labelColor = cs.onSurface.withValues(alpha: 0.85);
     final valueColor = cs.onSurface.withValues(alpha: enabled ? 0.92 : 0.55);
     final hintColor = cs.onSurface.withValues(alpha: isDark ? 0.42 : 0.46);
@@ -88,54 +95,66 @@ class IosFormTextField extends StatelessWidget {
       controller.selection = TextSelection.collapsed(offset: len);
     }
 
-    Widget field = TextField(
-      controller: controller,
-      maxLines: maxLines,
-      minLines: minLines,
-      autofocus: autofocus,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      textAlign: textAlign ?? _defaultTextAlign(),
-      textAlignVertical: maxLines == 1
-          ? TextAlignVertical.center
-          : TextAlignVertical.top,
-      textInputAction: textInputAction,
-      textCapitalization: textCapitalization,
-      autocorrect: autocorrect,
-      smartDashesType: autocorrect ? null : SmartDashesType.disabled,
-      smartQuotesType: autocorrect ? null : SmartQuotesType.disabled,
-      enableSuggestions: enableSuggestions,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
-      inputFormatters: inputFormatters,
-      onTap: cursorToEndOnTap
-          ? () {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                try {
-                  moveCursorToEnd();
-                } catch (_) {}
-              });
-            }
-          : null,
-      style: TextStyle(
-        fontSize: 15,
-        fontWeight: AppFontWeights.medium,
-        color: valueColor,
-        height: maxLines > 1 ? 1.25 : 1.15,
-      ),
-      decoration: InputDecoration(
-        isDense: true,
-        isCollapsed: true,
-        hintText: hintText,
-        hintStyle: TextStyle(
-          fontSize: 15,
-          fontWeight: AppFontWeights.medium,
-          color: hintColor,
-        ),
-        border: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
-      ),
-    );
+    Widget field =
+        editorBuilder?.call(context) ??
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          minLines: minLines,
+          autofocus: autofocus,
+          obscureText: obscureText,
+          enabled: enabled,
+          keyboardType: keyboardType,
+          textAlign: textAlign ?? _defaultTextAlign(),
+          textAlignVertical: maxLines == 1
+              ? TextAlignVertical.center
+              : TextAlignVertical.top,
+          textInputAction: textInputAction,
+          textCapitalization: textCapitalization,
+          autocorrect: autocorrect,
+          smartDashesType: autocorrect ? null : SmartDashesType.disabled,
+          smartQuotesType: autocorrect ? null : SmartQuotesType.disabled,
+          enableSuggestions: enableSuggestions,
+          onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          inputFormatters: inputFormatters,
+          onTap: cursorToEndOnTap
+              ? () {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    try {
+                      moveCursorToEnd();
+                    } catch (_) {}
+                  });
+                }
+              : null,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: AppFontWeights.medium,
+            color: valueColor,
+            height: maxLines > 1 ? 1.25 : 1.0,
+          ),
+          // 单行时强制行盒高 1.0：不靠行高“凑”居中，不同字体下基线才稳。
+          strutStyle: maxLines == 1
+              ? const StrutStyle(
+                  fontSize: 15,
+                  height: 1.0,
+                  leading: 0,
+                  forceStrutHeight: true,
+                )
+              : null,
+          decoration: InputDecoration(
+            isDense: true,
+            isCollapsed: maxLines > 1,
+            hintText: hintText,
+            hintStyle: TextStyle(
+              fontSize: 15,
+              fontWeight: AppFontWeights.medium,
+              color: hintColor,
+            ),
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.zero,
+          ),
+        );
 
     if (selectAllOnFocus || cursorToEndOnFocus) {
       field = Focus(

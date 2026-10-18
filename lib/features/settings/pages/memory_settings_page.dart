@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:Kelivo/theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
+import '../../../core/models/memory_entry.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/memory/memory_prompts.dart';
 import '../../../desktop/setting/memory_dialogs.dart';
@@ -11,9 +12,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/snackbar.dart';
+import '../widgets/memory_ui.dart';
 import '../../../utils/platform_utils.dart';
 import '../../model/widgets/model_select_sheet.dart';
-import '../widgets/memory_ui.dart';
 import 'legacy_memory_page.dart';
 import 'memory_about_page.dart';
 import 'memory_entries_page.dart';
@@ -134,6 +135,38 @@ class MemorySettingsContent extends StatelessWidget {
             subtitle: l10n.memorySettingsInjectionMaxItemsSubtitle,
             detailText: '${settings.memoryInjectionMaxItems}',
             onTap: () => _pickMemoryInjectionMaxItems(context),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _RowText(
+                  title: l10n.memorySettingsFullInjectionTypesTitle,
+                  subtitle: l10n.memorySettingsFullInjectionTypesSubtitle,
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final type in MemoryType.values)
+                      MemorySelectChip(
+                        label: memoryTypeLabel(l10n, type),
+                        selected: settings.memoryFullInjectionTypes.contains(
+                          type,
+                        ),
+                        onTap: () {
+                          final types = settings.memoryFullInjectionTypes
+                              .toSet();
+                          if (!types.remove(type)) types.add(type);
+                          settings.setMemoryFullInjectionTypes(types);
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -851,7 +884,7 @@ class _PromptField extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.appColors.surfaceCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.28)),
+        border: Border.all(color: context.appColors.fieldBorder),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: TextField(

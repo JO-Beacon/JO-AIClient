@@ -27,6 +27,10 @@ import '../../../utils/app_directories.dart';
 import '../backup/backup_isolate_runner.dart';
 import '../backup/backup_task_progress.dart';
 import '../api/providers/claude/claude_container.dart';
+import '../api/providers/claude/claude_history.dart';
+import '../api/providers/claude/claude_thinking_recovery.dart';
+import '../api/providers/google/gemini_thought_signature.dart';
+import '../api/providers/openai/responses_history.dart';
 import '../../utils/scheduler_idle.dart';
 
 final class LoadedTimelineSlot {
@@ -142,8 +146,10 @@ class ChatService extends ChangeNotifier {
   final Map<String, String> _geminiThoughtSigsCache = {};
   static const Set<String> _providerArtifactKinds = {
     claudeContainerArtifactKind,
-    'claude_turn',
-    'gemini_thought_signature',
+    claudeTurnArtifactKind,
+    claudeThinkingRecoveryArtifactKind,
+    geminiThoughtSignatureArtifactKind,
+    responsesTurnArtifactKind,
   };
   final Map<String, Map<String, String>> _providerArtifactsCache = {};
   final Map<String, Map<String, String>> _temporaryProviderArtifacts = {};
@@ -4672,10 +4678,14 @@ class ChatService extends ChangeNotifier {
       final messages = _messagesCache[conversationId];
       if (conversation == null || messages == null) return null;
       // 仅追加内容时必须保留先前的 ImagePart/FilePart 附件，
-      // 并保持顺序（[Image, Text] 保持为 [Image, Text(new)]）。
+      // 并保持顺序（[Image, Text] 保持为 [Image, Text(new)]）；
+      // 多个正文槽同样按原长重分布。
       final resolvedParts =
           parts ??
-          ChatMessage.partsWithReplacedText(temporaryOriginal.parts, content);
+          ChatMessage.partsWithRedistributedText(
+            temporaryOriginal.parts,
+            content,
+          );
       final derivedReasoning = ChatMessage.reasoningTextFromParts(
         resolvedParts,
       );
@@ -4713,6 +4723,29 @@ class ChatService extends ChangeNotifier {
         createdAt: newMsg.timestamp,
       );
       _temporaryConversationTrees[conversationId] = updatedTree;
+      // 分支继承原生记录：内容没变就整套照搬；只改正文时重分布 Claude 轮次
+      // 里的文本槽；恢复记录始终继承。
+      final preserveArtifacts =
+          parts == null && content == temporaryOriginal.content;
+      final artifacts = _temporaryProviderArtifacts[messageId];
+      if (artifacts != null) {
+        final inherited = <String, String>{};
+        for (final entry in artifacts.entries) {
+          final payload =
+              preserveArtifacts ||
+                  entry.key == claudeThinkingRecoveryArtifactKind
+              ? entry.value
+              : parts == null && entry.key == claudeTurnArtifactKind
+              ? editClaudeTurnText(
+                  entry.value,
+                  content,
+                  originalContent: temporaryOriginal.content,
+                )
+              : null;
+          if (payload != null) inherited[entry.key] = payload;
+        }
+        _temporaryProviderArtifacts[newMsg.id] = inherited;
+      }
       messages.add(newMsg);
       conversation.messageIds.add(newMsg.id);
       conversation.updatedAt = DateTime.now();
@@ -4730,6 +4763,7 @@ class ChatService extends ChangeNotifier {
     );
     if (result == null) return null;
     final newMsg = result.message;
+    await _cacheMessageArtifacts([newMsg]);
     if (_messageCanOwnAssets(newMsg)) {
       await _synchronizeMessageAssetsBestEffort(newMsg);
     }

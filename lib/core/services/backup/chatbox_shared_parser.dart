@@ -4,6 +4,7 @@ import '../../models/chat_message.dart';
 import '../../models/conversation_tree.dart';
 import '../../models/message_part.dart';
 import '../../utils/multimodal_input_utils.dart';
+import '../../../utils/newline_normalization.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import 'backup_cancel_token.dart';
 
@@ -430,7 +431,7 @@ abstract final class ChatboxSharedParser {
     }
 
     void addText(String s) {
-      final t = s.replaceAll('\r\n', '\n');
+      final t = normalizeNewlines(s);
       if (t.trim().isEmpty) return;
       if (pendingContentNewline && textChunks.isEmpty) {
         textChunks.add('');
@@ -493,7 +494,7 @@ abstract final class ChatboxSharedParser {
             addText((part['text'] ?? '').toString());
             break;
           case 'reasoning':
-            final t = (part['text'] ?? '').toString();
+            final t = normalizeNewlines((part['text'] ?? '').toString());
             if (t.trim().isNotEmpty) {
               flushText();
               out.add(ReasoningPart(t));
@@ -528,7 +529,9 @@ abstract final class ChatboxSharedParser {
     // v1.21.1 仍可能保留已弃用的 reasoningContent；它不能因为
     // contentParts 缺失而随正文一起丢失。旧字段没有交错位置信息，
     // 因此统一放在正文之前，保持 reasoning 与正文的结构化边界。
-    final legacyReasoning = (msg['reasoningContent'] ?? '').toString();
+    final legacyReasoning = normalizeNewlines(
+      (msg['reasoningContent'] ?? '').toString(),
+    );
     if (legacyReasoning.trim().isNotEmpty &&
         !out.any((part) => part is ReasoningPart)) {
       flushText();

@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../search_service.dart';
+import '../web_fetch.dart';
 
 /// Firecrawl Search（v2）。托管的 `/v2/search` 接受无 key 请求；
 /// Bearer API key 是可选的，仅用于获得更高限流额度。
-/// 有意不实现 Scrape。
-class FirecrawlSearchService extends SearchService<FirecrawlOptions> {
+class FirecrawlSearchService extends SearchService<FirecrawlOptions>
+    implements WebFetchCapable<FirecrawlOptions> {
   FirecrawlSearchService({super.client});
 
   @override
@@ -100,6 +101,47 @@ class FirecrawlSearchService extends SearchService<FirecrawlOptions> {
       return SearchResult(items: items.take(commonOptions.resultSize).toList());
     } catch (e) {
       throw Exception('Firecrawl search failed: $e');
+    }
+  }
+
+  @override
+  Future<WebFetchPage> fetch({
+    required String url,
+    required SearchCommonOptions commonOptions,
+    required FirecrawlOptions serviceOptions,
+  }) async {
+    try {
+      final apiKey = serviceOptions
+          .effectiveApiKey(serviceOptions.apiKey)
+          .trim();
+      final endpoint = siblingFetchEndpoint(
+        serviceOptions.resolvedUrl,
+        searchPath: '/search',
+        fetchPath: '/scrape',
+      );
+      final data = await postFetchJson(
+        Uri.parse(endpoint),
+        headers: {if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey'},
+        body: {
+          'url': url,
+          'formats': ['markdown'],
+          'onlyMainContent': true,
+        },
+        commonOptions: commonOptions,
+      );
+      if (data['success'] != true) {
+        throw Exception(data['error'] ?? 'scrape failed');
+      }
+      final page = (data['data'] as Map).cast<String, dynamic>();
+      final metadata = (page['metadata'] as Map?)?.cast<String, dynamic>();
+      final title = metadata?['title'];
+      return WebFetchPage(
+        url: (metadata?['url'] ?? metadata?['sourceURL'] ?? url).toString(),
+        title: (title is List ? title.firstOrNull : title)?.toString() ?? '',
+        content: (page['markdown'] ?? '').toString(),
+      );
+    } catch (e) {
+      throw Exception('Firecrawl fetch failed: $e');
     }
   }
 }

@@ -96,6 +96,9 @@ class ChatCompletionsStreamDecoder implements StreamChunkDecoder {
   }
 
   void _parseEvent(Map<String, dynamic> obj, List<StreamChunk> chunks) {
+    // 工具调用块与正文块分开收集：一条完整消息的 SSE 事件可能同时带上
+    // 思考、正文与调用，必须按与分散 delta 相同的顺序落盘。
+    final toolChunks = <StreamChunk>[];
     var content = '';
     String? reasoning;
     final pendingImages = <dynamic>[];
@@ -125,23 +128,25 @@ class ChatCompletionsStreamDecoder implements StreamChunkDecoder {
           if (wantsImageOutput) {
             pendingImages.addAll(_imageItems(delta));
           }
-          _accumulateToolCalls(delta['tool_calls'], chunks);
+          _accumulateToolCalls(delta['tool_calls'], toolChunks);
         }
         if (message is Map) {
           final rdMsg = message['reasoning_details'];
           if (rdMsg is List && rdMsg.isNotEmpty) {
             _addReasoningDetails(rdMsg);
           }
+          // 推理字段与 content 是否存在无关：只有推理、没有正文的响应
+          // 同样要把思考交给上层。
+          final rcMsg = message['reasoning_content'] ?? message['reasoning'];
+          if (rcMsg is String && rcMsg.isNotEmpty) {
+            if (needsReasoningEcho) reasoningEcho += rcMsg;
+            reasoning ??= rcMsg;
+          }
           if (message['content'] != null) {
             final messageContent = _messageText(message['content']);
             if (messageContent.isNotEmpty) {
               content += messageContent;
               approxCompletionChars += messageContent.length;
-            }
-            final rcMsg = message['reasoning_content'] ?? message['reasoning'];
-            if (rcMsg is String && rcMsg.isNotEmpty) {
-              if (needsReasoningEcho) reasoningEcho += rcMsg;
-              reasoning ??= rcMsg;
             }
             if (wantsImageOutput && message['content'] is List) {
               pendingImages.addAll([
@@ -153,7 +158,7 @@ class ChatCompletionsStreamDecoder implements StreamChunkDecoder {
             }
           }
           if (delta is! Map || delta['tool_calls'] == null) {
-            _ingestCompleteToolCalls(message['tool_calls'], chunks);
+            _ingestCompleteToolCalls(message['tool_calls'], toolChunks);
           }
         }
       }
@@ -214,6 +219,7 @@ class ChatCompletionsStreamDecoder implements StreamChunkDecoder {
     if (pendingImages.isNotEmpty) {
       chunks.addAll(_emitImages(pendingImages));
     }
+    chunks.addAll(toolChunks);
     if (finishReason == 'tool_calls') {
       chunks.addAll(_endOpenTools());
     }

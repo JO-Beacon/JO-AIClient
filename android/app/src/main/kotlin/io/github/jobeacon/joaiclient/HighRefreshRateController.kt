@@ -19,9 +19,11 @@ import android.view.Window
  *   `preferredDisplayModeId`. Some vendor ROMs (observed on ColorOS) ignore the
  *   frame-rate vote below, so this is the only path that actually reaches the
  *   high-refresh mode there.
- * - [adaptive] on: vote with `Surface.setFrameRate` on API 30+, leaving mode
- *   selection to Android for adaptive refresh. Kept as an opt-in because it is
- *   the upstream behaviour and can save power on adaptive displays.
+ * - [adaptive] on: on API 31+ vote with `Surface.setFrameRate` and leave mode
+ *   selection to Android for adaptive refresh. API 30 also pins the same-resolution
+ *   highest mode first, because some Android 11 vendor builds accept the vote
+ *   while continuing to deliver 60 Hz. Kept as an opt-in because it is the
+ *   upstream behaviour and can save power on adaptive displays.
  *
  * API 24–29 has no frame-rate vote, so the fixed path is always used there.
  */
@@ -99,7 +101,9 @@ internal class HighRefreshRateController(private val window: Window) : SurfaceHo
 
             if (adaptive && Build.VERSION.SDK_INT >= 30) {
                 val surface = view?.holder?.surface?.takeIf { it.isValid } ?: return
-                setWindowMode(0)
+                // Android 11 vendors can accept the Surface vote while still
+                // delivering 60 Hz app vsync, so also pin the mode there.
+                setWindowMode(if (Build.VERSION.SDK_INT == 30) highestMode.modeId else 0)
                 val rate = rateFor(display, highestMode)
                 if (!force && requestedSurface === surface && requestedRate == rate) return
                 val compatibility = if (Build.VERSION.SDK_INT >= 36) {

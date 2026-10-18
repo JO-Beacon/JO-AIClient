@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/models/model_spec.dart';
 import '../../../shared/widgets/context_usage_ring.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../services/context_usage_service.dart';
 import '../../../core/models/reasoning_request.dart';
 import '../../../core/services/api/reasoning/reasoning_level_options.dart';
@@ -274,6 +275,7 @@ class _ChatInputBarState extends State<ChatInputBar>
   InteractiveDrawerController? _hostDrawer;
   final GlobalKey _composerKey = GlobalKey();
   final GlobalKey _textAreaKey = GlobalKey();
+  final _longEditorKey = GlobalKey<LongMessageEditorState>();
   late final AnimationController _expandController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 320),
@@ -763,6 +765,11 @@ class _ChatInputBarState extends State<ChatInputBar>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _expandCheckScheduled = false;
       if (!mounted || _expandedLayout) return;
+      // 按行编辑器没有 RenderEditable，长文本下直接允许展开。
+      if (_longEditorKey.currentState?.usesLineEditor ?? false) {
+        if (!_canExpand) setState(() => _canExpand = true);
+        return;
+      }
       final editable = _findRenderEditable();
       if (editable == null || !editable.hasSize) return;
       // Judge the text at the width it has while the button is shown. The
@@ -773,9 +780,17 @@ class _ChatInputBarState extends State<ChatInputBar>
           ? editable.size.width
           : editable.size.width -
                 (_expandButtonExtent + AppSpacing.xs - AppSpacing.md);
-      final canExpand =
-          editable.getMaxIntrinsicHeight(buttonWidth) >
-          editable.preferredLineHeight * 2.5;
+      final bool canExpand;
+      // 展开按钮已在时，输入框宽度正好是 buttonWidth，直接复用已有布局，
+      // 不再把整篇文本重新排版一遍；只有首次探测才量没按钮时的窄宽度。
+      if (_canExpand) {
+        final height = editable.size.height + editable.maxScrollExtent;
+        canExpand = height > editable.preferredLineHeight * 2.5;
+      } else {
+        canExpand =
+            editable.getMaxIntrinsicHeight(buttonWidth) >
+            editable.preferredLineHeight * 2.5;
+      }
       if (canExpand != _canExpand) setState(() => _canExpand = canExpand);
     });
   }
@@ -808,6 +823,24 @@ class _ChatInputBarState extends State<ChatInputBar>
       } else if (_expandController.isDismissed) {
         _expandFromHeight = composer.size.height;
         _textAreaChrome = textArea.size.height - editable.size.height;
+      }
+    } else if (composer is RenderBox &&
+        composer.hasSize &&
+        textArea is RenderBox &&
+        textArea.hasSize &&
+        (_longEditorKey.currentState?.usesLineEditor ?? false)) {
+      // 按行编辑器：用单行高度推算收起时的文本高度。
+      final collapsedText =
+          _longEditorKey.currentState!.preferredLineHeight * _collapsedMaxLines;
+      if (!expanded) {
+        _expandFromHeight =
+            composer.size.height -
+            textArea.size.height +
+            _textAreaChrome +
+            collapsedText;
+      } else if (_expandController.isDismissed) {
+        _expandFromHeight = composer.size.height;
+        _textAreaChrome = textArea.size.height - collapsedText;
       }
     }
     if (expanded && _expandController.isDismissed) {
@@ -1450,6 +1483,13 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   // 程序化编辑（例如 Shift+Enter 插入）后保持光标可见
   void _ensureCaretVisible() {
+    // 按行编辑器没有 EditableTextState，交给它自己把光标滚进视野。
+    if (_longEditorKey.currentState?.usesLineEditor ?? false) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _longEditorKey.currentState?.ensureCaretVisible();
+      });
+      return;
+    }
     try {
       final selection = _controller.selection;
       if (!selection.isValid) return;
@@ -1470,7 +1510,12 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   // 为 contextMenuBuilder 使用实例方法，避免每次构建重新创建回调导致闪烁。
   // 参见：https://github.com/flutter/flutter/issues/150551
-  Widget _buildContextMenu(BuildContext context, EditableTextState state) {
+  Widget _buildMessageContextMenu(
+    BuildContext context,
+    TextSelectionToolbarAnchors anchors,
+    List<ContextMenuButtonItem> defaultItems,
+    VoidCallback hideToolbar,
+  ) {
     // 应用生命周期转换期间抑制上下文菜单，避免闪烁
     if (_suppressContextMenu) {
       return const SizedBox.shrink();
@@ -1501,7 +1546,7 @@ class _ChatInputBarState extends State<ChatInputBar>
                     selection: TextSelection.collapsed(offset: start),
                   );
                 } catch (_) {}
-                state.hideToolbar();
+                hideToolbar();
               },
               label: materialL10n.cutButtonLabel,
             ),
@@ -1519,7 +1564,7 @@ class _ChatInputBarState extends State<ChatInputBar>
                   final text = value.text.substring(start, end);
                   await Clipboard.setData(ClipboardData(text: text));
                 } catch (_) {}
-                state.hideToolbar();
+                hideToolbar();
               },
               label: materialL10n.copyButtonLabel,
             ),
@@ -1531,7 +1576,7 @@ class _ChatInputBarState extends State<ChatInputBar>
           ContextMenuButtonItem(
             onPressed: () {
               _handlePasteFromClipboard();
-              state.hideToolbar();
+              hideToolbar();
             },
             label: materialL10n.pasteButtonLabel,
           ),
@@ -1542,7 +1587,7 @@ class _ChatInputBarState extends State<ChatInputBar>
           ContextMenuButtonItem(
             onPressed: () {
               _insertNewlineAtCursor();
-              state.hideToolbar();
+              hideToolbar();
             },
             label: appL10n.chatInputBarInsertNewline,
           ),
@@ -1559,7 +1604,7 @@ class _ChatInputBarState extends State<ChatInputBar>
                     extentOffset: value.text.length,
                   );
                 } catch (_) {}
-                state.hideToolbar();
+                hideToolbar();
               },
               label: materialL10n.selectAllButtonLabel,
             ),
@@ -1567,24 +1612,24 @@ class _ChatInputBarState extends State<ChatInputBar>
         }
       } catch (_) {}
       return AdaptiveTextSelectionToolbar.buttonItems(
-        anchors: state.contextMenuAnchors,
+        anchors: anchors,
         buttonItems: items,
       );
     }
 
-    final items = state.contextMenuButtonItems
+    final items = defaultItems
         .map((item) {
           if (item.type != ContextMenuButtonType.paste) return item;
           return item.copyWith(
             onPressed: () {
               unawaited(_handlePasteFromClipboard());
-              state.hideToolbar();
+              hideToolbar();
             },
           );
         })
         .toList(growable: false);
     return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: state.contextMenuAnchors,
+      anchors: anchors,
       buttonItems: items,
     );
   }
@@ -2953,6 +2998,7 @@ class _ChatInputBarState extends State<ChatInputBar>
     final hasText = _controller.text.trim().isNotEmpty;
     final hasImages = _images.isNotEmpty;
     final hasDocs = _docs.isNotEmpty;
+    final hasInput = hasText || hasImages || hasDocs;
     _supportsImagesApiRouting(context);
     final bool isMobileLayout =
         MediaQuery.sizeOf(context).width < AppBreakpoints.tablet;
@@ -3226,7 +3272,8 @@ class _ChatInputBarState extends State<ChatInputBar>
                                                 // onSecondaryTapDown: (details) {
                                                 //   // _showDesktopContextMenu(details.globalPosition);
                                                 // },
-                                                child: TextField(
+                                                child: LongMessageEditor(
+                                                  key: _longEditorKey,
                                                   controller: _controller,
                                                   focusNode: widget.focusNode,
                                                   onChanged: _onTextChanged,
@@ -3258,8 +3305,6 @@ class _ChatInputBarState extends State<ChatInputBar>
                                                   expands: expandedLayout,
                                                   // On mobile, optionally show "Send" on the return key and submit on tap.
                                                   // Still keep multiline so pasted text preserves line breaks.
-                                                  keyboardType:
-                                                      TextInputType.multiline,
                                                   textInputAction: enterToSend
                                                       ? TextInputAction.send
                                                       : TextInputAction.newline,
@@ -3272,7 +3317,12 @@ class _ChatInputBarState extends State<ChatInputBar>
                                                   // caused by recreating the callback on every build.
                                                   // See: https://github.com/flutter/flutter/issues/150551
                                                   contextMenuBuilder:
-                                                      _buildContextMenu,
+                                                      _buildMessageContextMenu,
+                                                  onKeyEvent: _handleKeyEvent,
+                                                  // 开关关闭时始终用原生输入框（保持原有行为）。
+                                                  enabled: context
+                                                      .watch<SettingsProvider>()
+                                                      .useLongMessageEditor,
                                                   autofocus: false,
                                                   decoration: InputDecoration(
                                                     hintText: _hint(context),
@@ -3461,12 +3511,13 @@ class _ChatInputBarState extends State<ChatInputBar>
                                                   ],
                                                   _CompactSendButton(
                                                     enabled:
-                                                        (hasText ||
-                                                            hasImages ||
-                                                            hasDocs) &&
-                                                        !_hasUnreadyImages &&
-                                                        !widget.loading,
-                                                    loading: widget.loading,
+                                                        hasInput &&
+                                                        !_composerLocked &&
+                                                        !_hasUnreadyImages,
+                                                    loading:
+                                                        widget.loading &&
+                                                        (!hasInput ||
+                                                            _composerLocked),
                                                     onSend: _handleSend,
                                                     onStop: widget.loading
                                                         ? widget.onStop

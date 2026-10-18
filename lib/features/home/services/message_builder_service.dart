@@ -36,12 +36,17 @@ import '../../../core/services/workspace/workspace_runtime.dart';
 import '../../../core/services/workspace/workspace_tools_service.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/providers/world_book_provider.dart';
+import '../../../core/services/api/providers/claude/claude_container.dart';
+import '../../../core/services/api/providers/claude/claude_history.dart';
+import '../../../core/services/api/providers/claude/claude_thinking_recovery.dart';
 import '../../../core/services/api/builtin_tools.dart';
 import '../../../core/models/assistant_regex.dart';
 import '../../../core/utils/multimodal_input_utils.dart';
 import '../../../utils/assistant_regex.dart';
 import '../../../utils/markdown_media_sanitizer.dart';
 import 'ocr_service.dart';
+import 'assistant_tool_history.dart';
+import '../../../core/services/api/providers/openai/responses_history.dart';
 
 /// §7.6 记忆前缀解析结果。
 /// [persistHash] 区分“不写哈希”与“写入 [hash]”。
@@ -309,10 +314,17 @@ class MessageBuilderService {
   /// Build API messages list from current conversation state.
   ///
   /// 应用截断。调用方必须传入当前消息树活动路径；附件来自消息部分。
+  ///
+  /// [preserveToolTurns] 让 OpenAI 兼容的工具轮次按原顺序重建；
+  /// [responsesScope] 命中时改用原生 Responses 历史；
+  /// [claudeSource] 保证普通 Claude 块只挂在生成它的模型上。
   List<Map<String, dynamic>> buildApiMessages({
     required List<ChatMessage> messages,
     required Conversation? currentConversation,
     bool includeToolMessages = false,
+    bool preserveToolTurns = false,
+    ResponsesReplayScope? responsesScope,
+    ({String providerId, String modelId})? claudeSource,
 
     /// 上游并行版本选择模型保留参数：本仓库活动分支已由消息树表达。
     Map<String, int>? versionSelections,
@@ -328,14 +340,85 @@ class MessageBuilderService {
 
     final out = <Map<String, dynamic>>[];
 
+    final thinkingRecovery = ClaudeThinkingRecovery();
     for (final m in source) {
+      // 只在构建工具历史时收集：普通正文轮次不参与回放。
+      if (includeToolMessages && !preserveToolTurns && m.role == 'assistant') {
+        thinkingRecovery.readArtifact(
+          providerArtifactLookup?.call(m, claudeThinkingRecoveryArtifactKind),
+        );
+      }
+      // 原生 Responses 条目优先：命中时本轮由原生历史重建。
+      if (m.role == 'assistant' &&
+          includeToolMessages &&
+          responsesScope != null) {
+        final history = buildResponsesHistory(
+          payload: providerArtifactLookup?.call(m, responsesTurnArtifactKind),
+          scope: responsesScope,
+          toolEvents: chatService.getToolEvents(m.id),
+          content: m.content,
+        );
+        if (history != null) {
+          for (final message in history) {
+            ContextSegmentTags.replaceWithSingle(
+              message,
+              source: message['role'] == 'tool'
+                  ? ContextSource.toolResult
+                  : message['tool_calls'] is List
+                  ? ContextSource.toolCall
+                  : ContextSource.chatHistory,
+              length: (message['content'] ?? '').toString().length,
+            );
+          }
+          out.addAll(history);
+          continue;
+        }
+      }
+      var content = m.content;
+      var hasClaudeToolTurn = false;
+      // 带签名的原生块只属于生成它的供应商与模型；工具轮次的原生记录
+      // 挂在下方的工具前助手消息上。
+      final plainClaudeTurn =
+          includeToolMessages &&
+              !preserveToolTurns &&
+              m.role == 'assistant' &&
+              claudeSource != null &&
+              m.providerId == claudeSource.providerId &&
+              m.modelId == claudeSource.modelId &&
+              chatService.getToolEvents(m.id).isEmpty
+          ? providerArtifactLookup?.call(m, claudeTurnArtifactKind)
+          : null;
       String? assistantReasoningContent;
       dynamic reasoningDetails;
       if (m.role == 'assistant') {
         assistantReasoningContent = _reasoningContentForToolContinuation(m);
         reasoningDetails = _reasoningDetailsForApi(m);
       }
-      if (includeToolMessages && m.role == 'assistant') {
+      if (includeToolMessages && m.role == 'assistant' && preserveToolTurns) {
+        // OpenAI 兼容轮次：按持久化部件重建每一轮的调用与结果。
+        final history = buildAssistantToolHistory(m.parts);
+        for (final message in history.messages) {
+          ContextSegmentTags.replaceWithSingle(
+            message,
+            source: message['role'] == 'tool'
+                ? ContextSource.toolResult
+                : ContextSource.toolCall,
+            length: (message['content'] ?? '').toString().length,
+          );
+        }
+        out.addAll(history.messages);
+        content = history.content;
+        // 部件的顺序与字节由持久化数据决定；标量只跨轮汇总，
+        // 不能在这里重复。
+        if (m.parts.any(
+          (part) => part is ReasoningPart || part is ToolCallPart,
+        )) {
+          assistantReasoningContent = history.reasoning;
+        }
+        if (content.isEmpty && history.reasoning == null) {
+          reasoningDetails = null;
+        }
+      } else if (includeToolMessages && m.role == 'assistant') {
         final events = chatService.getToolEvents(m.id);
         if (events.isNotEmpty) {
           // 只有每个调用都有结果后，工具调用历史才有效。
@@ -388,6 +471,25 @@ class MessageBuilderService {
                 'content': '\n\n',
                 'tool_calls': calls,
               };
+              // 原生记录挂在这条合成的“工具前助手消息”上，
+              // 否则续跑时 Claude 会缺少带签名的原生块。
+              final turn = providerArtifactLookup?.call(
+                m,
+                claudeTurnArtifactKind,
+              );
+              if (turn != null && turn.isNotEmpty) {
+                assistantToolMessage[multimodalInternalClaudeTurnKey] = turn;
+                hasClaudeToolTurn = claudeSource != null;
+              }
+              // 跑过代码却没有最终消息的轮次，容器也挂在这里。
+              final container = providerArtifactLookup?.call(
+                m,
+                claudeContainerArtifactKind,
+              );
+              if (container != null && container.isNotEmpty) {
+                assistantToolMessage[multimodalInternalClaudeContainerKey] =
+                    container;
+              }
               if (assistantReasoningContent?.isNotEmpty == true) {
                 assistantToolMessage['reasoning_content'] =
                     assistantReasoningContent;
@@ -417,7 +519,6 @@ class MessageBuilderService {
         }
       }
 
-      var content = m.content;
       if (m.role == 'assistant' && geminiThoughtSignatureHandler != null) {
         content = geminiThoughtSignatureHandler!(m, content);
       }
@@ -427,6 +528,10 @@ class MessageBuilderService {
       // 因此还要保留仍包含可用 ImagePart/FilePart 的消息，
       // 供 processUserMessagesForApi 注入文本。
       if (content.isEmpty &&
+          (assistantReasoningContent?.isEmpty ?? true) &&
+          reasoningDetails == null &&
+          (plainClaudeTurn?.isEmpty ?? true) &&
+          !hasClaudeToolTurn &&
           mediaRefs.isEmpty &&
           !_hasUsableAttachmentPart(m)) {
         continue;
@@ -440,13 +545,15 @@ class MessageBuilderService {
           message[multimodalInternalDocumentPathsKey] = documentRefs;
         }
       } else {
-        final container = providerArtifactLookup?.call(m, 'claude_container');
+        if (plainClaudeTurn?.isNotEmpty == true) {
+          message[multimodalInternalClaudeTurnKey] = plainClaudeTurn;
+        }
+        final container = providerArtifactLookup?.call(
+          m,
+          claudeContainerArtifactKind,
+        );
         if (container != null && container.isNotEmpty) {
           message[multimodalInternalClaudeContainerKey] = container;
-        }
-        final turn = providerArtifactLookup?.call(m, 'claude_turn');
-        if (turn != null && turn.isNotEmpty) {
-          message[multimodalInternalClaudeTurnKey] = turn;
         }
       }
       if (mediaRefs.isNotEmpty) {
@@ -466,6 +573,12 @@ class MessageBuilderService {
       out.add(message);
     }
 
+    // 把累计的恢复记录挂到最后一条消息上，这样后续的上下文裁剪
+    // 与纯推理的助手回复都不会把它弄丢。
+    final recoveryArtifact = thinkingRecovery.artifact;
+    if (out.isNotEmpty && recoveryArtifact != null) {
+      out.last[multimodalInternalClaudeThinkingRecoveryKey] = recoveryArtifact;
+    }
     return out;
   }
 
@@ -595,7 +708,7 @@ class MessageBuilderService {
 
   String _reasoningContentForToolContinuation(ChatMessage message) {
     String pick(ChatMessage candidate) {
-      final direct = (candidate.reasoningText ?? '').trim();
+      final direct = candidate.reasoningText ?? '';
       if (direct.isNotEmpty) return direct;
 
       final raw = (candidate.reasoningSegmentsJson ?? '').trim();
@@ -611,10 +724,10 @@ class MessageBuilderService {
         final parts = <String>[];
         for (final item in segmentsRaw) {
           if (item is! Map) continue;
-          final text = (item['text'] ?? '').toString().trim();
+          final text = (item['text'] ?? '').toString();
           if (text.isNotEmpty) parts.add(text);
         }
-        return parts.join('\n').trim();
+        return parts.join();
       } catch (_) {
         return '';
       }
@@ -1607,6 +1720,8 @@ class MessageBuilderService {
     final maxItems =
         resolvedSettings?.memoryInjectionMaxItems ??
         SettingsProvider.defaultMemoryInjectionMaxItems;
+    final fullInjectionTypes =
+        resolvedSettings?.memoryFullInjectionTypes ?? const <MemoryType>{};
 
     final fields = await repo.readProfileFields();
     final totalByType = await repo.countVisibleMemoriesByType(
@@ -1627,6 +1742,7 @@ class MessageBuilderService {
       totalByType: totalByType,
       lang: lang,
       maxItems: maxItems,
+      fullInjectionTypes: fullInjectionTypes,
     );
     return (
       prefix: MemoryBlockBuilder.buildFullSnapshotPrefix(
@@ -2327,34 +2443,37 @@ class MessageBuilderService {
         );
       }
 
-      // AT_DEPTH：从末尾按深度插入（depth=1 表示在最后一条消息之前）。
+      // AT_DEPTH：depth=0 追加到末尾；depth=1 表示插在最后一条消息之前。
       final atDepthInjections = byPosition[WorldBookInjectionPosition.atDepth];
       if (atDepthInjections != null && atDepthInjections.isNotEmpty) {
         final byDepth = <int, List<WorldBookEntry>>{};
         for (final e in atDepthInjections) {
-          final depth = (e.injectDepth <= 0 ? 1 : e.injectDepth)
-              .clamp(1, 200)
-              .toInt();
+          final depth = e.injectDepth.clamp(0, 200).toInt();
           byDepth.putIfAbsent(depth, () => <WorldBookEntry>[]).add(e);
         }
 
         final depths = byDepth.keys.toList(growable: false)
           ..sort((a, b) => b.compareTo(a));
+        // 以“插入前的长度”为基准，多个超出长度的深度被压到会话开头后
+        // 彼此仍保持原有先后顺序。
+        final originalLength = apiMessages.length;
+        final historyStart = apiMessages
+            .takeWhile((message) => message['role'] == 'system')
+            .length;
+        var insertedCount = 0;
 
         for (final depth in depths) {
           final injections = byDepth[depth] ?? const <WorldBookEntry>[];
-          var insertIndex = (apiMessages.length - depth).clamp(
-            0,
-            apiMessages.length,
-          );
+          var insertIndex =
+              (originalLength - depth).clamp(historyStart, originalLength) +
+              insertedCount;
           insertIndex = findSafeInsertIndex(apiMessages, insertIndex);
-          apiMessages.insertAll(
-            insertIndex,
-            createMergedInjectionMessages(
-              injections,
-              position: WorldBookInjectionPosition.atDepth,
-            ),
+          final messages = createMergedInjectionMessages(
+            injections,
+            position: WorldBookInjectionPosition.atDepth,
           );
+          apiMessages.insertAll(insertIndex, messages);
+          insertedCount += messages.length;
         }
       }
     } catch (_) {}
@@ -2404,28 +2523,23 @@ class MessageBuilderService {
       if (apiMessages.isNotEmpty && apiMessages.first['role'] == 'system') {
         startIdx = 1;
       }
-      final tail = apiMessages.sublist(startIdx);
-      if (tail.length > keep) {
-        final trimmed = tail.sublist(tail.length - keep);
-        apiMessages
-          ..removeRange(startIdx, apiMessages.length)
-          ..addAll(trimmed);
+      var cut = apiMessages.length - keep;
+      if (cut <= startIdx) return;
+      // 消息条数是软上限：宁可多留，也要保住用户请求连同它整轮的
+      // 助手／工具交换，而不是从一轮中间开始发。
+      while (cut > startIdx && apiMessages[cut]['role'] != 'user') {
+        cut--;
       }
-      // 上下文裁剪可能切到工具调用三元组中间；避免发送悬空工具消息。
-      while (apiMessages.length > startIdx &&
-          (apiMessages[startIdx]['role'] ?? '').toString() == 'tool') {
-        apiMessages.removeAt(startIdx);
-      }
+      apiMessages.removeRange(startIdx, cut);
     }
   }
 
   /// 将本地 Markdown 图片链接转换为模型上下文可用的行内 base64。
   Future<void> inlineLocalImages(List<Map<String, dynamic>> apiMessages) async {
     for (int i = 0; i < apiMessages.length; i++) {
-      // view_image 的快照在供应商边界由成功的工具结果元数据解析。
-      // 错误文本里可能含有不可信的图片链接，不能据此读文件。
-      if (apiMessages[i]['role'] == 'tool' &&
-          apiMessages[i]['name'] == 'view_image') {
+      // 带类型的工具图片在供应商边界由工具结果元数据解析。
+      // 这里的 Markdown 要原样留着；工具文本不能作为读文件的凭据。
+      if (apiMessages[i]['role'] == 'tool') {
         continue;
       }
       final s = (apiMessages[i]['content'] ?? '').toString();

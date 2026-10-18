@@ -4504,12 +4504,6 @@ abstract class AppLocalizations {
   /// **'Save as Branch with Replies'**
   String get messageEditPageSaveAsBranchCopyChildren;
 
-  /// No description provided for @messageEditPageHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter message…'**
-  String get messageEditPageHint;
-
   /// No description provided for @messageEditTrimWhitespace.
   ///
   /// In en, this message translates to:
@@ -5007,6 +5001,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cannot open file: {message}'**
   String chatMessageWidgetCannotOpenFile(String message);
+
+  /// No description provided for @chatMessageWidgetWebFetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Read page: {target}'**
+  String chatMessageWidgetWebFetch(String target);
 
   /// No description provided for @chatMessageWidgetOpenFileError.
   ///
@@ -8191,6 +8191,78 @@ abstract class AppLocalizations {
   /// **'General Options'**
   String get searchServicesPageGeneralOptions;
 
+  /// No description provided for @searchServicesPageWebFetchSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Web page reading'**
+  String get searchServicesPageWebFetchSection;
+
+  /// No description provided for @searchServicesPageWebFetchModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Read pages with'**
+  String get searchServicesPageWebFetchModeTitle;
+
+  /// No description provided for @searchServicesPageWebFetchFollow.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow search service'**
+  String get searchServicesPageWebFetchFollow;
+
+  /// No description provided for @searchServicesPageWebFetchFollowValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow search · {name}'**
+  String searchServicesPageWebFetchFollowValue(String name);
+
+  /// No description provided for @searchServicesPageWebFetchFollowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently {name}'**
+  String searchServicesPageWebFetchFollowSubtitle(String name);
+
+  /// No description provided for @searchServicesPageWebFetchLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local'**
+  String get searchServicesPageWebFetchLocal;
+
+  /// No description provided for @searchServicesPageWebFetchLocalSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Free. This device requests the page directly.'**
+  String get searchServicesPageWebFetchLocalSubtitle;
+
+  /// No description provided for @searchServicesPageWebFetchProviderSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Uses this service\'s API key and quota'**
+  String get searchServicesPageWebFetchProviderSubtitle;
+
+  /// No description provided for @searchServicesPageWebFetchOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get searchServicesPageWebFetchOff;
+
+  /// No description provided for @searchServicesPageWebFetchOffSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search only, without reading pages'**
+  String get searchServicesPageWebFetchOffSubtitle;
+
+  /// No description provided for @searchServicesPageWebFetchFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'With web search on, the model can also read full pages. When the search service can\'t read pages, local reading is used, which can\'t handle pages that need JavaScript or block bots.'**
+  String get searchServicesPageWebFetchFooter;
+
+  /// No description provided for @searchServicesPageWebFetchSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Can read web pages'**
+  String get searchServicesPageWebFetchSupported;
+
   /// No description provided for @searchServicesPageAutoTestTitle.
   ///
   /// In en, this message translates to:
@@ -8406,6 +8478,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'API Key'**
   String get searchServicesDialogApiKey;
+
+  /// No description provided for @searchServicesDialogApiKeyOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'API Key (optional)'**
+  String get searchServicesDialogApiKeyOptional;
 
   /// No description provided for @searchServicesDialogModel.
   ///
@@ -8688,6 +8766,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search failed: {message}'**
   String searchServiceEditorTestFailed(String message);
+
+  /// No description provided for @searchServiceEditorTestModeSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchServiceEditorTestModeSearch;
+
+  /// No description provided for @searchServiceEditorTestModeFetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Read page'**
+  String get searchServiceEditorTestModeFetch;
+
+  /// No description provided for @searchServiceEditorTestUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a URL'**
+  String get searchServiceEditorTestUrlHint;
+
+  /// No description provided for @searchServiceEditorTestFetchRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Run test fetch'**
+  String get searchServiceEditorTestFetchRun;
+
+  /// No description provided for @searchServiceEditorTestFetchRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get searchServiceEditorTestFetchRunning;
+
+  /// No description provided for @searchServiceEditorTestFetchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch failed: {message}'**
+  String searchServiceEditorTestFetchFailed(String message);
+
+  /// No description provided for @searchServiceEditorTestFetchStats.
+  ///
+  /// In en, this message translates to:
+  /// **'{characters} characters · {seconds}s'**
+  String searchServiceEditorTestFetchStats(String characters, String seconds);
 
   /// No description provided for @searchServiceEditorResultOpenTooltip.
   ///
@@ -9487,6 +9607,12 @@ abstract class AppLocalizations {
   /// **'Input Box Background Opacity'**
   String get displaySettingsPageChatInputBackgroundOpacityTitle;
 
+  /// No description provided for @displaySettingsPageLongMessageEditorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Line editor for long text'**
+  String get displaySettingsPageLongMessageEditorTitle;
+
   /// No description provided for @displaySettingsPageThemeSettingsTitle.
   ///
   /// In en, this message translates to:
@@ -9708,6 +9834,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Color Palettes'**
   String get themeSettingsPageColorPalettesSection;
+
+  /// No description provided for @themeAdvancedSettingsPageUseLayeredSheetTilesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Layered sheet tiles'**
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle;
+
+  /// No description provided for @themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By default, tiles match the sheet background.'**
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle;
 
   /// No description provided for @themeSettingsPageCustomPaletteName.
   ///
@@ -9936,6 +10074,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Low-latency streaming transcription'**
   String get asrServicesOpenAiSubtitle;
+
+  /// No description provided for @asrServicesGroqSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Whisper segmented transcription'**
+  String get asrServicesGroqSubtitle;
+
+  /// No description provided for @asrServicesMistralSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Voxtral segmented transcription'**
+  String get asrServicesMistralSubtitle;
 
   /// No description provided for @asrServicesDashScopeTitle.
   ///
@@ -10903,6 +11053,12 @@ abstract class AppLocalizations {
   /// **'Neural search with semantic understanding. Great for research and finding specific content.'**
   String get searchProviderExaDescription;
 
+  /// No description provided for @searchProviderExaMcpDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Exa search via MCP. An API key is optional for limited free usage.'**
+  String get searchProviderExaMcpDescription;
+
   /// No description provided for @searchProviderLinkUpDescription.
   ///
   /// In en, this message translates to:
@@ -10945,6 +11101,12 @@ abstract class AppLocalizations {
   /// **'AI search foundation with embeddings, rerankers, web reader, deepsearch, and small language models. Multilingual and multimodal.'**
   String get searchProviderJinaDescription;
 
+  /// No description provided for @searchProviderDeepSeekDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'DeepSeek official web search and page fetch APIs. Uses a DeepSeek API key.'**
+  String get searchProviderDeepSeekDescription;
+
   /// No description provided for @searchServiceNameBingLocal.
   ///
   /// In en, this message translates to:
@@ -10968,6 +11130,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exa'**
   String get searchServiceNameExa;
+
+  /// No description provided for @searchServiceNameExaMcp.
+  ///
+  /// In en, this message translates to:
+  /// **'Exa MCP'**
+  String get searchServiceNameExaMcp;
 
   /// No description provided for @searchServiceNameZhipu.
   ///
@@ -11010,6 +11178,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Jina'**
   String get searchServiceNameJina;
+
+  /// No description provided for @searchServiceNameDeepSeek.
+  ///
+  /// In en, this message translates to:
+  /// **'DeepSeek'**
+  String get searchServiceNameDeepSeek;
 
   /// No description provided for @searchServiceNamePerplexity.
   ///
@@ -12604,8 +12778,20 @@ abstract class AppLocalizations {
   /// No description provided for @memorySettingsInjectionMaxItemsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'When a type exceeds this limit, only the newest items are injected. The rest can be fetched with memory_search_profile. A larger number is more complete but uses more tokens.'**
+  /// **'This limit applies to types not selected for full injection. When a type exceeds this limit, only the newest items are injected. The rest can be fetched with memory_search_profile. A larger number is more complete but uses more tokens.'**
   String get memorySettingsInjectionMaxItemsSubtitle;
+
+  /// No description provided for @memorySettingsFullInjectionTypesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Always inject these types'**
+  String get memorySettingsFullInjectionTypesTitle;
+
+  /// No description provided for @memorySettingsFullInjectionTypesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select one or more types to inject all their active memories visible to the current assistant. These types ignore the item limit and use more context and tokens.'**
+  String get memorySettingsFullInjectionTypesSubtitle;
 
   /// No description provided for @memorySettingsInjectionMaxItemsCustomButton.
   ///
@@ -14880,6 +15066,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'At depth'**
   String get worldBookInjectionPositionAtDepth;
+
+  /// No description provided for @worldBookImportUnsupportedEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported. {count} entries use unsupported SillyTavern features (such as macros, regex, timing, filters, or insertion rules). Their content was kept and they were disabled. Review them before enabling.'**
+  String worldBookImportUnsupportedEntries(int count);
 
   /// No description provided for @worldBookInjectionRoleUser.
   ///
@@ -17191,6 +17383,30 @@ abstract class AppLocalizations {
   /// **'Cancelled'**
   String get backupProgressCancelled;
 
+  /// No description provided for @backupProgressFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Operation failed'**
+  String get backupProgressFailed;
+
+  /// No description provided for @backupProgressFailedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed during: {phase}'**
+  String backupProgressFailedAt(String phase);
+
+  /// No description provided for @backupProgressCopyError.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy error'**
+  String get backupProgressCopyError;
+
+  /// No description provided for @backupProgressErrorCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Error copied'**
+  String get backupProgressErrorCopied;
+
   /// No description provided for @backupProgressCommitting.
   ///
   /// In en, this message translates to:
@@ -18132,18 +18348,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Darker page, brighter cards; both keep theme hue. Turn off to restore the previous look.'**
   String get themeAdvancedSettingsPageUseLayeredSurfacesSubtitle;
-
-  /// No description provided for @themeAdvancedSettingsPageUseLayeredSheetTilesTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Layered sheet tiles'**
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle;
-
-  /// No description provided for @themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'By default, tiles match the sheet background.'**
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle;
 
   /// No description provided for @searchServiceNameKelivo.
   ///
@@ -19344,6 +19548,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not extract the sandbox image.'**
   String get workspaceEnvErrorExtractFailed;
+
+  /// No description provided for @workspaceEnvErrorCleanupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove old sandbox files. Please try again.'**
+  String get workspaceEnvErrorCleanupFailed;
+
+  /// No description provided for @workspaceEnvCleanupIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'The sandbox is ready, but some old files could not be removed. They still take up storage space.'**
+  String get workspaceEnvCleanupIncomplete;
+
+  /// No description provided for @workspaceEnvErrorResetFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not finish resetting the sandbox. Please try again.'**
+  String get workspaceEnvErrorResetFailed;
 
   /// No description provided for @workspaceEnvErrorPatchFailed.
   ///
@@ -24671,6 +24893,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Used {value}'**
   String oauthUsedValue(String value);
+
+  /// No description provided for @mcpOAuthSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth settings'**
+  String get mcpOAuthSettings;
+
+  /// No description provided for @mcpOAuthAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get mcpOAuthAutomatic;
+
+  /// No description provided for @mcpOAuthMetadataUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Client metadata document URL'**
+  String get mcpOAuthMetadataUrl;
+
+  /// No description provided for @mcpOAuthClientAuthentication.
+  ///
+  /// In en, this message translates to:
+  /// **'Client authentication'**
+  String get mcpOAuthClientAuthentication;
+
+  /// No description provided for @mcpOAuthPublicClient.
+  ///
+  /// In en, this message translates to:
+  /// **'Public client'**
+  String get mcpOAuthPublicClient;
+
+  /// No description provided for @mcpOAuthRedirectUri.
+  ///
+  /// In en, this message translates to:
+  /// **'Local callback URL (optional)'**
+  String get mcpOAuthRedirectUri;
+
+  /// No description provided for @mcpOAuthFillRedirectExample.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill example'**
+  String get mcpOAuthFillRedirectExample;
+
+  /// No description provided for @mcpOAuthRedirectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use the platform default. Use an HTTP loopback URL if the service only allows localhost callbacks. Port 0 selects an available port; a pre-registered client may require a fixed port.'**
+  String get mcpOAuthRedirectHint;
+
+  /// No description provided for @mcpOAuthClientIdRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a client ID or choose automatic registration.'**
+  String get mcpOAuthClientIdRequired;
+
+  /// No description provided for @mcpOAuthMetadataUrlInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an HTTPS metadata document URL with a path.'**
+  String get mcpOAuthMetadataUrlInvalid;
+
+  /// No description provided for @mcpOAuthSecretRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This client authentication method requires a client secret.'**
+  String get mcpOAuthSecretRequired;
+
+  /// No description provided for @mcpOAuthRedirectInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an HTTP callback on localhost, 127.0.0.1 or [::1], without credentials, query parameters or a fragment.'**
+  String get mcpOAuthRedirectInvalid;
+
+  /// No description provided for @mcpOAuthDiscovering.
+  ///
+  /// In en, this message translates to:
+  /// **'Discovering authorization server…'**
+  String get mcpOAuthDiscovering;
+
+  /// No description provided for @mcpOAuthRegistering.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing authorization…'**
+  String get mcpOAuthRegistering;
+
+  /// No description provided for @mcpOAuthWaitingBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for browser authorization…'**
+  String get mcpOAuthWaitingBrowser;
+
+  /// No description provided for @mcpOAuthExchangingToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Completing sign-in…'**
+  String get mcpOAuthExchangingToken;
+
+  /// No description provided for @messageEditAssistantRoundEndPart.
+  ///
+  /// In en, this message translates to:
+  /// **'End of reply round'**
+  String get messageEditAssistantRoundEndPart;
 }
 
 class _AppLocalizationsDelegate

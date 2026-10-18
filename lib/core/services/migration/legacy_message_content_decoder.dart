@@ -1,5 +1,6 @@
 import '../../models/message_part.dart';
 import '../../utils/multimodal_input_utils.dart';
+import '../../../utils/newline_normalization.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 
 class LegacyDecodeResult {
@@ -63,8 +64,10 @@ Future<LegacyDecodeResult> decodeLegacyContent(
 
   void flushText() {
     if (textLines.isEmpty) return;
+    // 迁移同样只落 LF：旧库里的 `\r\n` / U+2028 之类换行一律归一，
+    // 免得存量数据继续带着“看起来是换行、按 `\n` 切分又不是”的字符。
     lastFlushedEol = textLines.last.eol.isNotEmpty ? textLines.last.eol : '\n';
-    parts.add(TextPart(_joinContentLines(textLines)));
+    parts.add(TextPart(normalizeNewlines(_joinContentLines(textLines))));
     textLines.clear();
   }
 
@@ -185,7 +188,7 @@ List<String> stripLegacyContentTextSegments(String content) {
   void flushText() {
     if (textLines.isEmpty) return;
     lastFlushedEol = textLines.last.eol.isNotEmpty ? textLines.last.eol : '\n';
-    segments.add(_joinContentLines(textLines));
+    segments.add(normalizeNewlines(_joinContentLines(textLines)));
     textLines.clear();
   }
 

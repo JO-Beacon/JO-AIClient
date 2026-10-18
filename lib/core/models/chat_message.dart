@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../utils/utf16_safe_cut.dart';
 import 'message_part.dart';
 import 'token_usage.dart';
 
@@ -191,6 +192,34 @@ class ChatMessage extends HiveObject {
     return next;
   }
 
+  /// 只重写正文、保留每个 [TextPart] 槽位的改写方式。
+  ///
+  /// 原文本长度决定切分点，并对齐到不会切碎代理对的位置；最后一个
+  /// [TextPart] 收下剩余内容，交错的工具／图片／思考卡片因此不会被挪位。
+  static List<MessagePart> partsWithRedistributedText(
+    List<MessagePart> original,
+    String newContent,
+  ) {
+    final lengths = [
+      for (final part in original)
+        if (part is TextPart) part.text.length,
+    ];
+    if (lengths.length <= 1) {
+      return partsWithReplacedText(original, newContent);
+    }
+    final texts = redistributeTextUtf16Safe(newContent, lengths);
+    final next = <MessagePart>[];
+    var textIndex = 0;
+    for (final part in original) {
+      if (part is TextPart) {
+        next.add(TextPart(texts[textIndex++]));
+      } else {
+        next.add(part);
+      }
+    }
+    return next;
+  }
+
   /// 从部件列表推导思维链文本。
   ///
   /// 编辑保存路径与数据库读取共用同一约定：reasoning 以 [ReasoningPart]
@@ -236,9 +265,9 @@ class ChatMessage extends HiveObject {
     if (parts != null) {
       nextParts = parts;
     } else if (content != null) {
-      // 展开步骤兼容：将派生文本重写为单个 TextPart，同时
-      // 保留非 TextPart 附件及其序号。
-      nextParts = partsWithReplacedText(this.parts, content);
+      // 展开步骤兼容：按原文本长度重分布正文，
+      // 让交错的非文本部件保持原位。
+      nextParts = partsWithRedistributedText(this.parts, content);
     } else {
       nextParts = this.parts;
     }

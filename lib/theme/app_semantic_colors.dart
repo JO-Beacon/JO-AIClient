@@ -1,6 +1,8 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 
+import 'surface_ladder.dart';
+
 /// 在 [ColorScheme] 中没有专用角色的语义颜色。
 ///
 /// 所有值都由当前 [ColorScheme] 派生或与之协调，因此自定义或种子生成的主题
@@ -8,7 +10,20 @@ import 'package:flutter/material.dart';
 class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   final Color surfaceFill;
   final Color surfaceCard;
+
+  /// 放在卡片上的输入框／搜索框底色。分层模式下比卡片再暗（浅色）或再亮（深色）一档，
+  /// 不分层时与 [surfaceFill] 相同。
+  final Color surfaceCardFill;
   final Color hairline;
+
+  /// 强调卡片的边框。
+  final Color hairlineStrong;
+
+  /// 普通分区卡片的边框。
+  final Color cardBorder;
+
+  /// 卡片里输入框的边框。
+  final Color fieldBorder;
   final Color success;
   final Color successContainer;
   final Color onSuccessContainer;
@@ -22,7 +37,11 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   const AppSemanticColors({
     required this.surfaceFill,
     required this.surfaceCard,
+    required this.surfaceCardFill,
     required this.hairline,
+    required this.hairlineStrong,
+    required this.cardBorder,
+    required this.fieldBorder,
     required this.success,
     required this.successContainer,
     required this.onSuccessContainer,
@@ -42,45 +61,24 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
       layered ? surfaceCard : scheme.surface;
 
   /// 用于输入框、标签、小卡片和标签容器的柔和填充色。
-  /// 替代旧的 `isDark ? Colors.white10 : Color(0xFFF2F3F5/F7F7F9)` 写法。
+  /// 具体取值由 [SurfaceLadder] 给出：不分层时把文字色按 5%（浅）／16%（深）
+  /// 叠到页面底色上；分层时按 HCT 色阶下移一档。
   ///
-  /// 深色模式使用比历史 white10/white12 更强的 alpha（0.14），因为这些填充通常
-  /// 位于 [surfaceCard] 上（surface 上的 white@0.10）；在 0.10 时两者难以区分，
-  /// 例如分区卡片中的输入框会变得不可见。
-  static Color _deriveSurfaceFill(ColorScheme cs) {
-    final alpha = cs.brightness == Brightness.dark ? 0.16 : 0.05;
-    return Color.alphaBlend(cs.onSurface.withValues(alpha: alpha), cs.surface);
-  }
-
-  /// 卡片、列表分隔与描边用的极淡线条色。
-  /// 由 [ColorScheme.outlineVariant] 派生，深浅模式各取一档。
-  static Color _deriveHairline(ColorScheme cs) {
-    return cs.outlineVariant.withValues(
-      alpha: cs.brightness == Brightness.dark ? 0.12 : 0.08,
-    );
-  }
-
-  /// iOS 风格的分区卡片背景。
-  /// 替代旧的 `isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.96)` 写法。
-  static Color _deriveSurfaceCard(ColorScheme cs) {
-    return cs.brightness == Brightness.dark
-        ? Color.alphaBlend(
-            const Color(0xFFFFFFFF).withValues(alpha: 0.10),
-            cs.surface,
-          )
-        : Color.alphaBlend(
-            const Color(0xFFFFFFFF).withValues(alpha: 0.96),
-            cs.surface,
-          );
-  }
+  /// 线色（[hairline]、[hairlineStrong]、[cardBorder]、[fieldBorder]）也从阶梯取。
+  /// 它们的值是本仓库自己的浓度（比上游深），且不随分层变化。
 
   factory AppSemanticColors.light(ColorScheme cs, {bool layered = false}) {
     const successBase = Color(0xFF2E7D32);
     const warningBase = Color(0xFFF57C00);
+    final ladder = SurfaceLadder.fromScheme(cs, layered: layered);
     return AppSemanticColors(
-      surfaceFill: layered ? cs.surfaceContainer : _deriveSurfaceFill(cs),
-      surfaceCard: layered ? cs.surfaceContainerHigh : _deriveSurfaceCard(cs),
-      hairline: _deriveHairline(cs),
+      surfaceFill: ladder.surfaceFill,
+      surfaceCard: ladder.card,
+      surfaceCardFill: ladder.surfaceCardFill,
+      hairline: ladder.hairline,
+      hairlineStrong: ladder.hairlineStrong,
+      cardBorder: ladder.cardBorder,
+      fieldBorder: ladder.fieldBorder,
       success: successBase.harmonizeWith(cs.primary),
       successContainer: const Color(0xFFA5D6A7).harmonizeWith(cs.primary),
       onSuccessContainer: const Color(0xFF1B5E20),
@@ -105,10 +103,15 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   factory AppSemanticColors.dark(ColorScheme cs, {bool layered = false}) {
     const successBase = Color(0xFF81C784);
     const warningBase = Color(0xFFFFB74D);
+    final ladder = SurfaceLadder.fromScheme(cs, layered: layered);
     return AppSemanticColors(
-      surfaceFill: layered ? cs.surfaceContainer : _deriveSurfaceFill(cs),
-      surfaceCard: layered ? cs.surfaceContainerHigh : _deriveSurfaceCard(cs),
-      hairline: _deriveHairline(cs),
+      surfaceFill: ladder.surfaceFill,
+      surfaceCard: ladder.card,
+      surfaceCardFill: ladder.surfaceCardFill,
+      hairline: ladder.hairline,
+      hairlineStrong: ladder.hairlineStrong,
+      cardBorder: ladder.cardBorder,
+      fieldBorder: ladder.fieldBorder,
       success: successBase.harmonizeWith(cs.primary),
       successContainer: const Color(0xFF1B5E20).harmonizeWith(cs.primary),
       onSuccessContainer: const Color(0xFFC8E6C9),
@@ -134,7 +137,11 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   AppSemanticColors copyWith({
     Color? surfaceFill,
     Color? surfaceCard,
+    Color? surfaceCardFill,
     Color? hairline,
+    Color? hairlineStrong,
+    Color? cardBorder,
+    Color? fieldBorder,
     Color? success,
     Color? successContainer,
     Color? onSuccessContainer,
@@ -148,7 +155,11 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     return AppSemanticColors(
       surfaceFill: surfaceFill ?? this.surfaceFill,
       surfaceCard: surfaceCard ?? this.surfaceCard,
+      surfaceCardFill: surfaceCardFill ?? this.surfaceCardFill,
       hairline: hairline ?? this.hairline,
+      hairlineStrong: hairlineStrong ?? this.hairlineStrong,
+      cardBorder: cardBorder ?? this.cardBorder,
+      fieldBorder: fieldBorder ?? this.fieldBorder,
       success: success ?? this.success,
       successContainer: successContainer ?? this.successContainer,
       onSuccessContainer: onSuccessContainer ?? this.onSuccessContainer,
@@ -170,7 +181,11 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     return AppSemanticColors(
       surfaceFill: Color.lerp(surfaceFill, other.surfaceFill, t)!,
       surfaceCard: Color.lerp(surfaceCard, other.surfaceCard, t)!,
+      surfaceCardFill: Color.lerp(surfaceCardFill, other.surfaceCardFill, t)!,
       hairline: Color.lerp(hairline, other.hairline, t)!,
+      hairlineStrong: Color.lerp(hairlineStrong, other.hairlineStrong, t)!,
+      cardBorder: Color.lerp(cardBorder, other.cardBorder, t)!,
+      fieldBorder: Color.lerp(fieldBorder, other.fieldBorder, t)!,
       success: Color.lerp(success, other.success, t)!,
       successContainer: Color.lerp(
         successContainer,

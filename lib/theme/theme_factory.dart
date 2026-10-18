@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:Kelivo/theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
+import 'package:Kelivo/theme/surface_ladder.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 
@@ -41,23 +42,35 @@ List<String> _getPlatformFontFallback() => getPlatformFontFallback();
 /// 从当前 scheme 的 surface 派生中性的 `surfaceContainer*` 角色。
 ///
 /// 本应用的调色板只定义经典 ColorScheme 角色，M3 surface 容器仍保持静态的
-/// 紫色默认值，这与其他非紫色调色板不协调。在这里派生这些角色可让对话框、
-/// 菜单、卡片和其他 Material 表面与当前调色板保持一致。
-ColorScheme _withDerivedSurfaceContainers(ColorScheme s) {
-  final dark = s.brightness == Brightness.dark;
-  const white = Color(0xFFFFFFFF);
-  const black = Color(0xFF000000);
-  Color over(Color c, double a) =>
-      Color.alphaBlend(c.withValues(alpha: a), s.surface);
+/// 紫色默认值，这与其他非紫色调色板不协调。取值统一由 [SurfaceLadder] 给出，
+/// 与 `AppSemanticColors` 的填充色、卡片色、细线色同一条色阶。
+ColorScheme _withDerivedSurfaceContainers(
+  ColorScheme s, {
+  bool layered = false,
+}) {
+  final ladder = SurfaceLadder.fromScheme(s, layered: layered);
   return s.copyWith(
-    surfaceContainerLowest: dark ? over(black, 0.28) : over(white, 0.72),
-    surfaceContainerLow: dark ? over(white, 0.03) : over(white, 0.55),
-    surfaceContainer: dark ? over(white, 0.045) : over(white, 0.35),
-    // 浅色模式的“高”容器必须接近白色：聊天气泡、卡片、菜单和对话框
-    // 过去在浅色模式下都直接使用 Colors.white。
-    surfaceContainerHigh: dark ? over(white, 0.06) : over(white, 0.85),
-    surfaceContainerHighest: dark ? over(white, 0.09) : over(s.onSurface, 0.05),
+    surfaceContainerLowest: ladder.surfaceContainerLowest,
+    surfaceContainerLow: ladder.surfaceContainerLow,
+    surfaceContainer: ladder.surfaceContainer,
+    surfaceContainerHigh: ladder.surfaceContainerHigh,
+    surfaceContainerHighest: ladder.surfaceContainerHighest,
   );
+}
+
+/// 调色板声明的 `surface` 是卡片；浅色模式下页面是它往下压 4 级（纯白背景跳过）。
+/// 深色模式页面不变（改动来自上游同名函数）。
+ColorScheme _applyPageSurface(
+  ColorScheme scheme, {
+  required bool pureBackground,
+  bool layered = false,
+}) {
+  if (scheme.brightness == Brightness.dark) return scheme;
+  if (pureBackground) {
+    return scheme.copyWith(surface: const Color(0xFFFFFFFF));
+  }
+  if (!layered) return scheme;
+  return scheme.copyWith(surface: shiftTone(scheme.surface, -4.0));
 }
 
 TextTheme _withFontFallback(TextTheme base, List<String> fallback) {
@@ -256,10 +269,14 @@ ThemeData buildLightThemeForScheme(
       onInverseSurface: const Color(0xFFFFFFFF),
     );
   }
-  scheme = _withDerivedSurfaceContainers(scheme);
-  if (layeredSurfaces) {
-    scheme = scheme.copyWith(surface: scheme.surfaceContainerLowest);
-  }
+  scheme = _withDerivedSurfaceContainers(
+    _applyPageSurface(
+      scheme,
+      pureBackground: pureBackground,
+      layered: layeredSurfaces,
+    ),
+    layered: layeredSurfaces,
+  );
   // 让日志行为与 buildLightTheme 保持一致，以便诊断结果一致。
   // _logColorScheme('Light ${dynamicScheme != null ? 'Dynamic' : 'Static'}', scheme);
   final theme = ThemeData(
@@ -428,10 +445,7 @@ ThemeData buildDarkThemeForScheme(
       onInverseSurface: const Color(0xFF000000),
     );
   }
-  scheme = _withDerivedSurfaceContainers(scheme);
-  if (layeredSurfaces) {
-    scheme = scheme.copyWith(surface: scheme.surfaceContainerLowest);
-  }
+  scheme = _withDerivedSurfaceContainers(scheme, layered: layeredSurfaces);
   // 让日志行为与 buildDarkTheme 保持一致，以便诊断结果一致。
   // _logColorScheme('Dark ${dynamicScheme != null ? 'Dynamic' : 'Static'}', scheme);
   final theme = ThemeData(

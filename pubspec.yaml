@@ -123,7 +123,13 @@ dependencies:
   image: ^4.8.0
   downsize:
     path: ./dependencies/downsize
-  math_expressions: ^2.6.2
+  petitparser: ^6.1.0
+  rational: ^2.2.3
+  decimal: ^3.2.6
+  # 本地 fork：上游 Kelivo 改过的按行编辑器（输入法、粘贴、光标等补丁），
+  # 供长文本输入框使用；详见 dependencies/re_editor/SOURCE.md
+  re_editor:
+    path: ./dependencies/re_editor
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

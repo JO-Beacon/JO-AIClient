@@ -14,7 +14,7 @@ String truncateHeadUtf16Safe(String value, int maxCodeUnits) {
   return value.substring(0, end);
 }
 
-int utf16SafeTailStart(String value, int maxCodeUnits) {
+int utf16SafeTailStartForMaxUnits(String value, int maxCodeUnits) {
   if (maxCodeUnits <= 0) return value.length;
   if (value.length <= maxCodeUnits) return 0;
   var start = value.length - maxCodeUnits;
@@ -27,7 +27,7 @@ int utf16SafeTailStart(String value, int maxCodeUnits) {
 }
 
 String truncateTailUtf16Safe(String value, int maxCodeUnits) {
-  return value.substring(utf16SafeTailStart(value, maxCodeUnits));
+  return value.substring(utf16SafeTailStartForMaxUnits(value, maxCodeUnits));
 }
 
 List<String> splitUtf16SafeChunks(String value, int maxCodeUnits) {
@@ -75,14 +75,14 @@ String truncateHeadTailUtf16Safe(
   if (available <= 0) return truncateHeadUtf16Safe(value, maxLength);
   final head = available ~/ 2;
   final tail = available - head;
-  final headEnd = _headEndAt(value, head);
-  final tailStart = _tailStartAt(value, value.length - tail);
+  final headEnd = utf16SafeHeadEnd(value, head);
+  final tailStart = utf16SafeTailStart(value, value.length - tail);
   return '${value.substring(0, headEnd)}$marker'
       '${value.substring(tailStart)}';
 }
 
 /// 返回适合 `value.substring(0, result)` 的结束下标，绝不落在代理对中间。
-int _headEndAt(String value, int end) {
+int utf16SafeHeadEnd(String value, int end) {
   if (end <= 0 || end >= value.length) return end;
   final prev = value.codeUnitAt(end - 1);
   final cur = value.codeUnitAt(end);
@@ -91,12 +91,38 @@ int _headEndAt(String value, int end) {
 }
 
 /// 返回适合 `value.substring(result)` 的起始下标，绝不落在代理对中间。
-int _tailStartAt(String value, int start) {
+int utf16SafeTailStart(String value, int start) {
   if (start <= 0 || start >= value.length) return start;
   final prev = value.codeUnitAt(start - 1);
   final cur = value.codeUnitAt(start);
   if (!_isHighSurrogate(prev) || !_isLowSurrogate(cur)) return start;
   return start + 1;
+}
+
+/// 把 [value] 按原始文本槽位重新分配，且不切开代理对。
+///
+/// 切分点用累积的 [originalLengths]，因此相邻槽位的拆分或合并不公
+/// 拖动后面的边界。跨越切分点的代理对留在前一个槽位；
+/// 最后一个槽位收下剩余全部内容。
+List<String> redistributeTextUtf16Safe(
+  String value,
+  List<int> originalLengths,
+) {
+  final parts = <String>[];
+  var originalEnd = 0;
+  var start = 0;
+  for (var i = 0; i < originalLengths.length; i++) {
+    originalEnd += originalLengths[i];
+    final end = utf16SafeTailStart(
+      value,
+      i == originalLengths.length - 1
+          ? value.length
+          : originalEnd.clamp(0, value.length),
+    );
+    parts.add(value.substring(start, end));
+    start = end;
+  }
+  return parts;
 }
 
 bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;

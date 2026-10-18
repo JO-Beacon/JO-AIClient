@@ -579,7 +579,7 @@ InputDecoration _inputDecoration(BuildContext context) {
   return InputDecoration(
     isDense: true,
     filled: true,
-    fillColor: context.appColors.surfaceCard,
+    fillColor: context.appColors.surfaceCardFill,
     hintStyle: TextStyle(
       fontSize: 14,
       color: cs.onSurface.withValues(alpha: 0.5),

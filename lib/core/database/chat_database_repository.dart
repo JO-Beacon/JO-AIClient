@@ -16,6 +16,8 @@ import '../models/conversation_tree.dart';
 import '../models/message_part.dart';
 import '../services/backup/restore_previous_plan.dart';
 import '../services/api/stream/stream_chunk_handler.dart';
+import '../services/api/providers/claude/claude_history.dart';
+import '../services/api/providers/claude/claude_thinking_recovery.dart';
 import '../utils/multimodal_input_utils.dart';
 import '../../utils/sandbox_path_resolver.dart';
 import '../../utils/kelivo_file_uri.dart';
@@ -5556,13 +5558,14 @@ class ChatDatabaseRepository {
 
       // 仅追加 Content 时必须先加载原始 parts，并在新 revision 上保留非文本
       // attachments（ImagePart/FilePart/etc.），同时保持
-      // ordinal（[Image, Text] 保持为 [Image, Text(new)]，而不是 [Text(new), Image]）。
+      // ordinal（[Image, Text] 保持为 [Image, Text(new)]，而不是 [Text(new), Image]）；
+      // 多个正文槽按原长重分布，不会塌成一个。
+      final original = await _messageFromRowWithParts(originalRow);
       final List<MessagePart> resolvedParts;
       if (parts != null) {
         resolvedParts = parts;
       } else {
-        final original = await _messageFromRowWithParts(originalRow);
-        resolvedParts = ChatMessage.partsWithReplacedText(
+        resolvedParts = ChatMessage.partsWithRedistributedText(
           original.parts,
           content,
         );
@@ -5608,6 +5611,29 @@ class ChatDatabaseRepository {
           .into(_db.messageRows)
           .insert(_messageCompanion(message, order), mode: InsertMode.insert);
       await _replaceMessageParts(message);
+      // 恢复记录属于所选中的历史，即使正文被编辑过。
+      // 正文编辑保留 Claude 的原生响应边界；显式替换部件则可能有意删掉
+      // 思考／工具，这时不能再继承能让它们在下次请求里复活的记录。
+      final preserveArtifacts = parts == null && content == original.content;
+      final artifacts = await (_db.select(
+        _db.providerArtifactRows,
+      )..where((row) => row.revisionId.equals(messageId))).get();
+      for (final artifact in artifacts) {
+        final payload =
+            preserveArtifacts ||
+                artifact.kind == claudeThinkingRecoveryArtifactKind
+            ? artifact.payload
+            : parts == null && artifact.kind == claudeTurnArtifactKind
+            ? editClaudeTurnText(
+                artifact.payload,
+                content,
+                originalContent: original.content,
+              )
+            : null;
+        if (payload != null) {
+          await setProviderArtifact(message.id, artifact.kind, payload);
+        }
+      }
       final tree = await _loadOrCreateConversationTree(conversation.id);
       final originalEdge = tree.edges[messageId];
       if (originalEdge == null) {

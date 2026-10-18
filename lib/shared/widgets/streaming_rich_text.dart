@@ -11,9 +11,17 @@ import 'markdown_block_list.dart';
 /// Markdown still supplies the styled spans; embedded widgets and bidi text
 /// keep Flutter's single-paragraph layout, where their context is significant.
 class StreamingRichText extends StatefulWidget {
-  const StreamingRichText({super.key, required this.text});
+  const StreamingRichText({
+    super.key,
+    required this.text,
+    this.streaming = true,
+  });
 
   final Text text;
+
+  /// 流式阶段与已完成消息的阈值不同：流式时超过 512 字符就按块排版，
+  /// 已完成时放宽到 2048，短段仍交给 Flutter 整段排版。
+  final bool streaming;
 
   @override
   State<StreamingRichText> createState() => _StreamingRichTextState();
@@ -129,6 +137,15 @@ class _StreamingRichTextState extends State<StreamingRichText> {
         text.semanticsIdentifier == null &&
         heightBehavior == null &&
         flatten(rootSpan, style);
+    // 短段落与需要上下文的文本直接用 Flutter 的整段排版：不需要分块森林、
+    // 视口观察与约束构建器。保留绘制边界，让移动中的祖先能复用自己的字形缓存。
+    if (!supported || length <= (widget.streaming ? 512 : 2048)) {
+      _layout = null;
+      _chunks.clear();
+      _runs = runs;
+      _runsVersion++;
+      return RepaintBoundary(child: text);
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final layout = (
@@ -191,11 +208,7 @@ class _StreamingRichTextState extends State<StreamingRichText> {
             (!_chunks.last.block.stable || _chunks.last.end >= common)) {
           _chunks.removeLast();
         }
-        if (!supported ||
-            // A short paragraph is already bounded. Let RenderParagraph shape
-            // it once instead of doing an extra TextPainter layout per block.
-            length <= 512 ||
-            constraints.maxWidth <= 0) {
+        if (constraints.maxWidth <= 0) {
           _chunks.clear();
           _chunks.add(
             _TextChunk(

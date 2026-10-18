@@ -438,15 +438,15 @@ class _ResponseStreamState {
   Future<void> cancel(Object error) async {
     if (finished || controller.isClosed) return;
     finished = true;
-    // 先取回要取消的订阅，再关闭 controller：close 会同步触发 onCancel，
-    // 把 subscription 清空；若先 close 再读，会误判为从未订阅，
-    // 进而对同一个单订阅响应流二次 listen。
-    final active = subscription;
+    // 取消可能发生在“已收到响应头、还没读响应体”的时刻：先把订阅取回、
+    // 并把字段清空，再去发错误。addError 与 close 会同步触发 onCancel，
+    // 若在这之后才读字段，会误判为“从未订阅”，对同一个单订阅流再 listen 一次。
+    // 响应体如果一直没人读过，就顺手接上并取消，别让 socket 留着。
+    final active =
+        subscription ?? source.listen((_) {}, onError: (Object _) {});
     subscription = null;
     controller.addError(error);
     unawaited(controller.close());
-    // A caller can cancel between receiving headers and listening to the body.
-    // Cancel that unopened body too, rather than leaving its socket alive.
-    await (active ?? source.listen((_) {}, onError: (Object _) {})).cancel();
+    await active.cancel();
   }
 }

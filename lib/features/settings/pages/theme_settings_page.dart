@@ -114,6 +114,17 @@ class ThemeSettingsPage extends StatelessWidget {
                 onChanged: (v) =>
                     context.read<SettingsProvider>().setUseLayeredSurfaces(v),
               ),
+              _iosDivider(context),
+              _iosSwitchRow(
+                context,
+                icon: Lucide.SquareEqual,
+                label: l10n.themeAdvancedSettingsPageUseLayeredSheetTilesTitle,
+                subtitle:
+                    l10n.themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle,
+                value: settings.useLayeredSheetTiles,
+                onChanged: (v) =>
+                    context.read<SettingsProvider>().setUseLayeredSheetTiles(v),
+              ),
             ],
           ),
           const SizedBox(height: 12),

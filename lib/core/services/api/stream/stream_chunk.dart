@@ -255,6 +255,13 @@ final class Finish extends StreamChunk {
   final String? model;
 }
 
+/// 一次响应已完成；它的客户端工具结果先于下一次响应。
+final class AssistantRoundEnd extends StreamChunk {
+  const AssistantRoundEnd({this.reasoningDetails});
+
+  final List<dynamic>? reasoningDetails;
+}
+
 /// Emitted between attempts while auto-retry is waiting to try again.
 ///
 /// Not message content — consumers should not fold this into parts.

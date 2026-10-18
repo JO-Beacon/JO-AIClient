@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,60 @@ void main() {
     await repository.close();
     await root.delete(recursive: true);
   });
+
+  test(
+    'tool response boundaries and reasoning metadata survive database reload',
+    () async {
+      final conversation = Conversation(id: 'rounds', title: 'Rounds');
+      final message = ChatMessage(
+        id: 'reply',
+        role: 'assistant',
+        conversationId: conversation.id,
+        parts: const [
+          ReasoningPart(' R1\n'),
+          ToolCallPart(
+            '{"id":"a","name":"lookup","arguments":{},"content":"ok"}',
+          ),
+          AssistantRoundEndPart(
+            reasoningDetails: [
+              {'type': 'reasoning.text', 'text': 'R1', 'signature': 'signed'},
+            ],
+          ),
+          ToolCallPart(
+            '{"id":"b","name":"lookup","arguments":{},"content":"ok"}',
+          ),
+          AssistantRoundEndPart(),
+          ReasoningPart('\nR3 '),
+          TextPart('Done.'),
+        ],
+      );
+      await repository.putConversation(conversation);
+      await repository.putMessage(message);
+      await repository.setToolEvents(message.id, [
+        {'id': 'a', 'name': 'lookup', 'content': 'updated'},
+        {'id': 'b', 'name': 'lookup', 'content': 'ok'},
+      ]);
+      await repository.close();
+      repository = ChatDatabaseRepository.open(
+        file: File('${root.path}/parts.sqlite'),
+      );
+      await repository.ensureReady();
+      final restored = (await repository.getMessage(message.id))!;
+      expect(
+        restored.parts.map((part) => part.kind),
+        message.parts.map((part) => part.kind),
+      );
+      expect(restored.parts[0], message.parts[0]);
+      expect(restored.parts[2], message.parts[2]);
+      expect(restored.parts[4], message.parts[4]);
+      expect(restored.parts[5], message.parts[5]);
+      expect(restored.content, 'Done.');
+      expect(
+        jsonDecode((restored.parts[1] as ToolCallPart).payloadJson)['content'],
+        'updated',
+      );
+    },
+  );
 
   test('text+image+file parts roundtrip preserves order and payload', () async {
     final now = DateTime.utc(2026, 8, 9, 12);

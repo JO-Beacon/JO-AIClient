@@ -67,6 +67,12 @@ Map<String, dynamic> copyChatCompletionMessage(Map<String, dynamic> m) {
 
   // Preserve tool linkage fields.
   if (role == 'tool') {
+    // 后续请求仍需要带类型的图片元数据来重建历史；
+    // 最终构建请求时会在解析完图片内容后把它去掉。
+    final metadata = m['metadata'];
+    if (metadata is Map) {
+      out['metadata'] = Map<String, dynamic>.from(metadata);
+    }
     final toolCallId = m['tool_call_id'];
     if (toolCallId != null && toolCallId.toString().isNotEmpty) {
       out['tool_call_id'] = toolCallId;
@@ -105,26 +111,19 @@ Map<String, dynamic> copyChatCompletionMessage(Map<String, dynamic> m) {
   return out;
 }
 
-List<Map<String, dynamic>> cleanToolsForCompatibility(
+List<Map<String, dynamic>> copyChatCompletionTools(
   List<Map<String, dynamic>> tools,
 ) {
-  final cleaned = tools.map((tool) {
+  // 这些参数是 JSON Schema。Google 原生 Schema 的修补会给它加上原本没有的
+  // 约束（例如字符串数组的 items、required 字段），那会改变 schema 的含义。
+  return tools.map((tool) {
     final result = Map<String, dynamic>.from(tool);
     final fn = result['function'];
     if (fn is Map) {
-      final fnMap = Map<String, dynamic>.from(fn);
-      final params = fnMap['parameters'];
-      if (params is Map) {
-        fnMap['parameters'] = cleanSchemaForGemini(
-          Map<String, dynamic>.from(params),
-        );
-      }
-      result['function'] = fnMap;
+      result['function'] = Map<String, dynamic>.from(fn);
     }
     return result;
   }).toList();
-  // print('[ChatApi/Tools] Cleaned ${cleaned.length} tools: ${jsonEncode(cleaned)}');
-  return cleaned;
 }
 
 bool _isRemoteImageContentPart(dynamic part) {
@@ -265,10 +264,18 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
   required bool allowRemoteImages,
   required ReasoningReplayPolicy reasoningReplay,
   ReasoningReplayField replayField = ReasoningReplayField.reasoningContent,
+  // 回放设置只过滤已存历史；本次请求的活跃工具续跑必须保留它返回的
+  // 推理内容（含带签名的块）。
+  int? currentToolMessagesStart,
   bool skipImageParsing = false,
   bool supportsGoogleOpenAIThoughtSignatures = false,
 }) async {
   final out = <Map<String, dynamic>>[];
+  final upstreamModelId = (nativeInputs.spec.apiModelId ?? nativeInputs.spec.id)
+      .toLowerCase();
+  final requiresSignedReasoning =
+      upstreamModelId.contains('claude') ||
+      upstreamModelId.startsWith('anthropic/');
   // Assistant turns cannot carry image_url/video_url; stash for the last user
   // message (same pattern as Responses shouldAttachAssistantImage).
   // Use last *user* index — not array-tail — so tool follow-ups that append
@@ -362,18 +369,30 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
         ];
       }
       final rawDetails = outMsg['reasoning_details'];
-      final signedDetails = reasoningDetailsNeedSignedReplay(rawDetails);
-      final keepReasoningContent =
-          !signedDetails &&
-          (reasoningReplay == ReasoningReplayPolicy.all ||
-              (reasoningReplay == ReasoningReplayPolicy.toolTurns &&
-                  toolTurnIds.contains(messageTurnIds[i])));
-      if (!keepReasoningContent) {
+      // 全量回放不能把旧的无签名 Claude 文本变成思考块，
+      // 只有它自己的原生 details 才带得起签名。
+      final signedDetails =
+          requiresSignedReasoning ||
+          reasoningDetailsNeedSignedReplay(rawDetails);
+      final keepReplay =
+          (currentToolMessagesStart != null && i >= currentToolMessagesStart) ||
+          reasoningReplay == ReasoningReplayPolicy.all ||
+          (reasoningReplay == ReasoningReplayPolicy.toolTurns &&
+              toolTurnIds.contains(messageTurnIds[i]));
+      if (!keepReplay) {
         outMsg.remove('reasoning_content');
         outMsg.remove('reasoning');
-        if (!signedDetails &&
-            replayField == ReasoningReplayField.reasoningDetails) {
+        outMsg.remove('reasoning_details');
+      } else if (signedDetails) {
+        outMsg.remove('reasoning_content');
+        outMsg.remove('reasoning');
+        // 带签名／Anthropic 标记的片段必须重建为完整块；
+        // 其他供应商按原序列逐字回放。
+        final details = normalizeReasoningDetailsForReplay(rawDetails);
+        if (details == null) {
           outMsg.remove('reasoning_details');
+        } else {
+          outMsg['reasoning_details'] = details;
         }
       } else if (replayField != ReasoningReplayField.reasoningDetails) {
         final field = replayField.wireName;
@@ -383,16 +402,6 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
         outMsg.remove('reasoning');
         if (value != null) {
           outMsg[field] = value;
-        }
-      }
-      // Only Anthropic upstreams need the streamed fragments rebuilt into
-      // whole blocks; other vendors document replaying the sequence verbatim.
-      if (signedDetails) {
-        final details = normalizeReasoningDetailsForReplay(rawDetails);
-        if (details == null) {
-          outMsg.remove('reasoning_details');
-        } else {
-          outMsg['reasoning_details'] = details;
         }
       }
     }
@@ -614,7 +623,7 @@ Future<List<Map<String, dynamic>>> buildOpenAIChatCompletionMessages(
       if (result.imageUrls.isNotEmpty) {
         pendingToolImageParts.add({
           'type': 'text',
-          'text': 'Image returned by view_image (${m['tool_call_id']}):',
+          'text': 'Image returned by ${m['name']} (${m['tool_call_id']}):',
         });
         pendingToolImageParts.addAll([
           for (final url in result.imageUrls)
@@ -869,9 +878,10 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
       lastRound?.assistantContent ?? firstAssistantContent;
   String reasoning() => lastRound?.reasoningEcho ?? firstReasoning;
   dynamic reasoningDetails() =>
-      lastRound?.reasoningDetails ?? firstReasoningDetails;
+      lastRound == null ? firstReasoningDetails : lastRound!.reasoningDetails;
 
   yield* runClientToolFollowUps(
+    reasoningDetailsOf: reasoningDetails,
     initialCalls: clientToolCallsFromChatAcc(firstToolAcc),
     onToolCall: onToolCall,
     append: (executed) {
@@ -906,6 +916,7 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
           canAudioInput: canAudioInput,
           allowRemoteImages: allowRemoteImages,
           reasoningReplay: spec.reasoning.replay,
+          currentToolMessagesStart: messages.length,
           replayField: spec.reasoning.replayField,
           skipImageParsing: skipImageParsing,
           supportsGoogleOpenAIThoughtSignatures:
@@ -915,7 +926,7 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
         if (temperature != null) 'temperature': temperature,
         if (topP != null) 'top_p': topP,
         if (tools != null && tools.isNotEmpty)
-          'tools': cleanToolsForCompatibility(tools),
+          'tools': copyChatCompletionTools(tools),
         if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
       };
       applyMaxTokens(body2);
@@ -1007,7 +1018,7 @@ Stream<StreamChunk> runOpenAIChatCompletionsToolFollowUps({
       return emitDone(
         ids: StreamChunkIds('finish'),
         reasoningDetails: includeReasoningDetailsOnDone
-            ? lastRound?.reasoningDetails ?? firstReasoningDetails
+            ? reasoningDetails()
             : null,
         usage: usage,
         totalTokens: usage?.totalTokens ?? approxTotal,
@@ -1050,8 +1061,25 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
   var currentMessages = [
     for (final message in messages) copyChatCompletionMessage(message),
   ];
+  var round = 0;
+  Stream<StreamChunk> emitToolRoundOutput() async* {
+    final message = openaiFirstChoiceMessage(lastObj);
+    final visible = openaiVisibleOutputFromMessage(message);
+    final ids = StreamChunkIds('round-${round++}');
+    yield* emitDelta(
+      ids: ids,
+      content: visible.content,
+      reasoning: openaiReasoningText(message),
+      reasoningDetails: message?['reasoning_details'],
+    );
+    yield* emitImages(visible.images, ids: ids);
+  }
+
+  yield* emitToolRoundOutput();
 
   yield* runClientToolFollowUps(
+    reasoningDetailsOf: () =>
+        openaiFirstChoiceMessage(lastObj)?['reasoning_details'],
     initialCalls: initialCalls,
     onToolCall: onToolCall,
     emitCalls: true,
@@ -1102,6 +1130,7 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
         canAudioInput: canAudioInput,
         allowRemoteImages: allowRemoteImages,
         reasoningReplay: spec.reasoning.replay,
+        currentToolMessagesStart: messages.length,
         replayField: spec.reasoning.replayField,
         skipImageParsing: skipImageParsing,
         supportsGoogleOpenAIThoughtSignatures:
@@ -1117,6 +1146,11 @@ Stream<StreamChunk> runOpenAIChatCompletionsNonStreamToolFollowUps({
       lastObj =
           jsonDecode(await decodeUtf8Stream(resp2.stream))
               as Map<String, dynamic>;
+      if (openaiCallsFromCompletionMessage(
+        openaiFirstChoiceMessage(lastObj),
+      ).isNotEmpty) {
+        yield* emitToolRoundOutput();
+      }
       final roundUsage = openaiUsageFromObj(lastObj);
       for (final chunk in citationsDecoder.decodeCitations(lastObj)) {
         yield chunk;

@@ -23,6 +23,13 @@ ProviderConfig _openAIConfig(String baseUrl) {
     apiKey: 'test-key',
     baseUrl: baseUrl,
     providerType: ProviderKind.openai,
+    // 这些用例验证“全量回放”下带签名片段的形状；
+    // 默认档位随供应商而定，不能依赖默认值。
+    modelOverrides: {
+      'claude-sonnet-4-6': {
+        'reasoning': {'replay': 'all'},
+      },
+    },
   );
 }
 

@@ -599,6 +599,9 @@ Map<String, dynamic> cleanSchemaForGemini(
   bool stringEnumOnly = false,
 }) {
   final result = Map<String, dynamic>.from(schema);
+  // Google 原生 Schema 不接受这个关键字。只在 schema 节点上移除：
+  // 属性名或 default/example 里的同名键都是数据，不动。
+  result.remove('additionalProperties');
   if (stringEnumOnly && result['enum'] is List) {
     final values = result['enum'] as List;
     if (values.every((value) => value is String)) {
@@ -625,13 +628,12 @@ Map<String, dynamic> cleanSchemaForGemini(
         if (propMap['type'] == 'array' && !propMap.containsKey('items')) {
           propMap['items'] = {'type': 'string'}; // 默认使用字符串数组
         }
-        // 递归清理嵌套对象。
-        if (propMap['type'] == 'object' && propMap.containsKey('properties')) {
-          propMap['properties'] = cleanSchemaForGemini({
-            'properties': propMap['properties'],
-          }, stringEnumOnly: stringEnumOnly)['properties'];
-        }
-        props[key] = propMap;
+        // 递归清理属性节点自身：additionalProperties、anyOf、items 与嵌套 properties
+        // 都必须在每一层清到，否则嵌在对象里的字段会被 Gemini 拒收。
+        props[key] = cleanSchemaForGemini(
+          propMap,
+          stringEnumOnly: stringEnumOnly,
+        );
       }
     });
 
@@ -654,6 +656,20 @@ Map<String, dynamic> cleanSchemaForGemini(
       result['items'] as Map<String, dynamic>,
       stringEnumOnly: stringEnumOnly,
     );
+  }
+
+  // 保留 anyOf 的每个分支，但每个分支同样要按 Google 的规则清理。
+  if (result['anyOf'] is List) {
+    result['anyOf'] = [
+      for (final variant in result['anyOf'] as List)
+        if (variant is Map)
+          cleanSchemaForGemini(
+            Map<String, dynamic>.from(variant),
+            stringEnumOnly: stringEnumOnly,
+          )
+        else
+          variant,
+    ];
   }
 
   return result;

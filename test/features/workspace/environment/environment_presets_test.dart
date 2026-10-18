@@ -439,9 +439,24 @@ void main() {
         await tester.tap(
           find.byKey(const ValueKey('environment-dependency-install')),
         );
-        await tester.runAsync(
-          () async => Future<void>.delayed(const Duration(milliseconds: 30)),
+        // 安装会跨越真实数据库异步与 widget 的假异步队列：两边都要推进，
+        // 而不是固定等一段真实时间就去 settle 一个一直在转的忙碌指示器。
+        final installationWait = Stopwatch()..start();
+        while (service.busy &&
+            installationWait.elapsed < const Duration(seconds: 5)) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump(const Duration(milliseconds: 10));
+        }
+        expect(
+          service.busy,
+          isFalse,
+          reason:
+              '安装没有结束：${runtime.requests.length} 条命令，'
+              '状态=${service.status(EnvironmentDependency.python)}',
         );
+        expect(service.failure, isNull);
         await tester.pumpAndSettle();
         expect(
           service.status(EnvironmentDependency.python),

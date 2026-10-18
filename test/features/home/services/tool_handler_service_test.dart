@@ -48,8 +48,9 @@ void main() {
         expect(
           (properties['config'] as Map)['additionalProperties'],
           <String, dynamic>{
+            r'$schema': 'https://json-schema.org/draft/2020-12/schema',
             'type': 'string',
-            'enum': ['enabled'],
+            'const': 'enabled',
           },
         );
         expect(

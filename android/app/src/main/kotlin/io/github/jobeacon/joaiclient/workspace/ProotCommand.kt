@@ -1,5 +1,7 @@
 package io.github.jobeacon.joaiclient.workspace
 
+import android.os.Process
+import android.system.Os
 import java.io.File
 
 data class BindMount(
@@ -20,6 +22,11 @@ object ProotCommand {
     const val TALLOC_LIB = "libtalloc.so"
     const val TALLOC_SONAME = "libtalloc.so.2"
     const val BASH_EVAL = "cd -- \"\$1\" && eval \"\$2\""
+
+    internal fun defaultKernelRelease(
+        is64BitProcess: Boolean = Process.is64Bit(),
+        readKernelRelease: () -> String = { Os.uname().release },
+    ): String? = if (is64BitProcess) null else readKernelRelease()
 
     fun validateGuestCwd(cwd: String): String {
         val trimmed = cwd.trim()
@@ -42,6 +49,7 @@ object ProotCommand {
         extraArgs: List<String> = emptyList(),
         shell: String? = null,
         includeLibraryPath: Boolean = File(nativeLibDir, TALLOC_LIB).isFile,
+        kernelRelease: String? = defaultKernelRelease(),
     ): ProotLaunch {
         val guestCwd = validateGuestCwd(cwd)
         require(extraArgs.none { it.contains('\u0000') }) { "PRoot argument contains a NUL byte" }
@@ -54,6 +62,17 @@ object ProotCommand {
             "--root-id",
             "--link2symlink",
             "--kill-on-exit",
+        )
+        // 有些厂商内核在 32 位进程下的 time64 vDSO 是坏的（上游 issue #1231）。
+        // 用 PRoot 的 -k 把它对客户机 libc 藏起来；这里传的是真实内核版本，
+        // 并尊重调用方已经显式写好的同类参数。
+        val hasKernelOverride = extraArgs.any {
+            it == "-k" || it.startsWith("-k ") || it.startsWith("--kernel-release=")
+        }
+        if (kernelRelease != null && !hasKernelOverride) {
+            argv += "--kernel-release=$kernelRelease"
+        }
+        argv += listOf(
             *extraArgs.toTypedArray(),
             "-r",
             rootfsDir.absolutePath,

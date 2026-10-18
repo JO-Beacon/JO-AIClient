@@ -2,13 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/models/message_part.dart';
+import '../../../core/providers/settings_provider.dart';
 import '../../../desktop/widgets/desktop_dialog_style.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
 import '../../../shared/widgets/ios_tactile.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../utils/newline_normalization.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
@@ -250,6 +253,10 @@ class _PartCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final label = _partLabel(l10n, part);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // 长文本编辑器开关：打开后文本部分改用按行编辑器（短文本仍由它自己回退到原生输入框）。
+    final useLongEditor = context
+        .watch<SettingsProvider>()
+        .useLongMessageEditor;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -304,6 +311,22 @@ class _PartCard extends StatelessWidget {
                 inputFormatters: const [NormalizeNewlinesFormatter()],
                 onChanged: onTextChanged,
                 outerPadding: EdgeInsets.zero,
+                editorBuilder: useLongEditor
+                    ? (ctx) => LongMessageEditor(
+                        controller: controller!,
+                        minLines: 3,
+                        maxLines: _maxPartEditorLines,
+                        onChanged: onTextChanged,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          isCollapsed: true,
+                          hintText: l10n.messageEditTextPart,
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        inputFormatters: const [NormalizeNewlinesFormatter()],
+                      )
+                    : null,
               )
             else
               Text(
@@ -327,12 +350,16 @@ String _partLabel(AppLocalizations l10n, MessagePart part) => switch (part) {
   FilePart() => l10n.messageEditFilePart,
   UnknownPart() => l10n.messageEditUnknownPart,
   MalformedPart() => l10n.messageEditUnknownPart,
+  // 一次响应的结束标记是结构信息，不是可编辑内容。
+  AssistantRoundEndPart() => l10n.messageEditAssistantRoundEndPart,
   // 账号登录失效的恢复入口不是可编辑内容，按未知部件展示。
   ProviderAuthErrorPart() => l10n.messageEditUnknownPart,
 };
 
 /// 只读部件在卡片和大窗口里展示的文本。
 String _partSummary(MessagePart part) {
+  // 结束标记本身没有可展示的正文。
+  if (part is AssistantRoundEndPart) return '';
   if (part is ReasoningPart) return part.text;
   if (part is ToolCallPart) {
     try {
@@ -664,27 +691,43 @@ class _ExpandedPartField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final useLongEditor = context
+        .watch<SettingsProvider>()
+        .useLongMessageEditor;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: context.appColors.surfaceFill,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
       ),
-      child: TextField(
-        controller: controller,
-        autofocus: true,
-        readOnly: readOnly,
-        expands: true,
-        maxLines: null,
-        minLines: null,
-        keyboardType: TextInputType.multiline,
-        inputFormatters: const [NormalizeNewlinesFormatter()],
-        textAlignVertical: TextAlignVertical.top,
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.fromLTRB(14, 14, 14, 14),
-        ),
-      ),
+      child: useLongEditor
+          ? LongMessageEditor(
+              controller: controller,
+              autofocus: true,
+              readOnly: readOnly,
+              expands: true,
+              minLines: null,
+              maxLines: null,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.fromLTRB(14, 14, 14, 14),
+              ),
+            )
+          : TextField(
+              controller: controller,
+              autofocus: true,
+              readOnly: readOnly,
+              expands: true,
+              maxLines: null,
+              minLines: null,
+              keyboardType: TextInputType.multiline,
+              inputFormatters: const [NormalizeNewlinesFormatter()],
+              textAlignVertical: TextAlignVertical.top,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.fromLTRB(14, 14, 14, 14),
+              ),
+            ),
     );
   }
 }

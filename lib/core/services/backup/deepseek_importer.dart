@@ -18,6 +18,7 @@ import '../../models/progress_update.dart';
 import '../../providers/assistant_group_provider.dart';
 import '../../providers/assistant_provider.dart';
 import '../chat/chat_service.dart';
+import '../../../utils/newline_normalization.dart';
 import 'backup_isolate_runner.dart';
 
 class DeepSeekImportException implements Exception {
@@ -522,20 +523,20 @@ class DeepSeekImporter {
           hasRequest = true;
           final content = fragment['content'];
           if (content is String && content.isNotEmpty) {
-            parts.add(TextPart(content));
+            parts.add(TextPart(normalizeNewlines(content)));
           }
         case 'RESPONSE':
           hasAssistant = true;
           final content = fragment['content'];
           if (content is String && content.isNotEmpty) {
-            parts.add(TextPart(content));
+            parts.add(TextPart(normalizeNewlines(content)));
           }
         case 'THINK':
           hasAssistant = true;
           final content = fragment['content'];
           if (content is String && content.isNotEmpty) {
-            reasoningTexts.add(content);
-            parts.add(ReasoningPart(content));
+            reasoningTexts.add(normalizeNewlines(content));
+            parts.add(ReasoningPart(normalizeNewlines(content)));
           }
         case 'FILE':
           hasRequest = true;
@@ -1021,7 +1022,8 @@ class DeepSeekImporter {
         'name': providerName,
         'apiKey': '',
         'baseUrl': '',
-        'providerType': 'openai',
+        // DeepSeek 默认走 Anthropic 协议（产品口径）；用户在供应商设置里可手动改成 OpenAI。
+        'providerType': 'claude',
         'models': models,
         'modelOverrides': const <String, dynamic>{},
         'proxyEnabled': false,

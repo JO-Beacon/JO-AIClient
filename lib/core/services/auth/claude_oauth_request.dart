@@ -143,7 +143,14 @@ void setClaudeOAuthHeader(
   String name,
   String value,
 ) {
-  headers.removeWhere((key, _) => key.toLowerCase() == name.toLowerCase());
+  // 先收集再删除：边遍历边改 Map，会在“大小写不敏感”的头部映射上损坏迭代。
+  final lowerName = name.toLowerCase();
+  final matchingKeys = headers.keys
+      .where((key) => key.toLowerCase() == lowerName)
+      .toList();
+  for (final key in matchingKeys) {
+    headers.remove(key);
+  }
   headers[name] = value;
 }
 

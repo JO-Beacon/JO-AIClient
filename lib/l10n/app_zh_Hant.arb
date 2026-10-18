@@ -714,7 +714,6 @@
   "messageEditPageSaveAsBranchAndSend": "儲存為新分支並發送",
   "messageEditPageOverwriteSave": "覆蓋儲存",
   "messageEditPageSaveAsBranchCopyChildren": "儲存為新分支並複製子分支",
-  "messageEditPageHint": "輸入訊息內容…",
   "messageEditTrimWhitespace": "清理首尾空白",
   "messageEditAttachmentsTitle": "附件",
   "messageEditAddImage": "新增圖片",
@@ -797,6 +796,14 @@
   "reasoningBudgetSheetCustomHint": "例如：2048 (-1 自動，0 關閉)",
   "chatMessageWidgetFileNotFound": "檔案不存在: {fileName}",
   "chatMessageWidgetCannotOpenFile": "無法開啟檔案: {message}",
+  "chatMessageWidgetWebFetch": "讀取網頁: {target}",
+  "@chatMessageWidgetWebFetch": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "chatMessageWidgetOpenFileError": "開啟檔案失敗: {error}",
   "chatMessageWidgetCopiedToClipboard": "已複製到剪貼簿",
   "chatMessageWidgetResendTooltip": "重新傳送",
@@ -1305,6 +1312,32 @@
   "searchServicesPageAddProvider": "新增提供商",
   "searchServicesPageSearchProviders": "搜尋提供商",
   "searchServicesPageGeneralOptions": "通用選項",
+  "searchServicesPageWebFetchSection": "網頁抓取",
+  "searchServicesPageWebFetchModeTitle": "抓取方式",
+  "searchServicesPageWebFetchFollow": "跟隨搜尋服務",
+  "searchServicesPageWebFetchFollowValue": "跟隨搜尋 · {name}",
+  "@searchServicesPageWebFetchFollowValue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServicesPageWebFetchFollowSubtitle": "目前：{name}",
+  "@searchServicesPageWebFetchFollowSubtitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServicesPageWebFetchLocal": "本機抓取",
+  "searchServicesPageWebFetchLocalSubtitle": "免費，由本機直接請求網頁",
+  "searchServicesPageWebFetchProviderSubtitle": "使用該服務商的 API Key 與額度",
+  "searchServicesPageWebFetchOff": "關閉",
+  "searchServicesPageWebFetchOffSubtitle": "連網時只搜尋，不讀取網頁",
+  "searchServicesPageWebFetchFooter": "開啟連網搜尋後，模型還可以讀取網頁全文。搜尋服務不支援抓取時會改用本機抓取，本機抓取無法處理需要 JavaScript 渲染或有反爬限制的頁面。",
+  "searchServicesPageWebFetchSupported": "支援網頁抓取",
   "searchServicesPageAutoTestTitle": "啟動時自動測試連線",
   "searchServicesPageMaxResults": "最大結果數",
   "searchServicesPageTimeoutSeconds": "超時時間（秒）",
@@ -1327,6 +1360,7 @@
   "searchServicesAddDialogApiKeyRequired": "API Key 必填",
   "searchServicesFieldCustomUrlOptional": "自訂 URL（可選）",
   "searchServicesDialogApiKey": "API Key",
+  "searchServicesDialogApiKeyOptional": "API Key（可選）",
   "searchServicesDialogModel": "模型",
   "searchServicesDialogSystemPrompt": "系統提示詞",
   "searchServicesAddDialogInstanceUrl": "實例 URL",
@@ -1505,6 +1539,7 @@
   "displaySettingsPageChatFontSampleText": "這是一個範例的聊天文本",
   "displaySettingsPageChatBackgroundMaskTitle": "聊天背景遮罩透明度",
   "displaySettingsPageChatInputBackgroundOpacityTitle": "輸入框背景透明度",
+  "displaySettingsPageLongMessageEditorTitle": "長文字使用按行編輯器",
   "displaySettingsPageThemeSettingsTitle": "主題設定",
   "displaySettingsPageThemeColorTitle": "主題顏色",
   "desktopSettingsFontsTitle": "字體設定",
@@ -1542,6 +1577,8 @@
   "searchProviderYouDescription": "You.com 搜尋 API。返回網頁與新聞結果，支援 Highlights 或 Snippets。",
   "themeSettingsPageUseDynamicColorSubtitle": "基於系統配色（Android 12+）",
   "themeSettingsPageColorPalettesSection": "配色方案",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesTitle": "分層表單磚片",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle": "面板裡的操作列使用卡片底色；關閉後保持通透",
   "themeSettingsPageCustomPaletteName": "自定義",
   "themeSettingsPageCustomColorReset": "重置",
   "themeSettingsPageCustomThemesSection": "自定義主題",
@@ -1580,6 +1617,8 @@
   "asrServicesLocalSubtitle": "下載後在裝置上離線執行",
   "asrServicesOpenAiTitle": "OpenAI Realtime",
   "asrServicesOpenAiSubtitle": "低延遲串流轉寫",
+  "asrServicesGroqSubtitle": "Whisper 分段雲端轉寫",
+  "asrServicesMistralSubtitle": "Voxtral 分段雲端轉寫",
   "asrServicesDashScopeTitle": "DashScope",
   "asrServicesDashScopeSubtitle": "Qwen 即時轉寫",
   "asrServicesVolcengineTitle": "火山引擎",
@@ -1741,6 +1780,7 @@
   "searchProviderDuckDuckGoDescription": "基於 DDGS 的 DuckDuckGo 隱私搜尋，無需 API 金鑰，支援設定地區。",
   "searchProviderBraveDescription": "Brave 獨立搜尋引擎。注重隱私，無追蹤或建立個人檔案。",
   "searchProviderExaDescription": "具備語義理解的神經搜尋引擎。適合研究與查找特定內容。",
+  "searchProviderExaMcpDescription": "透過 MCP 使用 Exa 搜尋。不填 API Key 可在免費額度內使用。",
   "searchProviderLinkUpDescription": "提供來源可追溯答案的搜尋 API，同時提供搜尋結果與 AI 摘要。",
   "modelFetchInvertTooltip": "反選",
   "modelDetailSheetSaveFailedMessage": "保存失敗，請重試",
@@ -1750,10 +1790,12 @@
   "searchProviderZhipuDescription": "智譜 AI 旗下中文 AI 搜尋服務，針對中文內容與查詢進行優化。",
   "searchProviderOllamaDescription": "Ollama 網路搜尋 API。為模型補充最新資訊，降低幻覺並提升準確性。",
   "searchProviderJinaDescription": "AI 搜尋基礎設施：提供 Embeddings、重排序、Web Reader、DeepSearch 與小語言模型。支援多語言與多模態。",
+  "searchProviderDeepSeekDescription": "DeepSeek 官方網頁搜尋與讀頁介面，使用 DeepSeek 金鑰。",
   "searchServiceNameBingLocal": "Bing（本機）",
   "searchServiceNameDuckDuckGo": "DuckDuckGo",
   "searchServiceNameTavily": "Tavily",
   "searchServiceNameExa": "Exa",
+  "searchServiceNameExaMcp": "Exa MCP",
   "searchServiceNameZhipu": "Zhipu（智譜）",
   "searchServiceNameSearXNG": "SearXNG",
   "searchServiceNameLinkUp": "LinkUp",
@@ -1761,6 +1803,7 @@
   "searchServiceNameMetaso": "Metaso（秘塔）",
   "searchServiceNameOllama": "Ollama",
   "searchServiceNameJina": "Jina",
+  "searchServiceNameDeepSeek": "DeepSeek",
   "searchServiceNamePerplexity": "Perplexity",
   "searchProviderPerplexityDescription": "Perplexity 搜尋 API。提供排序的網頁結果，支援地區與網域過濾。",
   "searchServiceNameBocha": "博查",
@@ -2081,7 +2124,9 @@
   "memorySettingsLegacySection": "舊版記憶",
   "memorySettingsInjectionSection": "記憶注入",
   "memorySettingsInjectionMaxItemsTitle": "每類注入條數",
-  "memorySettingsInjectionMaxItemsSubtitle": "某類記憶超過此上限時，只注入最新條目，其餘內容可透過 memory_search_profile 查詢。數值越大越完整，但會佔用更多 token。",
+  "memorySettingsInjectionMaxItemsSubtitle": "此限制僅適用於未選擇全量注入的類型。某類記憶超過此上限時，只注入最新條目，其餘內容可透過 memory_search_profile 查詢。數值越大越完整，但會佔用更多 token。",
+  "memorySettingsFullInjectionTypesTitle": "全量注入類型",
+  "memorySettingsFullInjectionTypesSubtitle": "可多選。選中類型會注入全域及目前助手的全部有效記憶，不受條數限制，會增加上下文和 token 消耗。",
   "memorySettingsInjectionMaxItemsCustomButton": "自訂",
   "memorySettingsInjectionMaxItemsCustomTitle": "自訂注入條數",
   "memorySettingsInjectionMaxItemsCustomLabel": "條數",
@@ -2461,6 +2506,7 @@
   "worldBookInjectionPositionTopOfChat": "對話頂部",
   "worldBookInjectionPositionBottomOfChat": "對話底部",
   "worldBookInjectionPositionAtDepth": "指定深度",
+  "worldBookImportUnsupportedEntries": "匯入完成。{count} 個條目使用了暫不支援的酒館功能（如巨集、正則、時效、篩選或插入規則），已保留內容並停用，請檢查後再啟用。",
   "worldBookInjectionRoleUser": "使用者",
   "worldBookInjectionRoleAssistant": "助手",
   "mcpToolNeedsApproval": "需要審批",
@@ -2846,6 +2892,17 @@
   "backupProgressBytes": "{done} / {total}",
   "backupProgressCancel": "取消",
   "backupProgressCancelled": "已取消",
+  "backupProgressFailed": "操作失敗",
+  "backupProgressFailedAt": "失敗階段：{phase}",
+  "@backupProgressFailedAt": {
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      }
+    }
+  },
+  "backupProgressCopyError": "複製錯誤",
+  "backupProgressErrorCopied": "錯誤已複製",
   "backupProgressCommitting": "正在提交",
   "backupProgressDownloading": "正在下載",
   "backupProgressExtracting": "正在解壓",
@@ -3205,6 +3262,9 @@
   "workspaceEnvErrorNetwork": "下載失敗，請檢查網路後重試。",
   "workspaceEnvErrorChecksumMismatch": "下載檔案已損毀，請重試。",
   "workspaceEnvErrorExtractFailed": "無法解壓沙箱映像。",
+  "workspaceEnvErrorCleanupFailed": "無法清理舊沙箱檔案，請重試。",
+  "workspaceEnvCleanupIncomplete": "沙箱已就緒，但部分舊檔案未能清理，仍佔用儲存空間。",
+  "workspaceEnvErrorResetFailed": "未能完成沙箱重設，請重試。",
   "workspaceEnvErrorPatchFailed": "無法完成沙箱設定。",
   "workspaceEnvErrorCancelled": "安裝已取消。",
   "workspaceEnvErrorGeneric": "安裝沙箱時發生錯誤。",
@@ -4580,6 +4640,30 @@
   "@searchServiceEditorTestFailed": {
     "placeholders": {
       "message": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServiceEditorTestModeSearch": "搜尋",
+  "searchServiceEditorTestModeFetch": "抓取",
+  "searchServiceEditorTestUrlHint": "輸入測試網址",
+  "searchServiceEditorTestFetchRun": "執行抓取測試",
+  "searchServiceEditorTestFetchRunning": "抓取中…",
+  "searchServiceEditorTestFetchFailed": "抓取失敗：{message}",
+  "@searchServiceEditorTestFetchFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServiceEditorTestFetchStats": "{characters} 字元 · {seconds} 秒",
+  "@searchServiceEditorTestFetchStats": {
+    "placeholders": {
+      "characters": {
+        "type": "String"
+      },
+      "seconds": {
         "type": "String"
       }
     }
@@ -6100,5 +6184,22 @@
   "tokenDetailCost": "{amount}",
   "workspaceToolTitleViewImage": "檢視圖片",
   "workspaceToolHelpViewImage": "讓模型檢視工作區中的圖片內容。",
-  "oauthUsedValue": "已用 {value}"
+  "oauthUsedValue": "已用 {value}",
+  "mcpOAuthSettings": "OAuth 設定",
+  "mcpOAuthAutomatic": "自動",
+  "mcpOAuthMetadataUrl": "用戶端中繼資料文件 URL",
+  "mcpOAuthClientAuthentication": "用戶端驗證方式",
+  "mcpOAuthPublicClient": "公用用戶端",
+  "mcpOAuthRedirectUri": "本機回呼 URL（選填）",
+  "mcpOAuthFillRedirectExample": "填入範例",
+  "mcpOAuthRedirectHint": "留空使用平台預設回呼。若服務僅允許 localhost 回呼，可填寫 HTTP 回環位址。連接埠 0 自動選擇可用連接埠；預先註冊的用戶端可能要求固定連接埠。",
+  "mcpOAuthClientIdRequired": "請輸入用戶端 ID，或選擇自動註冊。",
+  "mcpOAuthMetadataUrlInvalid": "請輸入包含路徑的 HTTPS 中繼資料文件 URL。",
+  "mcpOAuthSecretRequired": "此用戶端驗證方式需要 Client secret。",
+  "mcpOAuthRedirectInvalid": "請使用 localhost、127.0.0.1 或 [::1] 的 HTTP 回呼位址，不要包含憑證、查詢參數或片段。",
+  "mcpOAuthDiscovering": "正在探索授權伺服器…",
+  "mcpOAuthRegistering": "正在準備授權…",
+  "mcpOAuthWaitingBrowser": "等待瀏覽器授權…",
+  "mcpOAuthExchangingToken": "正在完成登入…",
+  "messageEditAssistantRoundEndPart": "本輪回覆結束"
 }

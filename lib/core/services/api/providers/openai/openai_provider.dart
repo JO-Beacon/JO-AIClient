@@ -33,6 +33,7 @@ import '../../reasoning/reasoning_dialects.dart' show ReasoningTransport;
 import '../../../model_spec/model_spec_resolver.dart';
 import 'responses_api.dart';
 import 'responses_decoder.dart';
+import 'responses_history.dart';
 
 Uri _openAICompatibleUrl(ProviderConfig config) {
   final rawBase = config.baseUrl.endsWith('/')
@@ -251,7 +252,11 @@ Stream<StreamChunk> sendOpenAIStream(
       const <Map<String, dynamic>>[];
   String responsesInstructions = '';
   List<dynamic>? responsesIncludeParam;
+  final responsesRecorder = ResponsesTurnRecorder(
+    responsesReplayScope(config, modelId),
+  );
   if (config.useResponseApi == true) {
+    messages = filterResponsesReasoningHistory(messages, spec.reasoning.replay);
     final input = <Map<String, dynamic>>[];
     // Extract system messages into `instructions` (Responses API best practice)
     String instructions = '';
@@ -296,6 +301,12 @@ Stream<StreamChunk> sendOpenAIStream(
           ? textFromContentParts(originalContent)
           : (originalContent ?? '').toString();
       final roleRaw = (m['role'] ?? 'user').toString();
+
+      if (roleRaw == 'assistant' &&
+          m[multimodalInternalResponsesItemKey] is Map) {
+        input.add(responsesInputItem(m));
+        continue;
+      }
 
       // Responses API supports a top-level `instructions` field that has higher priority
       if (roleRaw == 'system') {
@@ -348,6 +359,9 @@ Stream<StreamChunk> sendOpenAIStream(
       }
 
       final isAssistant = roleRaw == 'assistant';
+      // 重建出的助手正文要排在同一条消息的调用之前。在这里先占住位置，
+      // 免得工具的调用批次与它的结果之间被插进一条消息。
+      final assistantMessageIndex = input.length;
 
       // Handle assistant messages with tool_calls - convert to function_call format
       if (isAssistant && m['tool_calls'] is List) {
@@ -412,7 +426,7 @@ Stream<StreamChunk> sendOpenAIStream(
         // 只支持音频、不支持图片的模型也必须走到下面的媒体循环，否则音频发不出去。
         if (!canImageInput && !canAudioInput) {
           if (isAssistant) {
-            input.add({
+            input.insert(assistantMessageIndex, {
               'type': 'message',
               'role': 'assistant',
               'status': 'completed',
@@ -560,7 +574,7 @@ Stream<StreamChunk> sendOpenAIStream(
           if (assistantContent.isEmpty) {
             assistantContent.add({'type': 'output_text', 'text': parsed.text});
           }
-          input.add({
+          input.insert(assistantMessageIndex, {
             'type': 'message',
             'role': 'assistant',
             'status': 'completed',
@@ -573,7 +587,7 @@ Stream<StreamChunk> sendOpenAIStream(
         // No images
         if (isAssistant) {
           // Use proper message object format for assistant messages
-          input.add({
+          input.insert(assistantMessageIndex, {
             'type': 'message',
             'role': 'assistant',
             'status': 'completed',
@@ -610,6 +624,12 @@ Stream<StreamChunk> sendOpenAIStream(
       } catch (_) {}
     }
     // Save initial Responses context
+    if (Uri.tryParse(config.baseUrl)?.host == 'api.openai.com') {
+      body['include'] = [
+        ...?body['include'] as List?,
+        'reasoning.encrypted_content',
+      ];
+    }
     try {
       responsesInitialInput = List<Map<String, dynamic>>.from(
         (body['input'] as List).map((e) => (e as Map).cast<String, dynamic>()),
@@ -663,7 +683,7 @@ Stream<StreamChunk> sendOpenAIStream(
       if (temperature != null) 'temperature': temperature,
       if (topP != null) 'top_p': topP,
       if (tools != null && tools.isNotEmpty)
-        'tools': cleanToolsForCompatibility(tools),
+        'tools': copyChatCompletionTools(tools),
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };
     setMaxTokens(body);
@@ -823,6 +843,7 @@ Stream<StreamChunk> sendOpenAIStream(
               item.cast<String, dynamic>(),
         ];
         final calls = responsesCallsFromOutput(outputItems);
+        yield responsesRecorder.record(outputItems, calls);
         if (calls.isNotEmpty && effectiveOnToolCall != null) {
           yield* emitDelta(
             ids: ids,
@@ -831,6 +852,7 @@ Stream<StreamChunk> sendOpenAIStream(
             usage: usage,
           );
           yield* runOpenAIResponsesToolFollowUps(
+            recorder: responsesRecorder,
             client: client,
             config: config,
             modelId: modelId,
@@ -1028,6 +1050,14 @@ Stream<StreamChunk> sendOpenAIStream(
                 'args': call.args,
               },
           });
+        final recordedCalls = responsesCallsFromIndexMap(respToolCallsByIndex);
+        yield responsesRecorder.record(
+          withResponsesFunctionCallItems(
+            lastResponseOutputItems,
+            recordedCalls,
+          ),
+          recordedCalls,
+        );
         if (!decoder.emittedImageEvents) {
           var fallbackCount = 0;
           for (final image in decoder.takeImages()) {
@@ -1088,6 +1118,7 @@ Stream<StreamChunk> sendOpenAIStream(
                     ),
                 ];
           yield* runOpenAIResponsesToolFollowUps(
+            recorder: responsesRecorder,
             client: client,
             config: config,
             modelId: modelId,
@@ -1214,6 +1245,22 @@ Stream<StreamChunk> sendOpenAIStream(
   }
   for (final chunk in responsesDecoder?.onClosed() ?? const <StreamChunk>[]) {
     yield chunk;
+  }
+  if (responsesDecoder != null) {
+    usage = responsesDecoder.usage ?? usage;
+    approxCompletionChars = responsesDecoder.approxCompletionChars;
+    final output = responsesDecoder.outputItems;
+    if (output.isNotEmpty) {
+      // EOF 可能跟在完整的 output_item.done 后而没有任何终止事件：
+      // 这些原生条目要留住，但不要去合成或执行未完成的工具调用。
+      yield responsesRecorder.record(
+        output,
+        responsesCallsFromIndexMap({
+          for (final call in responsesDecoder.takeFunctionCalls())
+            call.index: call.toIndexFields(),
+        }),
+      );
+    }
   }
   final approxTotal =
       usage?.totalTokens ??

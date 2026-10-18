@@ -2333,9 +2333,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageEditPageSaveAsBranchCopyChildren => '保存为新分支并复制子分支';
 
   @override
-  String get messageEditPageHint => '输入消息内容…';
-
-  @override
   String get messageEditTrimWhitespace => '清理首尾空白';
 
   @override
@@ -2594,6 +2591,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String chatMessageWidgetCannotOpenFile(String message) {
     return '无法打开文件: $message';
+  }
+
+  @override
+  String chatMessageWidgetWebFetch(String target) {
+    return '读取网页: $target';
   }
 
   @override
@@ -4298,6 +4300,48 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchServicesPageGeneralOptions => '通用选项';
 
   @override
+  String get searchServicesPageWebFetchSection => '网页抓取';
+
+  @override
+  String get searchServicesPageWebFetchModeTitle => '抓取方式';
+
+  @override
+  String get searchServicesPageWebFetchFollow => '跟随搜索服务';
+
+  @override
+  String searchServicesPageWebFetchFollowValue(String name) {
+    return '跟随搜索 · $name';
+  }
+
+  @override
+  String searchServicesPageWebFetchFollowSubtitle(String name) {
+    return '当前：$name';
+  }
+
+  @override
+  String get searchServicesPageWebFetchLocal => '本地抓取';
+
+  @override
+  String get searchServicesPageWebFetchLocalSubtitle => '免费，由本机直接请求网页';
+
+  @override
+  String get searchServicesPageWebFetchProviderSubtitle =>
+      '使用该服务商的 API Key 和额度';
+
+  @override
+  String get searchServicesPageWebFetchOff => '关闭';
+
+  @override
+  String get searchServicesPageWebFetchOffSubtitle => '联网时只搜索，不读取网页';
+
+  @override
+  String get searchServicesPageWebFetchFooter =>
+      '开启联网搜索后，模型还可以读取网页全文。搜索服务不支持抓取时会改用本地抓取，本地抓取无法处理需要 JavaScript 渲染或有反爬限制的页面。';
+
+  @override
+  String get searchServicesPageWebFetchSupported => '支持网页抓取';
+
+  @override
   String get searchServicesPageAutoTestTitle => '启动时自动测试连接';
 
   @override
@@ -4406,6 +4450,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchServicesDialogApiKey => 'API Key';
+
+  @override
+  String get searchServicesDialogApiKeyOptional => 'API Key（可选）';
 
   @override
   String get searchServicesDialogModel => '模型';
@@ -4561,6 +4608,31 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String searchServiceEditorTestFailed(String message) {
     return '搜索失败：$message';
+  }
+
+  @override
+  String get searchServiceEditorTestModeSearch => '搜索';
+
+  @override
+  String get searchServiceEditorTestModeFetch => '抓取';
+
+  @override
+  String get searchServiceEditorTestUrlHint => '输入测试网址';
+
+  @override
+  String get searchServiceEditorTestFetchRun => '运行抓取测试';
+
+  @override
+  String get searchServiceEditorTestFetchRunning => '抓取中…';
+
+  @override
+  String searchServiceEditorTestFetchFailed(String message) {
+    return '抓取失败：$message';
+  }
+
+  @override
+  String searchServiceEditorTestFetchStats(String characters, String seconds) {
+    return '$characters 字符 · $seconds 秒';
   }
 
   @override
@@ -4990,6 +5062,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get displaySettingsPageChatInputBackgroundOpacityTitle => '输入框背景透明度';
 
   @override
+  String get displaySettingsPageLongMessageEditorTitle => '长文本使用按行编辑器';
+
+  @override
   String get displaySettingsPageThemeSettingsTitle => '主题设置';
 
   @override
@@ -5106,6 +5181,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get themeSettingsPageColorPalettesSection => '配色方案';
 
   @override
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle => '弹窗内瓦片分层';
+
+  @override
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle =>
+      '默认瓦片与弹窗同色';
+
+  @override
   String get themeSettingsPageCustomPaletteName => '自定义';
 
   @override
@@ -5218,6 +5300,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get asrServicesOpenAiSubtitle => '低延迟流式转写';
+
+  @override
+  String get asrServicesGroqSubtitle => 'Whisper 分段云端转写';
+
+  @override
+  String get asrServicesMistralSubtitle => 'Voxtral 分段云端转写';
 
   @override
   String get asrServicesDashScopeTitle => 'DashScope';
@@ -5729,6 +5817,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchProviderExaDescription => '具备语义理解的神经搜索引擎。适合研究与查找特定内容。';
 
   @override
+  String get searchProviderExaMcpDescription =>
+      '通过 MCP 使用 Exa 搜索。不填 API Key 可在免费限额内使用。';
+
+  @override
   String get searchProviderLinkUpDescription =>
       '提供来源可追溯答案的搜索 API，同时提供搜索结果与 AI 摘要。';
 
@@ -5754,6 +5846,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchProviderJinaDescription => '适合开发者和企业用于 AI 搜索应用。支持多语言与多模态。';
 
   @override
+  String get searchProviderDeepSeekDescription =>
+      'DeepSeek 官方网页搜索与读页接口，使用 DeepSeek 密钥。';
+
+  @override
   String get searchServiceNameBingLocal => 'Bing（Local）';
 
   @override
@@ -5764,6 +5860,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchServiceNameExa => 'Exa';
+
+  @override
+  String get searchServiceNameExaMcp => 'Exa MCP';
 
   @override
   String get searchServiceNameZhipu => '智谱';
@@ -5785,6 +5884,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchServiceNameJina => 'Jina';
+
+  @override
+  String get searchServiceNameDeepSeek => 'DeepSeek';
 
   @override
   String get searchServiceNamePerplexity => 'Perplexity';
@@ -6632,7 +6734,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get memorySettingsInjectionMaxItemsSubtitle =>
-      '某类记忆超过此上限时，只注入最新条目，其余内容可通过 memory_search_profile 查询。数值越大越完整，但会占用更多 token。';
+      '此限制仅适用于未选择全量注入的类型。某类记忆超过此上限时，只注入最新条目，其余内容可通过 memory_search_profile 查询。数值越大越完整，但会占用更多 token。';
+
+  @override
+  String get memorySettingsFullInjectionTypesTitle => '全量注入类型';
+
+  @override
+  String get memorySettingsFullInjectionTypesSubtitle =>
+      '可多选。选中类型会注入全局及当前助手的全部有效记忆，不受条数限制，会增加上下文和 token 消耗。';
 
   @override
   String get memorySettingsInjectionMaxItemsCustomButton => '自定义';
@@ -7852,6 +7961,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get worldBookInjectionPositionAtDepth => '指定深度';
+
+  @override
+  String worldBookImportUnsupportedEntries(int count) {
+    return '导入完成。$count 个条目使用了暂不支持的酒馆功能（如宏、正则、时效、筛选或插入规则），已保留内容并停用，请检查后再启用。';
+  }
 
   @override
   String get worldBookInjectionRoleUser => '用户';
@@ -9115,6 +9229,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backupProgressCancelled => '已取消';
 
   @override
+  String get backupProgressFailed => '操作失败';
+
+  @override
+  String backupProgressFailedAt(String phase) {
+    return '失败阶段：$phase';
+  }
+
+  @override
+  String get backupProgressCopyError => '复制错误';
+
+  @override
+  String get backupProgressErrorCopied => '错误已复制';
+
+  @override
   String get backupProgressCommitting => '正在提交';
 
   @override
@@ -9667,13 +9795,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get themeAdvancedSettingsPageUseLayeredSurfacesSubtitle =>
       '页面更深、卡片更亮，两者都保留主题色相；关闭可恢复旧外观';
-
-  @override
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle => '弹窗内瓦片分层';
-
-  @override
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle =>
-      '默认瓦片与弹窗同色';
 
   @override
   String get searchServiceNameKelivo => 'Kelivo';
@@ -10334,6 +10455,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get workspaceEnvErrorExtractFailed => '无法解压沙箱镜像。';
+
+  @override
+  String get workspaceEnvErrorCleanupFailed => '无法清理旧沙箱文件，请重试。';
+
+  @override
+  String get workspaceEnvCleanupIncomplete => '沙箱已就绪，但部分旧文件未能清理，仍占用存储空间。';
+
+  @override
+  String get workspaceEnvErrorResetFailed => '未能完成沙箱重置，请重试。';
 
   @override
   String get workspaceEnvErrorPatchFailed => '无法完成沙箱配置。';
@@ -13208,6 +13338,59 @@ class AppLocalizationsZh extends AppLocalizations {
   String oauthUsedValue(String value) {
     return '已用 $value';
   }
+
+  @override
+  String get mcpOAuthSettings => 'OAuth 设置';
+
+  @override
+  String get mcpOAuthAutomatic => '自动';
+
+  @override
+  String get mcpOAuthMetadataUrl => '客户端元数据文档 URL';
+
+  @override
+  String get mcpOAuthClientAuthentication => '客户端认证方式';
+
+  @override
+  String get mcpOAuthPublicClient => '公共客户端';
+
+  @override
+  String get mcpOAuthRedirectUri => '本地回调 URL（可选）';
+
+  @override
+  String get mcpOAuthFillRedirectExample => '填入示例';
+
+  @override
+  String get mcpOAuthRedirectHint =>
+      '留空使用平台默认回调。若服务仅允许 localhost 回调，可填写 HTTP 回环地址。端口 0 自动选择可用端口；预注册客户端可能要求固定端口。';
+
+  @override
+  String get mcpOAuthClientIdRequired => '请输入客户端 ID，或选择自动注册。';
+
+  @override
+  String get mcpOAuthMetadataUrlInvalid => '请输入包含路径的 HTTPS 元数据文档 URL。';
+
+  @override
+  String get mcpOAuthSecretRequired => '此客户端认证方式需要 Client secret。';
+
+  @override
+  String get mcpOAuthRedirectInvalid =>
+      '请使用 localhost、127.0.0.1 或 [::1] 的 HTTP 回调地址，不要包含凭据、查询参数或片段。';
+
+  @override
+  String get mcpOAuthDiscovering => '正在发现授权服务器…';
+
+  @override
+  String get mcpOAuthRegistering => '正在准备授权…';
+
+  @override
+  String get mcpOAuthWaitingBrowser => '等待浏览器授权…';
+
+  @override
+  String get mcpOAuthExchangingToken => '正在完成登录…';
+
+  @override
+  String get messageEditAssistantRoundEndPart => '本轮回复结束';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -15539,9 +15722,6 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get messageEditPageSaveAsBranchCopyChildren => '保存为新分支并复制子分支';
 
   @override
-  String get messageEditPageHint => '输入消息内容…';
-
-  @override
   String get messageEditTrimWhitespace => '清理首尾空白';
 
   @override
@@ -15800,6 +15980,11 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String chatMessageWidgetCannotOpenFile(String message) {
     return '无法打开文件: $message';
+  }
+
+  @override
+  String chatMessageWidgetWebFetch(String target) {
+    return '读取网页: $target';
   }
 
   @override
@@ -17504,6 +17689,48 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get searchServicesPageGeneralOptions => '通用选项';
 
   @override
+  String get searchServicesPageWebFetchSection => '网页抓取';
+
+  @override
+  String get searchServicesPageWebFetchModeTitle => '抓取方式';
+
+  @override
+  String get searchServicesPageWebFetchFollow => '跟随搜索服务';
+
+  @override
+  String searchServicesPageWebFetchFollowValue(String name) {
+    return '跟随搜索 · $name';
+  }
+
+  @override
+  String searchServicesPageWebFetchFollowSubtitle(String name) {
+    return '当前：$name';
+  }
+
+  @override
+  String get searchServicesPageWebFetchLocal => '本地抓取';
+
+  @override
+  String get searchServicesPageWebFetchLocalSubtitle => '免费，由本机直接请求网页';
+
+  @override
+  String get searchServicesPageWebFetchProviderSubtitle =>
+      '使用该服务商的 API Key 和额度';
+
+  @override
+  String get searchServicesPageWebFetchOff => '关闭';
+
+  @override
+  String get searchServicesPageWebFetchOffSubtitle => '联网时只搜索，不读取网页';
+
+  @override
+  String get searchServicesPageWebFetchFooter =>
+      '开启联网搜索后，模型还可以读取网页全文。搜索服务不支持抓取时会改用本地抓取，本地抓取无法处理需要 JavaScript 渲染或有反爬限制的页面。';
+
+  @override
+  String get searchServicesPageWebFetchSupported => '支持网页抓取';
+
+  @override
   String get searchServicesPageAutoTestTitle => '启动时自动测试连接';
 
   @override
@@ -17612,6 +17839,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get searchServicesDialogApiKey => 'API Key';
+
+  @override
+  String get searchServicesDialogApiKeyOptional => 'API Key（可选）';
 
   @override
   String get searchServicesDialogModel => '模型';
@@ -17767,6 +17997,31 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String searchServiceEditorTestFailed(String message) {
     return '搜索失败：$message';
+  }
+
+  @override
+  String get searchServiceEditorTestModeSearch => '搜索';
+
+  @override
+  String get searchServiceEditorTestModeFetch => '抓取';
+
+  @override
+  String get searchServiceEditorTestUrlHint => '输入测试网址';
+
+  @override
+  String get searchServiceEditorTestFetchRun => '运行抓取测试';
+
+  @override
+  String get searchServiceEditorTestFetchRunning => '抓取中…';
+
+  @override
+  String searchServiceEditorTestFetchFailed(String message) {
+    return '抓取失败：$message';
+  }
+
+  @override
+  String searchServiceEditorTestFetchStats(String characters, String seconds) {
+    return '$characters 字符 · $seconds 秒';
   }
 
   @override
@@ -18196,6 +18451,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get displaySettingsPageChatInputBackgroundOpacityTitle => '输入框背景透明度';
 
   @override
+  String get displaySettingsPageLongMessageEditorTitle => '长文本使用按行编辑器';
+
+  @override
   String get displaySettingsPageThemeSettingsTitle => '主题设置';
 
   @override
@@ -18312,6 +18570,13 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get themeSettingsPageColorPalettesSection => '配色方案';
 
   @override
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle => '弹窗内瓦片分层';
+
+  @override
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle =>
+      '默认瓦片与弹窗同色';
+
+  @override
   String get themeSettingsPageCustomPaletteName => '自定义';
 
   @override
@@ -18424,6 +18689,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get asrServicesOpenAiSubtitle => '低延迟流式转写';
+
+  @override
+  String get asrServicesGroqSubtitle => 'Whisper 分段云端转写';
+
+  @override
+  String get asrServicesMistralSubtitle => 'Voxtral 分段云端转写';
 
   @override
   String get asrServicesDashScopeTitle => 'DashScope';
@@ -18935,6 +19206,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get searchProviderExaDescription => '具备语义理解的神经搜索引擎。适合研究与查找特定内容。';
 
   @override
+  String get searchProviderExaMcpDescription =>
+      '通过 MCP 使用 Exa 搜索。不填 API Key 可在免费限额内使用。';
+
+  @override
   String get searchProviderLinkUpDescription =>
       '提供来源可追溯答案的搜索 API，同时提供搜索结果与 AI 摘要。';
 
@@ -18960,6 +19235,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get searchProviderJinaDescription => '适合开发者和企业用于 AI 搜索应用。支持多语言与多模态。';
 
   @override
+  String get searchProviderDeepSeekDescription =>
+      'DeepSeek 官方网页搜索与读页接口，使用 DeepSeek 密钥。';
+
+  @override
   String get searchServiceNameBingLocal => 'Bing（Local）';
 
   @override
@@ -18970,6 +19249,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get searchServiceNameExa => 'Exa';
+
+  @override
+  String get searchServiceNameExaMcp => 'Exa MCP';
 
   @override
   String get searchServiceNameZhipu => '智谱';
@@ -18991,6 +19273,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get searchServiceNameJina => 'Jina';
+
+  @override
+  String get searchServiceNameDeepSeek => 'DeepSeek';
 
   @override
   String get searchServiceNamePerplexity => 'Perplexity';
@@ -19838,7 +20123,14 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get memorySettingsInjectionMaxItemsSubtitle =>
-      '某类记忆超过此上限时，只注入最新条目，其余内容可通过 memory_search_profile 查询。数值越大越完整，但会占用更多 token。';
+      '此限制仅适用于未选择全量注入的类型。某类记忆超过此上限时，只注入最新条目，其余内容可通过 memory_search_profile 查询。数值越大越完整，但会占用更多 token。';
+
+  @override
+  String get memorySettingsFullInjectionTypesTitle => '全量注入类型';
+
+  @override
+  String get memorySettingsFullInjectionTypesSubtitle =>
+      '可多选。选中类型会注入全局及当前助手的全部有效记忆，不受条数限制，会增加上下文和 token 消耗。';
 
   @override
   String get memorySettingsInjectionMaxItemsCustomButton => '自定义';
@@ -21058,6 +21350,11 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get worldBookInjectionPositionAtDepth => '指定深度';
+
+  @override
+  String worldBookImportUnsupportedEntries(int count) {
+    return '导入完成。$count 个条目使用了暂不支持的酒馆功能（如宏、正则、时效、筛选或插入规则），已保留内容并停用，请检查后再启用。';
+  }
 
   @override
   String get worldBookInjectionRoleUser => '用户';
@@ -22321,6 +22618,20 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get backupProgressCancelled => '已取消';
 
   @override
+  String get backupProgressFailed => '操作失败';
+
+  @override
+  String backupProgressFailedAt(String phase) {
+    return '失败阶段：$phase';
+  }
+
+  @override
+  String get backupProgressCopyError => '复制错误';
+
+  @override
+  String get backupProgressErrorCopied => '错误已复制';
+
+  @override
   String get backupProgressCommitting => '正在提交';
 
   @override
@@ -22873,13 +23184,6 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String get themeAdvancedSettingsPageUseLayeredSurfacesSubtitle =>
       '页面更深、卡片更亮，两者都保留主题色相；关闭可恢复旧外观';
-
-  @override
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle => '弹窗内瓦片分层';
-
-  @override
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle =>
-      '默认瓦片与弹窗同色';
 
   @override
   String get searchServiceNameKelivo => 'Kelivo';
@@ -23540,6 +23844,15 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get workspaceEnvErrorExtractFailed => '无法解压沙箱镜像。';
+
+  @override
+  String get workspaceEnvErrorCleanupFailed => '无法清理旧沙箱文件，请重试。';
+
+  @override
+  String get workspaceEnvCleanupIncomplete => '沙箱已就绪，但部分旧文件未能清理，仍占用存储空间。';
+
+  @override
+  String get workspaceEnvErrorResetFailed => '未能完成沙箱重置，请重试。';
 
   @override
   String get workspaceEnvErrorPatchFailed => '无法完成沙箱配置。';
@@ -26414,6 +26727,59 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String oauthUsedValue(String value) {
     return '已用 $value';
   }
+
+  @override
+  String get mcpOAuthSettings => 'OAuth 设置';
+
+  @override
+  String get mcpOAuthAutomatic => '自动';
+
+  @override
+  String get mcpOAuthMetadataUrl => '客户端元数据文档 URL';
+
+  @override
+  String get mcpOAuthClientAuthentication => '客户端认证方式';
+
+  @override
+  String get mcpOAuthPublicClient => '公共客户端';
+
+  @override
+  String get mcpOAuthRedirectUri => '本地回调 URL（可选）';
+
+  @override
+  String get mcpOAuthFillRedirectExample => '填入示例';
+
+  @override
+  String get mcpOAuthRedirectHint =>
+      '留空使用平台默认回调。若服务仅允许 localhost 回调，可填写 HTTP 回环地址。端口 0 自动选择可用端口；预注册客户端可能要求固定端口。';
+
+  @override
+  String get mcpOAuthClientIdRequired => '请输入客户端 ID，或选择自动注册。';
+
+  @override
+  String get mcpOAuthMetadataUrlInvalid => '请输入包含路径的 HTTPS 元数据文档 URL。';
+
+  @override
+  String get mcpOAuthSecretRequired => '此客户端认证方式需要 Client secret。';
+
+  @override
+  String get mcpOAuthRedirectInvalid =>
+      '请使用 localhost、127.0.0.1 或 [::1] 的 HTTP 回调地址，不要包含凭据、查询参数或片段。';
+
+  @override
+  String get mcpOAuthDiscovering => '正在发现授权服务器…';
+
+  @override
+  String get mcpOAuthRegistering => '正在准备授权…';
+
+  @override
+  String get mcpOAuthWaitingBrowser => '等待浏览器授权…';
+
+  @override
+  String get mcpOAuthExchangingToken => '正在完成登录…';
+
+  @override
+  String get messageEditAssistantRoundEndPart => '本轮回复结束';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -28745,9 +29111,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get messageEditPageSaveAsBranchCopyChildren => '儲存為新分支並複製子分支';
 
   @override
-  String get messageEditPageHint => '輸入訊息內容…';
-
-  @override
   String get messageEditTrimWhitespace => '清理首尾空白';
 
   @override
@@ -29006,6 +29369,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String chatMessageWidgetCannotOpenFile(String message) {
     return '無法開啟檔案: $message';
+  }
+
+  @override
+  String chatMessageWidgetWebFetch(String target) {
+    return '讀取網頁: $target';
   }
 
   @override
@@ -30709,6 +31077,48 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get searchServicesPageGeneralOptions => '通用選項';
 
   @override
+  String get searchServicesPageWebFetchSection => '網頁抓取';
+
+  @override
+  String get searchServicesPageWebFetchModeTitle => '抓取方式';
+
+  @override
+  String get searchServicesPageWebFetchFollow => '跟隨搜尋服務';
+
+  @override
+  String searchServicesPageWebFetchFollowValue(String name) {
+    return '跟隨搜尋 · $name';
+  }
+
+  @override
+  String searchServicesPageWebFetchFollowSubtitle(String name) {
+    return '目前：$name';
+  }
+
+  @override
+  String get searchServicesPageWebFetchLocal => '本機抓取';
+
+  @override
+  String get searchServicesPageWebFetchLocalSubtitle => '免費，由本機直接請求網頁';
+
+  @override
+  String get searchServicesPageWebFetchProviderSubtitle =>
+      '使用該服務商的 API Key 與額度';
+
+  @override
+  String get searchServicesPageWebFetchOff => '關閉';
+
+  @override
+  String get searchServicesPageWebFetchOffSubtitle => '連網時只搜尋，不讀取網頁';
+
+  @override
+  String get searchServicesPageWebFetchFooter =>
+      '開啟連網搜尋後，模型還可以讀取網頁全文。搜尋服務不支援抓取時會改用本機抓取，本機抓取無法處理需要 JavaScript 渲染或有反爬限制的頁面。';
+
+  @override
+  String get searchServicesPageWebFetchSupported => '支援網頁抓取';
+
+  @override
   String get searchServicesPageAutoTestTitle => '啟動時自動測試連線';
 
   @override
@@ -30817,6 +31227,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get searchServicesDialogApiKey => 'API Key';
+
+  @override
+  String get searchServicesDialogApiKeyOptional => 'API Key（可選）';
 
   @override
   String get searchServicesDialogModel => '模型';
@@ -30972,6 +31385,31 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String searchServiceEditorTestFailed(String message) {
     return '搜尋失敗：$message';
+  }
+
+  @override
+  String get searchServiceEditorTestModeSearch => '搜尋';
+
+  @override
+  String get searchServiceEditorTestModeFetch => '抓取';
+
+  @override
+  String get searchServiceEditorTestUrlHint => '輸入測試網址';
+
+  @override
+  String get searchServiceEditorTestFetchRun => '執行抓取測試';
+
+  @override
+  String get searchServiceEditorTestFetchRunning => '抓取中…';
+
+  @override
+  String searchServiceEditorTestFetchFailed(String message) {
+    return '抓取失敗：$message';
+  }
+
+  @override
+  String searchServiceEditorTestFetchStats(String characters, String seconds) {
+    return '$characters 字元 · $seconds 秒';
   }
 
   @override
@@ -31402,6 +31840,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get displaySettingsPageChatInputBackgroundOpacityTitle => '輸入框背景透明度';
 
   @override
+  String get displaySettingsPageLongMessageEditorTitle => '長文字使用按行編輯器';
+
+  @override
   String get displaySettingsPageThemeSettingsTitle => '主題設定';
 
   @override
@@ -31518,6 +31959,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get themeSettingsPageColorPalettesSection => '配色方案';
 
   @override
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle => '彈窗內瓦片分層';
+
+  @override
+  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle =>
+      '預設瓦片與彈窗同色';
+
+  @override
   String get themeSettingsPageCustomPaletteName => '自定義';
 
   @override
@@ -31630,6 +32078,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get asrServicesOpenAiSubtitle => '低延遲串流轉寫';
+
+  @override
+  String get asrServicesGroqSubtitle => 'Whisper 分段雲端轉寫';
+
+  @override
+  String get asrServicesMistralSubtitle => 'Voxtral 分段雲端轉寫';
 
   @override
   String get asrServicesDashScopeTitle => 'DashScope';
@@ -32141,6 +32595,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get searchProviderExaDescription => '具備語義理解的神經搜尋引擎。適合研究與查找特定內容。';
 
   @override
+  String get searchProviderExaMcpDescription =>
+      '透過 MCP 使用 Exa 搜尋。不填 API Key 可在免費額度內使用。';
+
+  @override
   String get searchProviderLinkUpDescription =>
       '提供來源可追溯答案的搜尋 API，同時提供搜尋結果與 AI 摘要。';
 
@@ -32167,6 +32625,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       'AI 搜尋基礎設施：提供 Embeddings、重排序、Web Reader、DeepSearch 與小語言模型。支援多語言與多模態。';
 
   @override
+  String get searchProviderDeepSeekDescription =>
+      'DeepSeek 官方網頁搜尋與讀頁介面，使用 DeepSeek 金鑰。';
+
+  @override
   String get searchServiceNameBingLocal => 'Bing（本機）';
 
   @override
@@ -32177,6 +32639,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get searchServiceNameExa => 'Exa';
+
+  @override
+  String get searchServiceNameExaMcp => 'Exa MCP';
 
   @override
   String get searchServiceNameZhipu => 'Zhipu（智譜）';
@@ -32198,6 +32663,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get searchServiceNameJina => 'Jina';
+
+  @override
+  String get searchServiceNameDeepSeek => 'DeepSeek';
 
   @override
   String get searchServiceNamePerplexity => 'Perplexity';
@@ -33046,7 +33514,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get memorySettingsInjectionMaxItemsSubtitle =>
-      '某類記憶超過此上限時，只注入最新條目，其餘內容可透過 memory_search_profile 查詢。數值越大越完整，但會佔用更多 token。';
+      '此限制僅適用於未選擇全量注入的類型。某類記憶超過此上限時，只注入最新條目，其餘內容可透過 memory_search_profile 查詢。數值越大越完整，但會佔用更多 token。';
+
+  @override
+  String get memorySettingsFullInjectionTypesTitle => '全量注入類型';
+
+  @override
+  String get memorySettingsFullInjectionTypesSubtitle =>
+      '可多選。選中類型會注入全域及目前助手的全部有效記憶，不受條數限制，會增加上下文和 token 消耗。';
 
   @override
   String get memorySettingsInjectionMaxItemsCustomButton => '自訂';
@@ -34266,6 +34741,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get worldBookInjectionPositionAtDepth => '指定深度';
+
+  @override
+  String worldBookImportUnsupportedEntries(int count) {
+    return '匯入完成。$count 個條目使用了暫不支援的酒館功能（如巨集、正則、時效、篩選或插入規則），已保留內容並停用，請檢查後再啟用。';
+  }
 
   @override
   String get worldBookInjectionRoleUser => '使用者';
@@ -35529,6 +36009,20 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get backupProgressCancelled => '已取消';
 
   @override
+  String get backupProgressFailed => '操作失敗';
+
+  @override
+  String backupProgressFailedAt(String phase) {
+    return '失敗階段：$phase';
+  }
+
+  @override
+  String get backupProgressCopyError => '複製錯誤';
+
+  @override
+  String get backupProgressErrorCopied => '錯誤已複製';
+
+  @override
   String get backupProgressCommitting => '正在提交';
 
   @override
@@ -36081,13 +36575,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String get themeAdvancedSettingsPageUseLayeredSurfacesSubtitle =>
       '頁面更深、卡片更亮，兩者都保留主題色相；關閉可恢復舊外觀';
-
-  @override
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesTitle => '彈窗內瓦片分層';
-
-  @override
-  String get themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle =>
-      '預設瓦片與彈窗同色';
 
   @override
   String get searchServiceNameKelivo => 'Kelivo';
@@ -36748,6 +37235,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get workspaceEnvErrorExtractFailed => '無法解壓沙箱映像。';
+
+  @override
+  String get workspaceEnvErrorCleanupFailed => '無法清理舊沙箱檔案，請重試。';
+
+  @override
+  String get workspaceEnvCleanupIncomplete => '沙箱已就緒，但部分舊檔案未能清理，仍佔用儲存空間。';
+
+  @override
+  String get workspaceEnvErrorResetFailed => '未能完成沙箱重設，請重試。';
 
   @override
   String get workspaceEnvErrorPatchFailed => '無法完成沙箱設定。';
@@ -39626,4 +40122,57 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String oauthUsedValue(String value) {
     return '已用 $value';
   }
+
+  @override
+  String get mcpOAuthSettings => 'OAuth 設定';
+
+  @override
+  String get mcpOAuthAutomatic => '自動';
+
+  @override
+  String get mcpOAuthMetadataUrl => '用戶端中繼資料文件 URL';
+
+  @override
+  String get mcpOAuthClientAuthentication => '用戶端驗證方式';
+
+  @override
+  String get mcpOAuthPublicClient => '公用用戶端';
+
+  @override
+  String get mcpOAuthRedirectUri => '本機回呼 URL（選填）';
+
+  @override
+  String get mcpOAuthFillRedirectExample => '填入範例';
+
+  @override
+  String get mcpOAuthRedirectHint =>
+      '留空使用平台預設回呼。若服務僅允許 localhost 回呼，可填寫 HTTP 回環位址。連接埠 0 自動選擇可用連接埠；預先註冊的用戶端可能要求固定連接埠。';
+
+  @override
+  String get mcpOAuthClientIdRequired => '請輸入用戶端 ID，或選擇自動註冊。';
+
+  @override
+  String get mcpOAuthMetadataUrlInvalid => '請輸入包含路徑的 HTTPS 中繼資料文件 URL。';
+
+  @override
+  String get mcpOAuthSecretRequired => '此用戶端驗證方式需要 Client secret。';
+
+  @override
+  String get mcpOAuthRedirectInvalid =>
+      '請使用 localhost、127.0.0.1 或 [::1] 的 HTTP 回呼位址，不要包含憑證、查詢參數或片段。';
+
+  @override
+  String get mcpOAuthDiscovering => '正在探索授權伺服器…';
+
+  @override
+  String get mcpOAuthRegistering => '正在準備授權…';
+
+  @override
+  String get mcpOAuthWaitingBrowser => '等待瀏覽器授權…';
+
+  @override
+  String get mcpOAuthExchangingToken => '正在完成登入…';
+
+  @override
+  String get messageEditAssistantRoundEndPart => '本輪回覆結束';
 }

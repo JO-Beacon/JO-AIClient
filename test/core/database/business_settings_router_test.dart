@@ -152,6 +152,37 @@ void main() {
       },
     );
 
+    test('accepts and preserves DeepSeek search credentials', () {
+      final service = {
+        'id': 'deepseek-1',
+        'type': 'deepseek',
+        'apiKey': 'primary-key',
+        'apiKeys': ['backup-key'],
+      };
+      final snapshot = BusinessSettingsRouter.normalizeAndRoute({
+        'search_services_v1': jsonEncode([service]),
+      });
+      final exported = BusinessSettingsRouter.exportSnapshot(snapshot);
+      expect(jsonDecode(exported['search_services_v1']! as String), [service]);
+
+      for (final invalid in [
+        {'apiKey': 123},
+        {'apiKeys': 'not-a-list'},
+        {
+          'apiKeys': [123],
+        },
+      ]) {
+        expect(
+          () => BusinessSettingsRouter.normalizeAndRoute({
+            'search_services_v1': jsonEncode([
+              {...service, ...invalid},
+            ]),
+          }),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+
     test('preserves provider order when configs were never persisted', () {
       final snapshot = BusinessSettingsRouter.normalizeAndRoute({
         'providers_order_v1': <String>['Gemini', 'OpenAI'],
@@ -670,7 +701,7 @@ void main() {
           },
         ]),
         'search_services_v1': jsonEncode([
-          {'id': 'search-1', 'type': 'bing_local', 'acceptLanguage': 'en-US'},
+          {'id': 'search-1', 'type': 'bing_local'},
         ]),
         'tts_services_v1': jsonEncode([
           {

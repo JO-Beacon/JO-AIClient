@@ -745,7 +745,6 @@
   "messageEditPageSaveAsBranchAndSend": "保存为新分支并发送",
   "messageEditPageOverwriteSave": "覆盖保存",
   "messageEditPageSaveAsBranchCopyChildren": "保存为新分支并复制子分支",
-  "messageEditPageHint": "输入消息内容…",
   "messageEditTrimWhitespace": "清理首尾空白",
   "messageEditAttachmentsTitle": "附件",
   "messageEditAddImage": "添加图片",
@@ -828,6 +827,14 @@
   "reasoningBudgetSheetCustomHint": "例如：2048 (-1 自动，0 关闭)",
   "chatMessageWidgetFileNotFound": "文件不存在: {fileName}",
   "chatMessageWidgetCannotOpenFile": "无法打开文件: {message}",
+  "chatMessageWidgetWebFetch": "读取网页: {target}",
+  "@chatMessageWidgetWebFetch": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "chatMessageWidgetOpenFileError": "打开文件失败: {error}",
   "chatMessageWidgetCopiedToClipboard": "已复制到剪贴板",
   "chatMessageWidgetResendTooltip": "重新发送",
@@ -1336,6 +1343,32 @@
   "searchServicesPageAddProvider": "添加提供商",
   "searchServicesPageSearchProviders": "搜索提供商",
   "searchServicesPageGeneralOptions": "通用选项",
+  "searchServicesPageWebFetchSection": "网页抓取",
+  "searchServicesPageWebFetchModeTitle": "抓取方式",
+  "searchServicesPageWebFetchFollow": "跟随搜索服务",
+  "searchServicesPageWebFetchFollowValue": "跟随搜索 · {name}",
+  "@searchServicesPageWebFetchFollowValue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServicesPageWebFetchFollowSubtitle": "当前：{name}",
+  "@searchServicesPageWebFetchFollowSubtitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServicesPageWebFetchLocal": "本地抓取",
+  "searchServicesPageWebFetchLocalSubtitle": "免费，由本机直接请求网页",
+  "searchServicesPageWebFetchProviderSubtitle": "使用该服务商的 API Key 和额度",
+  "searchServicesPageWebFetchOff": "关闭",
+  "searchServicesPageWebFetchOffSubtitle": "联网时只搜索，不读取网页",
+  "searchServicesPageWebFetchFooter": "开启联网搜索后，模型还可以读取网页全文。搜索服务不支持抓取时会改用本地抓取，本地抓取无法处理需要 JavaScript 渲染或有反爬限制的页面。",
+  "searchServicesPageWebFetchSupported": "支持网页抓取",
   "searchServicesPageAutoTestTitle": "启动时自动测试连接",
   "searchServicesPageMaxResults": "最大结果数",
   "searchServicesPageTimeoutSeconds": "超时时间（秒）",
@@ -1358,6 +1391,7 @@
   "searchServicesAddDialogApiKeyRequired": "API Key 必填",
   "searchServicesFieldCustomUrlOptional": "自定义 URL（可选）",
   "searchServicesDialogApiKey": "API Key",
+  "searchServicesDialogApiKeyOptional": "API Key（可选）",
   "searchServicesDialogModel": "模型",
   "searchServicesDialogSystemPrompt": "系统提示词",
   "searchServicesAddDialogInstanceUrl": "实例 URL",
@@ -1536,6 +1570,7 @@
   "displaySettingsPageChatFontSampleText": "这是一个示例的聊天文本",
   "displaySettingsPageChatBackgroundMaskTitle": "背景图片遮罩透明度",
   "displaySettingsPageChatInputBackgroundOpacityTitle": "输入框背景透明度",
+  "displaySettingsPageLongMessageEditorTitle": "长文本使用按行编辑器",
   "displaySettingsPageThemeSettingsTitle": "主题设置",
   "displaySettingsPageThemeColorTitle": "主题颜色",
   "desktopSettingsFontsTitle": "字体设置",
@@ -1573,6 +1608,8 @@
   "searchServicesDialogMaximumTokensInvalid": "最大 token 数必须介于 1024 和 32768 之间。",
   "searchProviderYouDescription": "You.com 搜索 API。返回网页与新闻结果，支持 Highlights 或 Snippets。",
   "themeSettingsPageColorPalettesSection": "配色方案",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesTitle": "分层表单瓦片",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle": "面板里的操作行使用卡片底色；关闭后保持通透",
   "themeSettingsPageCustomPaletteName": "自定义",
   "themeSettingsPageCustomColorReset": "重置",
   "themeSettingsPageCustomThemesSection": "自定义主题",
@@ -1611,6 +1648,8 @@
   "asrServicesLocalSubtitle": "下载后在设备上离线运行",
   "asrServicesOpenAiTitle": "OpenAI Realtime",
   "asrServicesOpenAiSubtitle": "低延迟流式转写",
+  "asrServicesGroqSubtitle": "Whisper 分段云端转写",
+  "asrServicesMistralSubtitle": "Voxtral 分段云端转写",
   "asrServicesDashScopeTitle": "DashScope",
   "asrServicesDashScopeSubtitle": "Qwen 实时转写",
   "asrServicesVolcengineTitle": "火山引擎",
@@ -1772,6 +1811,7 @@
   "searchProviderDuckDuckGoDescription": "基于 DDGS 的 DuckDuckGo 隐私搜索，无需 API 密钥，支持设置地区。",
   "searchProviderBraveDescription": "Brave 独立搜索引擎。注重隐私，无跟踪或画像。",
   "searchProviderExaDescription": "具备语义理解的神经搜索引擎。适合研究与查找特定内容。",
+  "searchProviderExaMcpDescription": "通过 MCP 使用 Exa 搜索。不填 API Key 可在免费限额内使用。",
   "searchProviderLinkUpDescription": "提供来源可追溯答案的搜索 API，同时提供搜索结果与 AI 摘要。",
   "modelFetchInvertTooltip": "反选",
   "modelDetailSheetSaveFailedMessage": "保存失败，请重试",
@@ -1781,10 +1821,12 @@
   "searchProviderZhipuDescription": "智谱 AI 旗下中文 AI 搜索服务，针对中文内容与查询进行了优化。",
   "searchProviderOllamaDescription": "Ollama 网络搜索 API。为模型补充最新信息，减少幻觉并提升准确性。",
   "searchProviderJinaDescription": "适合开发者和企业用于 AI 搜索应用。支持多语言与多模态。",
+  "searchProviderDeepSeekDescription": "DeepSeek 官方网页搜索与读页接口，使用 DeepSeek 密钥。",
   "searchServiceNameBingLocal": "Bing（Local）",
   "searchServiceNameDuckDuckGo": "DuckDuckGo",
   "searchServiceNameTavily": "Tavily",
   "searchServiceNameExa": "Exa",
+  "searchServiceNameExaMcp": "Exa MCP",
   "searchServiceNameZhipu": "智谱",
   "searchServiceNameSearXNG": "SearXNG",
   "searchServiceNameLinkUp": "LinkUp",
@@ -1792,6 +1834,8 @@
   "searchServiceNameMetaso": "秘塔",
   "searchServiceNameOllama": "Ollama",
   "searchServiceNameJina": "Jina",
+  "searchServiceNameDeepSeek": "DeepSeek",
+  "searchServiceNameDeepSeek": "DeepSeek",
   "searchServiceNamePerplexity": "Perplexity",
   "searchProviderPerplexityDescription": "Perplexity 搜索 API。提供排序的网页结果，支持区域与域名过滤。",
   "searchServiceNameBocha": "博查",
@@ -2081,7 +2125,9 @@
   "memorySettingsLegacySection": "旧版记忆",
   "memorySettingsInjectionSection": "记忆注入",
   "memorySettingsInjectionMaxItemsTitle": "每类注入条数",
-  "memorySettingsInjectionMaxItemsSubtitle": "某类记忆超过此上限时，只注入最新条目，其余内容可通过 memory_search_profile 查询。数值越大越完整，但会占用更多 token。",
+  "memorySettingsInjectionMaxItemsSubtitle": "此限制仅适用于未选择全量注入的类型。某类记忆超过此上限时，只注入最新条目，其余内容可通过 memory_search_profile 查询。数值越大越完整，但会占用更多 token。",
+  "memorySettingsFullInjectionTypesTitle": "全量注入类型",
+  "memorySettingsFullInjectionTypesSubtitle": "可多选。选中类型会注入全局及当前助手的全部有效记忆，不受条数限制，会增加上下文和 token 消耗。",
   "memorySettingsInjectionMaxItemsCustomButton": "自定义",
   "memorySettingsInjectionMaxItemsCustomTitle": "自定义注入条数",
   "memorySettingsInjectionMaxItemsCustomLabel": "条数",
@@ -2461,6 +2507,7 @@
   "worldBookInjectionPositionTopOfChat": "对话顶部",
   "worldBookInjectionPositionBottomOfChat": "对话底部",
   "worldBookInjectionPositionAtDepth": "指定深度",
+  "worldBookImportUnsupportedEntries": "导入完成。{count} 个条目使用了暂不支持的酒馆功能（如宏、正则、时效、筛选或插入规则），已保留内容并停用，请检查后再启用。",
   "worldBookInjectionRoleUser": "用户",
   "worldBookInjectionRoleAssistant": "助手",
   "mcpToolNeedsApproval": "需要审批",
@@ -2846,6 +2893,17 @@
   "backupProgressBytes": "{done} / {total}",
   "backupProgressCancel": "取消",
   "backupProgressCancelled": "已取消",
+  "backupProgressFailed": "操作失败",
+  "backupProgressFailedAt": "失败阶段：{phase}",
+  "@backupProgressFailedAt": {
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      }
+    }
+  },
+  "backupProgressCopyError": "复制错误",
+  "backupProgressErrorCopied": "错误已复制",
   "backupProgressCommitting": "正在提交",
   "backupProgressDownloading": "正在下载",
   "backupProgressExtracting": "正在解压",
@@ -3205,6 +3263,9 @@
   "workspaceEnvErrorNetwork": "下载失败，请检查网络后重试。",
   "workspaceEnvErrorChecksumMismatch": "下载文件已损坏，请重试。",
   "workspaceEnvErrorExtractFailed": "无法解压沙箱镜像。",
+  "workspaceEnvErrorCleanupFailed": "无法清理旧沙箱文件，请重试。",
+  "workspaceEnvCleanupIncomplete": "沙箱已就绪，但部分旧文件未能清理，仍占用存储空间。",
+  "workspaceEnvErrorResetFailed": "未能完成沙箱重置，请重试。",
   "workspaceEnvErrorPatchFailed": "无法完成沙箱配置。",
   "workspaceEnvErrorCancelled": "安装已取消。",
   "workspaceEnvErrorGeneric": "安装沙箱时出错。",
@@ -4580,6 +4641,30 @@
   "@searchServiceEditorTestFailed": {
     "placeholders": {
       "message": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServiceEditorTestModeSearch": "搜索",
+  "searchServiceEditorTestModeFetch": "抓取",
+  "searchServiceEditorTestUrlHint": "输入测试网址",
+  "searchServiceEditorTestFetchRun": "运行抓取测试",
+  "searchServiceEditorTestFetchRunning": "抓取中…",
+  "searchServiceEditorTestFetchFailed": "抓取失败：{message}",
+  "@searchServiceEditorTestFetchFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServiceEditorTestFetchStats": "{characters} 字符 · {seconds} 秒",
+  "@searchServiceEditorTestFetchStats": {
+    "placeholders": {
+      "characters": {
+        "type": "String"
+      },
+      "seconds": {
         "type": "String"
       }
     }
@@ -6100,5 +6185,22 @@
   "tokenDetailCost": "{amount}",
   "workspaceToolTitleViewImage": "查看图片",
   "workspaceToolHelpViewImage": "让模型查看工作区中的图片内容。",
-  "oauthUsedValue": "已用 {value}"
+  "oauthUsedValue": "已用 {value}",
+  "mcpOAuthSettings": "OAuth 设置",
+  "mcpOAuthAutomatic": "自动",
+  "mcpOAuthMetadataUrl": "客户端元数据文档 URL",
+  "mcpOAuthClientAuthentication": "客户端认证方式",
+  "mcpOAuthPublicClient": "公共客户端",
+  "mcpOAuthRedirectUri": "本地回调 URL（可选）",
+  "mcpOAuthFillRedirectExample": "填入示例",
+  "mcpOAuthRedirectHint": "留空使用平台默认回调。若服务仅允许 localhost 回调，可填写 HTTP 回环地址。端口 0 自动选择可用端口；预注册客户端可能要求固定端口。",
+  "mcpOAuthClientIdRequired": "请输入客户端 ID，或选择自动注册。",
+  "mcpOAuthMetadataUrlInvalid": "请输入包含路径的 HTTPS 元数据文档 URL。",
+  "mcpOAuthSecretRequired": "此客户端认证方式需要 Client secret。",
+  "mcpOAuthRedirectInvalid": "请使用 localhost、127.0.0.1 或 [::1] 的 HTTP 回调地址，不要包含凭据、查询参数或片段。",
+  "mcpOAuthDiscovering": "正在发现授权服务器…",
+  "mcpOAuthRegistering": "正在准备授权…",
+  "mcpOAuthWaitingBrowser": "等待浏览器授权…",
+  "mcpOAuthExchangingToken": "正在完成登录…",
+  "messageEditAssistantRoundEndPart": "本轮回复结束"
 }

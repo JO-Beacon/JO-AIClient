@@ -19,6 +19,7 @@ import '../../../core/models/conversation.dart';
 import '../../../core/models/skills_binding.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/api/chat_api_service.dart';
+import '../../../core/services/api/providers/openai/responses_history.dart';
 import '../../../core/services/api/builtin_tools.dart';
 import '../../../core/providers/workspace_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
@@ -174,7 +175,9 @@ class MessageGenerationService {
     bool persistWorldBookActivation = true,
     void Function(int before, int after)? onWorldBookActivationPersisted,
   }) async {
-    final cfg = settings.getProviderConfig(providerKey);
+    final cfg = settings
+        .getProviderConfig(providerKey)
+        .forModelProtocol(modelId);
     final kind = ProviderConfig.classify(
       providerKey,
       explicitType: cfg.providerType,
@@ -196,6 +199,13 @@ class MessageGenerationService {
       messages: messages,
       currentConversation: currentConversation,
       includeToolMessages: includeToolMessages,
+      preserveToolTurns: kind == ProviderKind.openai,
+      claudeSource: kind == ProviderKind.claude
+          ? (providerId: providerKey, modelId: modelId)
+          : null,
+      responsesScope: kind == ProviderKind.openai && cfg.useResponseApi == true
+          ? responsesReplayScope(cfg, modelId)
+          : null,
     );
 
     // 在发送时应用助手仅替换型正则（显示保持不变）。

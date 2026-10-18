@@ -216,11 +216,102 @@ void main() {
       expect(webProvider['name'], 'DeepSeek Web');
       expect(webProvider['apiKey'], '');
       expect(webProvider['baseUrl'], '');
-      expect(webProvider['providerType'], 'openai');
+      // DeepSeek 默认走 Anthropic 协议（产品口径），导入的占位供应商也是。
+      expect(webProvider['providerType'], 'claude');
       expect(webProvider['models'], ['deepseek-reasoner']);
       expect(exported['providers_order_v1'], contains('deepseek_web'));
     },
   );
+
+  test('imported fragments only store LF newlines', () async {
+    // 五种换行：CRLF、CR、U+2028、U+2029、U+0085。
+    const mixed = 'a\r\nb\rc\u2028d\u2029e\u0085f';
+    const normalized = 'a\nb\nc\nd\ne\nf';
+    final archive = Archive()
+      ..add(ArchiveFile.string('user.json', '{}'))
+      ..add(
+        ArchiveFile.string(
+          'conversations.json',
+          jsonEncode(<Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'nl-conversation',
+              'title': '换行归一',
+              'inserted_at': '05/12/2026 14:18:04',
+              'updated_at': '05/12/2026 14:24:11',
+              'mapping': <String, dynamic>{
+                'root': <String, dynamic>{
+                  'id': 'root',
+                  'parent': null,
+                  'children': <String>['request'],
+                  'message': null,
+                },
+                'request': <String, dynamic>{
+                  'id': 'request',
+                  'parent': 'root',
+                  'children': <String>['answer'],
+                  'message': <String, dynamic>{
+                    'model': 'deepseek-chat',
+                    'inserted_at': '05/12/2026 14:23:50',
+                    'fragments': <Map<String, dynamic>>[
+                      <String, dynamic>{'type': 'REQUEST', 'content': mixed},
+                    ],
+                  },
+                },
+                'answer': <String, dynamic>{
+                  'id': 'answer',
+                  'parent': 'request',
+                  'children': <String>[],
+                  'message': <String, dynamic>{
+                    'model': 'deepseek-chat',
+                    'inserted_at': '05/12/2026 14:23:51',
+                    'fragments': <Map<String, dynamic>>[
+                      <String, dynamic>{'type': 'THINK', 'content': mixed},
+                      <String, dynamic>{'type': 'RESPONSE', 'content': mixed},
+                    ],
+                  },
+                },
+              },
+            },
+          ]),
+        ),
+      );
+    final file = File('${root.path}/deepseek_newlines.zip')
+      ..writeAsBytesSync(ZipEncoder().encodeBytes(archive));
+
+    await DeepSeekImporter.importFromDeepSeek(
+      file: file,
+      mode: RestoreMode.overwrite,
+      businessRepository: businessRepository,
+      chatService: chatService,
+      assistantProvider: assistantProvider,
+      assistantGroupProvider: assistantGroupProvider,
+      assistantGroupName: 'DeepSeek Web 导入',
+      providerName: 'DeepSeek Web',
+    );
+
+    final messages = await chatService.loadAllConversationMessages(
+      'deepseek_nl-conversation',
+    );
+    expect(messages, hasLength(2));
+    final texts = <String>[
+      ...messages.expand(
+        (message) =>
+            message.parts.whereType<TextPart>().map((part) => part.text),
+      ),
+      ...messages.expand(
+        (message) =>
+            message.parts.whereType<ReasoningPart>().map((part) => part.text),
+      ),
+    ];
+    expect(texts, isNotEmpty);
+    for (final text in texts) {
+      expect(text.contains('\r'), isFalse, reason: text);
+      expect(text.contains('\u2028'), isFalse, reason: text);
+      expect(text.contains('\u2029'), isFalse, reason: text);
+      expect(text.contains('\u0085'), isFalse, reason: text);
+    }
+    expect(texts, everyElement(normalized));
+  });
 
   test('merge is idempotent for an unchanged DeepSeek conversation', () async {
     final file = File('${root.path}/deepseek.json')

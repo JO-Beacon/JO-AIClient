@@ -15,7 +15,7 @@ import 'claude_oauth_request.dart';
 
 part 'claude_oauth_adapter.dart';
 
-const codexClientVersion = '0.153.0';
+const codexClientVersion = '0.159.0';
 
 class OAuthLoginPrompt {
   const OAuthLoginPrompt({

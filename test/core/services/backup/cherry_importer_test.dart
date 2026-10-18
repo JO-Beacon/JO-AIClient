@@ -221,6 +221,94 @@ void main() {
       );
     });
 
+    test('imported message text only stores LF newlines', () async {
+      // 五种换行：CRLF、CR、U+2028、U+2029、U+0085。导入边界必须把它们
+      // 全部归成 LF，否则标题、预览、导出这些按 `\n` 切分的功能会看到一行。
+      const mixed = 'a\r\nb\rc\u2028d\u2029e\u0085f';
+      final backup = await _createZip(tempDir, <String, List<int>>{
+        'data.json': utf8.encode(
+          jsonEncode(<String, dynamic>{
+            'version': 5,
+            'localStorage': <String, dynamic>{
+              'persist:cherry-studio': _persistStateJson(),
+            },
+            'indexedDB': <String, dynamic>{
+              'topics': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'id': 'topic-1',
+                  'messages': <Map<String, dynamic>>[
+                    <String, dynamic>{
+                      'id': 'msg-1',
+                      'role': 'user',
+                      'topicId': 'topic-1',
+                      'assistantId': 'assistant-1',
+                      'createdAt': '2026-01-01T00:00:00.000Z',
+                      'status': 'success',
+                      'content': mixed,
+                    },
+                    <String, dynamic>{
+                      'id': 'msg-2',
+                      'role': 'assistant',
+                      'topicId': 'topic-1',
+                      'assistantId': 'assistant-1',
+                      'createdAt': '2026-01-01T00:00:01.000Z',
+                      'status': 'success',
+                      'blocks': <String>['block-1'],
+                    },
+                  ],
+                },
+              ],
+              'message_blocks': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'id': 'block-1',
+                  'messageId': 'msg-2',
+                  'type': 'thinking',
+                  'createdAt': '2026-01-01T00:00:02.000Z',
+                  'status': 'success',
+                  'content': mixed,
+                },
+              ],
+              'files': <Map<String, dynamic>>[],
+            },
+          }),
+        ),
+      });
+
+      await CherryImporter.importFromCherryStudio(
+        file: backup,
+        mode: RestoreMode.overwrite,
+        businessRepository: businessRepository,
+        chatService: chatService,
+      );
+
+      final messages = await chatService.loadMessages('topic-1');
+      expect(messages, hasLength(2));
+      expect(messages.first.content, 'a\nb\nc\nd\ne\nf');
+      expect(messages.last.content, contains('<think>'));
+      for (final message in messages) {
+        expect(
+          message.content.contains('\r'),
+          isFalse,
+          reason: message.content,
+        );
+        expect(
+          message.content.contains('\u2028'),
+          isFalse,
+          reason: message.content,
+        );
+        expect(
+          message.content.contains('\u2029'),
+          isFalse,
+          reason: message.content,
+        );
+        expect(
+          message.content.contains('\u0085'),
+          isFalse,
+          reason: message.content,
+        );
+      }
+    });
+
     test('merge re-import of the same backup adds nothing twice', () async {
       Map<String, List<int>> entries() => <String, List<int>>{
         'data.json': utf8.encode(

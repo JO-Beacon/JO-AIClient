@@ -20,9 +20,12 @@ import '../../../core/models/conversation_tree.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/api/chat_api_service.dart';
+import '../../../core/services/api/providers/claude/claude_history.dart';
+import '../../../core/services/api/providers/openai/responses_history.dart';
 import '../../../core/services/api/reasoning/reasoning_selection.dart';
 import '../../../core/services/api/retry_policy.dart';
 import '../../../core/services/api/stream/stream_chunk.dart';
+import '../../../core/services/api/stream/stream_chunk_handler.dart';
 import '../../../core/services/backup/data_sync.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../core/services/mobile_background.dart';
@@ -1885,7 +1888,24 @@ class ChatActions {
     final providerKey = modelConfig.providerKey!;
     final modelId = modelConfig.modelId!;
 
-    final streamingMessage = _messages[visibleIndex].copyWith(
+    // 恢复的答案比可见气泡新：用刷新后的上下文，并合并缓存结果
+    // （临时会话没有数据库行）。
+    final resumedParts = StreamChunkHandler(
+      seed: completeMessages[contextIndex].parts,
+    );
+    for (final event in chatService.getToolEvents(message.id)) {
+      final id = (event['id'] ?? '').toString();
+      if (id.isEmpty || event['content'] == null) continue;
+      resumedParts.handle(
+        ToolCallResult(
+          id: id,
+          output: event['content'],
+          metadata: (event['metadata'] as Map?)?.cast<String, dynamic>(),
+        ),
+      );
+    }
+    final streamingMessage = completeMessages[contextIndex].copyWith(
+      parts: resumedParts.parts,
       isStreaming: true,
     );
     _activeAssistantMessages.put(streamingMessage);
@@ -1909,7 +1929,7 @@ class ChatActions {
     _bindFileProcessingCallbacks();
     try {
       final apiContextMessages = List<ChatMessage>.of(completeMessages);
-      apiContextMessages[contextIndex] = streamingMessage.copyWith(content: '');
+      apiContextMessages[contextIndex] = streamingMessage;
       final prepared = await messageGenerationService
           .prepareApiMessagesWithInjections(
             messages: apiContextMessages,
@@ -2132,7 +2152,21 @@ class ChatActions {
 
   /// 使用给定上下文执行生成。
   Future<void> _executeGeneration(stream_ctrl.GenerationContext ctx) async {
-    final state = stream_ctrl.StreamingState(ctx);
+    final state = stream_ctrl.StreamingState(
+      ctx,
+      responsesTurnPrefix: chatService.getProviderArtifact(
+        ctx.assistantMessage.id,
+        responsesTurnArtifactKind,
+      ),
+      claudeTurnPrefix:
+          ctx.providerKey == ctx.assistantMessage.providerId &&
+              ctx.modelId == ctx.assistantMessage.modelId
+          ? chatService.getProviderArtifact(
+              ctx.assistantMessage.id,
+              claudeTurnArtifactKind,
+            )
+          : null,
+    );
     _streamingStates[state.messageId] = state;
     final assistant = ctx.assistant;
     final conversationId = state.conversationId;
@@ -2223,6 +2257,16 @@ class ChatActions {
         await _cancelSubscriptionWithTimeout(previousSub);
       }
       state.requestStartedAt = DateTime.now();
+      if (!ctx.streamOutput) {
+        // JSON 响应同样会产出工具轮次：边到边消费，这样暂停的工具
+        // 在续跑前已经有可持久化的记录。
+        await for (final chunk in stream) {
+          await _handleStreamChunk(chunk, state);
+        }
+        await _handleStreamDone(state);
+        return;
+      }
+
       final sub = listenSequentiallyToStream<StreamChunk>(
         stream: stream,
         onReceived: state.recordFirstOutput,
@@ -2280,6 +2324,11 @@ class ChatActions {
       case ToolCallEnd():
         await _handleToolCallsChunk(chunk, state);
         _scheduleStreamingCheckpoint(state);
+      case AssistantRoundEnd():
+        // 一轮响应结束：本轮的推理详情已被写进消息部件，
+        // 不能继续沿用到下一轮。
+        streamController.reasoningDetails.remove(state.messageId);
+        _scheduleStreamingCheckpoint(state);
       case ServerToolStart(:final id, :final toolName):
         if (toolName.isNotEmpty) state.pendingToolNames[id] = toolName;
         await _handleToolCallsChunk(chunk, state);
@@ -2290,8 +2339,8 @@ class ChatActions {
       case Usage():
         _applyUsage(state);
         _scheduleStreamingCheckpoint(state);
-      case ProviderArtifact(:final kind, :final payload):
-        await chatService.setProviderArtifact(state.messageId, kind, payload);
+      case ProviderArtifact():
+        await _persistProviderArtifact(state, chunk);
       case Finish():
         await _handleStreamFinish(state);
       case ImageStart() ||
@@ -2310,6 +2359,27 @@ class ChatActions {
         break;
     }
   }
+
+  /// 同一轮的原生记录要累加到本次请求之前那份快照上，
+  /// 而不是覆盖上一次写入。
+  Future<void> _persistProviderArtifact(
+    stream_ctrl.StreamingState state,
+    ProviderArtifact artifact,
+  ) => chatService.setProviderArtifact(
+    state.messageId,
+    artifact.kind,
+    switch (artifact.kind) {
+      responsesTurnArtifactKind => appendResponsesTurn(
+        state.responsesTurnPrefix,
+        artifact.payload,
+      ),
+      claudeTurnArtifactKind => appendClaudeTurn(
+        state.claudeTurnPrefix,
+        artifact.payload,
+      ),
+      _ => artifact.payload,
+    },
+  );
 
   void _applyUsage(stream_ctrl.StreamingState state) {
     state.usage = state.partsHandler.usage;
@@ -2487,6 +2557,13 @@ class ChatActions {
     state.finishRequestTiming();
     final messageId = state.messageId;
     final conversationId = state.conversationId;
+    if (!state.ctx.streamOutput) {
+      // 续跑的回复同样拥有它更早几轮的推理内容。
+      state.bufferedReasoning = state.partsHandler.parts
+          .whereType<ReasoningPart>()
+          .map((part) => part.text)
+          .join();
+    }
     final autoCollapseThinking =
         (!state.ctx.streamOutput && state.bufferedReasoning.isNotEmpty)
         ? contextProvider.read<SettingsProvider>().autoCollapseThinking

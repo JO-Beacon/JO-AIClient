@@ -600,7 +600,7 @@ void main() {
       },
     );
 
-    test('ordinary history strips reasoning_content', () async {
+    test('tools enabled preserves reasoning from a non-tool turn', () async {
       late Map<String, dynamic> requestBody;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() async {
@@ -632,7 +632,16 @@ void main() {
       final baseUrl = 'http://${server.address.address}:${server.port}/v1';
       await ChatApiService.sendMessageStream(
         config: _deepSeekConfig(baseUrl),
-        modelId: 'deepseek-reasoner',
+        modelId: 'deepseek-v4.1-flash',
+        tools: const [
+          {
+            'type': 'function',
+            'function': {
+              'name': 'weather',
+              'parameters': {'type': 'object', 'properties': {}},
+            },
+          },
+        ],
         messages: const [
           {'role': 'user', 'content': 'first question'},
           {
@@ -645,7 +654,8 @@ void main() {
       ).toList();
 
       final history = (requestBody['messages'] as List).cast<Map>();
-      expect(history[1].containsKey('reasoning_content'), isFalse);
+      expect(requestBody['tools'], isNotEmpty);
+      expect(history[1]['reasoning_content'], 'private first-turn reasoning');
     });
 
     test(

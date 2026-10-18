@@ -38,6 +38,7 @@ import 'device_local_settings_writer.dart';
 import 'joaiclient_archive.dart';
 import 'kelivo_schema3_payload.dart';
 import 'local_device_settings_ledger.dart';
+import 'streaming_zip_entry.dart';
 import 'restore_bundle_preparation.dart';
 import 'restore_workspace_lock.dart';
 import 'restore_business_lease.dart';
@@ -1419,7 +1420,11 @@ class DataSync {
             onBytes: (bytes) => meter.add(bytes, detail: canonical),
           );
           try {
-            entry.writeContent(digest);
+            writeZipEntryStreaming(
+              entry,
+              digest,
+              checkCancelled: ctx?.throwIfCancelled,
+            );
             final actualSha256 = digest.closeAndDigest();
             final expected = expectedEntries[canonical];
             if (expected == null) {
@@ -1589,7 +1594,11 @@ class DataSync {
             budget: _ExtractionBudget(maxTotalBytes: _maxManifestBytes),
           );
           try {
-            manifestEntry.writeContent(manifestOutput);
+            writeZipEntryStreaming(
+              manifestEntry,
+              manifestOutput,
+              checkCancelled: ctx?.throwIfCancelled,
+            );
             manifestOutput.verifyComplete();
           } finally {
             manifestOutput.closeSync();
@@ -1651,7 +1660,11 @@ class DataSync {
               meter: meter,
             );
             try {
-              entry.writeContent(output);
+              writeZipEntryStreaming(
+                entry,
+                output,
+                checkCancelled: ctx?.throwIfCancelled,
+              );
               output.verifyComplete();
             } finally {
               output.closeSync();

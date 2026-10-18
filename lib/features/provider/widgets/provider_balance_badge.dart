@@ -61,7 +61,8 @@ class _ProviderBalanceBadgeState extends State<ProviderBalanceBadge> {
       config.id,
       explicitType: config.providerType,
     );
-    if ((kind != ProviderKind.openai && !ProviderConfig.isDeepSeek(config)) ||
+    if (!config.enabled ||
+        (kind != ProviderKind.openai && !ProviderConfig.isDeepSeek(config)) ||
         config.balanceEnabled != true) {
       return;
     }
@@ -133,7 +134,8 @@ class _ProviderBalanceBadgeState extends State<ProviderBalanceBadge> {
       config.id,
       explicitType: config.providerType,
     );
-    if ((kind != ProviderKind.openai && !ProviderConfig.isDeepSeek(config)) ||
+    if (!config.enabled ||
+        (kind != ProviderKind.openai && !ProviderConfig.isDeepSeek(config)) ||
         config.balanceEnabled != true) {
       return const SizedBox.shrink();
     }

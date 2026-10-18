@@ -6,6 +6,7 @@ import 'dart:convert';
 /// - `text` / `reasoning`：原始字符串
 /// - `provider_auth_error`：`{"providerId"}`，账号登录失效后的恢复入口
 /// - `tool_call`：原样保留的 JSON 字符串
+/// - `assistant_round_end`：JSON 格式的推理详情数组或 `null`
 /// - `image`：`{"uri","mime"?,"assetId"?,"unavailable"?}`
 /// - `file`：`{"uri","name","mime"?,"assetId"?,"unavailable"?}`
 /// - 未知类型：存入 [UnknownPart]，写回时保持原样
@@ -22,6 +23,8 @@ sealed class MessagePart {
         return ReasoningPart(payload);
       case 'tool_call':
         return ToolCallPart(payload);
+      case 'assistant_round_end':
+        return AssistantRoundEndPart.fromPayload(payload);
       case 'image':
         return ImagePart.fromPayload(payload);
       case 'file':
@@ -117,6 +120,38 @@ final class ToolCallPart extends MessagePart {
 
   @override
   int get hashCode => payloadJson.hashCode;
+}
+
+/// 一次模型响应在客户端工具执行之前的结束点。
+///
+/// 这是可持久化的对话结构，不是可见正文，也不是工具执行结果。
+final class AssistantRoundEndPart extends MessagePart {
+  const AssistantRoundEndPart({this.reasoningDetails});
+
+  factory AssistantRoundEndPart.fromPayload(String payload) {
+    final decoded = jsonDecode(payload);
+    if (decoded != null && decoded is! List) {
+      throw const _MessagePartFormatException('invalid_round_details');
+    }
+    return AssistantRoundEndPart(reasoningDetails: decoded as List<dynamic>?);
+  }
+
+  final List<dynamic>? reasoningDetails;
+
+  @override
+  String get kind => 'assistant_round_end';
+
+  @override
+  String encodePayload() => jsonEncode(reasoningDetails);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AssistantRoundEndPart &&
+          encodePayload() == other.encodePayload();
+
+  @override
+  int get hashCode => encodePayload().hashCode;
 }
 
 final class ImagePart extends MessagePart {

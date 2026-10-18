@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/providers/settings_provider.dart';
 import '../../theme/app_semantic_colors.dart';
 
-/// JO-AIClient 本地版 SectionCard：上游 1.2.5 的 section_card 依赖
-/// hairline/hairlineStrong 与 useLayeredSheetTiles（1.2.6 的分层表单瓦片），
-/// 本仓库尚无这些字段，这里以 ColorScheme 直接推导等价视觉。
 enum SectionCardVariant { standard, emphasized }
 
 /// Shared iOS-style section card: one step above the page surface.
@@ -42,9 +41,7 @@ class SectionCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final emphasized = variant == SectionCardVariant.emphasized;
     final resolvedRadius = radius ?? (emphasized ? 18.0 : 12.0);
-    final borderColor = emphasized
-        ? cs.outlineVariant.withValues(alpha: 0.45)
-        : cs.outlineVariant.withValues(alpha: 0.22);
+    final borderColor = emphasized ? colors.hairlineStrong : colors.cardBorder;
     final resolvedPadding =
         padding ??
         (child != null && children == null
@@ -82,7 +79,21 @@ class SectionCard extends StatelessWidget {
 
 /// 面板内操作瓦片的填充色。
 ///
-/// 与上游的差别：上游有“分层表单瓦片”开关（关闭时返回透明），本仓库尚无该
-/// 字段，沿用仓库既有的 `surfaceFill` 口径（与 `bottom_tools_sheet.dart`、
-/// `context_management_sheet.dart` 一致）。
-Color sheetTileColor(BuildContext context) => context.appColors.surfaceFill;
+/// 与上游一致：开着“分层表单瓦片”时用卡片上的输入框那一档底色，
+/// 关掉时透明，让磨砂／半透明的面板保持通透。
+Color sheetTileColor(BuildContext context) {
+  var layered = true;
+  try {
+    layered = context.watch<SettingsProvider>().useLayeredSheetTiles;
+  } catch (_) {}
+  return layered ? context.appColors.surfaceCardFill : Colors.transparent;
+}
+
+/// 分层瓦片打开时，瓦片之间才画分隔线。
+bool showSheetTileDividers(BuildContext context) {
+  try {
+    return context.watch<SettingsProvider>().useLayeredSheetTiles;
+  } catch (_) {
+    return true;
+  }
+}

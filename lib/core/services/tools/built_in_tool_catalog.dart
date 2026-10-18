@@ -3,6 +3,7 @@ import '../../models/assistant.dart';
 import '../memory/memory_prompts.dart';
 import '../memory/memory_tools.dart';
 import '../search/search_tool_service.dart';
+import '../search/web_fetch_tool_service.dart';
 import '../workspace/workspace_tools_service.dart';
 
 enum BuiltInToolGroup { search, memory, local, workspace }
@@ -37,6 +38,11 @@ abstract final class BuiltInToolCatalog {
       BuiltInToolCatalogEntry(
         name: SearchToolService.toolName,
         defaultDefinition: SearchToolService.getToolDefinition(),
+        group: BuiltInToolGroup.search,
+      ),
+      BuiltInToolCatalogEntry(
+        name: WebFetchToolService.toolName,
+        defaultDefinition: WebFetchToolService.getToolDefinition(),
         group: BuiltInToolGroup.search,
       ),
     ];

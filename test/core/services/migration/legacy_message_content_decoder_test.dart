@@ -266,7 +266,7 @@ void main() {
     },
   );
 
-  test('CRLF-only legacy content round-trips CRLF in TextPart', () async {
+  test('CRLF-only legacy content normalizes to LF in TextPart', () async {
     const content = 'a\r\n[image:https://example.com/x.png]\r\nb';
     final result = await decodeLegacyContent(content);
 
@@ -274,12 +274,12 @@ void main() {
     expect(result.parts, hasLength(3));
     expect((result.parts[0] as TextPart).text, 'a');
     expect(result.parts[1], isA<ImagePart>());
-    expect((result.parts[2] as TextPart).text, '\r\nb');
+    expect((result.parts[2] as TextPart).text, '\nb');
     expect(
       result.parts.whereType<TextPart>().map((part) => part.text).join(),
-      'a\r\nb',
+      'a\nb',
     );
-    expect(stripLegacyContentTextSegments(content).join(), 'a\r\nb');
+    expect(stripLegacyContentTextSegments(content).join(), 'a\nb');
   });
 
   test('LF legacy content still joins with LF', () async {
@@ -356,12 +356,13 @@ void main() {
     );
   });
 
-  test('mixed endings in text-only content are preserved verbatim', () async {
+  test('mixed endings in text-only content normalize to LF', () async {
     const content = 'a\r\nb\nc';
+    const expected = 'a\nb\nc';
     final result = await decodeLegacyContent(content);
     expect(result.parts, hasLength(1));
-    expect((result.parts.single as TextPart).text, content);
-    expect(stripLegacyContentTextSegments(content).join(), content);
+    expect((result.parts.single as TextPart).text, expected);
+    expect(stripLegacyContentTextSegments(content).join(), expected);
   });
 
   test('attachment-only content strips to zero segments', () async {
@@ -467,5 +468,28 @@ void main() {
     expect(result.converted, 1);
     final part = result.parts.single as ImagePart;
     expect(part.uri, external);
+  });
+
+  test('迁移结果只保留 LF 换行', () async {
+    const content = 'a\r\nb\rc\u2028d\u2029e\u0085f';
+    final result = await decodeLegacyContent(content);
+    final text = result.parts.whereType<TextPart>().single.text;
+    expect(text, 'a\nb\nc\nd\ne\nf');
+  });
+
+  test('标记桥接的换行也归一成 LF', () async {
+    final missing = '${tempDir.path}/missing.png';
+    final result = await decodeLegacyContent(
+      'before\r\n[image:$missing]\r\nafter\u2028tail',
+    );
+    expect(result.missingFiles, 1);
+    final joined = result.parts
+        .whereType<TextPart>()
+        .map((part) => part.text)
+        .join();
+    expect(joined.contains('\r'), isFalse, reason: joined);
+    expect(joined.contains('\u2028'), isFalse, reason: joined);
+    expect(joined, contains('before'));
+    expect(joined, contains('after'));
   });
 }

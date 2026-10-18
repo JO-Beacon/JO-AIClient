@@ -1714,7 +1714,7 @@ class GenerationContext {
 
 /// 流式消息生成的状态对象。
 class StreamingState {
-  StreamingState(this.ctx)
+  StreamingState(this.ctx, {this.responsesTurnPrefix, this.claudeTurnPrefix})
     : _content = StreamTextBuffer(ctx.assistantMessage.content),
       totalTokens = ctx.assistantMessage.totalTokens ?? 0,
       firstTokenMs = ctx.assistantMessage.firstTokenMs,
@@ -1722,6 +1722,10 @@ class StreamingState {
       partsHandler = StreamChunkHandler(seed: ctx.assistantMessage.parts);
 
   final GenerationContext ctx;
+
+  /// 本次续跑前这条消息已经持有的原生历史快照。
+  final String? responsesTurnPrefix;
+  final String? claudeTurnPrefix;
   final StreamTextBuffer _content;
   String get fullContentRaw => _content.value;
   set fullContentRaw(String text) => _content.value = text;

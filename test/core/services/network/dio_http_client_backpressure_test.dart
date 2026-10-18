@@ -100,6 +100,35 @@ void main() {
     await source.close();
   });
 
+  test('取消正在读的响应体时，不会对同一个数据源二次订阅', () async {
+    final source = StreamController<Uint8List>(sync: true);
+    var cancellations = 0;
+    source.onCancel = () => cancellations++;
+    final token = CancelToken();
+    final client = DioHttpClient(
+      adapter: _Adapter(() => source.stream),
+      cancelToken: token,
+      logRequests: false,
+    );
+    addTearDown(client.close);
+    final response = await client.send(
+      http.Request('GET', Uri.parse('https://test.invalid')),
+    );
+    // bytesToString 在收到错误时会同步取消自己的订阅，
+    // 而取消动作又会同步触发 onCancel：这里旧写法会对同一个单订阅流再 listen 一次。
+    final failure = expectLater(
+      response.stream.bytesToString(),
+      throwsA(isA<DioException>()),
+    );
+    source.add(Uint8List.fromList([123, 34]));
+    token.cancel('stop during the response body');
+    await failure;
+    await Future<void>.delayed(Duration.zero);
+    expect(cancellations, 1);
+    expect(source.hasListener, false);
+    await source.close();
+  });
+
   test(
     'response demand propagates to the transport without an eager buffer',
     () async {

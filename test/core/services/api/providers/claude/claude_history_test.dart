@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_history.dart';
 import 'package:Kelivo/core/services/api/native_input_attachments.dart';
 import 'package:Kelivo/core/providers/settings_provider.dart';
+import 'package:Kelivo/core/models/model_spec.dart';
 import 'package:Kelivo/core/services/model_spec/model_spec_resolver.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_role_normalizer.dart';
 import 'package:Kelivo/core/utils/multimodal_input_utils.dart';
@@ -36,6 +37,7 @@ void main() {
         nativeInputs: _nativeInputs(),
         replayServerToolBlocks: true,
         skipRedactedThinkingBlocks: false,
+        reasoningReplay: ReasoningReplayPolicy.all,
       );
       final messages = await history.build([
         {'role': 'user', 'content': 'search'},
@@ -91,6 +93,7 @@ void main() {
         nativeInputs: _nativeInputs(),
         replayServerToolBlocks: true,
         skipRedactedThinkingBlocks: false,
+        reasoningReplay: ReasoningReplayPolicy.all,
       );
       final messages = await history.build([
         {'role': 'user', 'content': 'search'},
@@ -131,6 +134,7 @@ void main() {
       nativeInputs: _nativeInputs(),
       replayServerToolBlocks: true,
       skipRedactedThinkingBlocks: false,
+      reasoningReplay: ReasoningReplayPolicy.all,
     );
     final messages = await history.build([
       {'role': 'user', 'content': 'start'},
@@ -176,6 +180,7 @@ void main() {
         nativeInputs: _nativeInputs(),
         replayServerToolBlocks: true,
         skipRedactedThinkingBlocks: false,
+        reasoningReplay: ReasoningReplayPolicy.all,
       );
       // What a conversation cut to start at a reply — a branch root, or a context
       // window that begins after the opening question — hands the API.
@@ -202,6 +207,7 @@ void main() {
       nativeInputs: _nativeInputs(),
       replayServerToolBlocks: true,
       skipRedactedThinkingBlocks: false,
+      reasoningReplay: ReasoningReplayPolicy.all,
     );
     final messages = await history.build([
       {'role': 'user', 'content': 'one'},

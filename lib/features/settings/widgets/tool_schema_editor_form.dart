@@ -252,9 +252,7 @@ class _ToolSchemaEditorFormState extends State<ToolSchemaEditorForm> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    // 上游此处用 surfaceCardFill（来自本仓库没有的色彩阶梯文件）；
-                    // 本仓库等价写法是 surfaceCard，像素不变。
-                    color: context.appColors.surfaceCard,
+                    color: context.appColors.surfaceCardFill,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(

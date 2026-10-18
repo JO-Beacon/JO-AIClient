@@ -287,7 +287,7 @@ class _HeaderRowState extends State<_HeaderRow> {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: context.appColors.surfaceFill,
+      fillColor: context.appColors.surfaceCardFill,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -400,7 +400,7 @@ class _BodyRowState extends State<_BodyRow> {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: context.appColors.surfaceFill,
+      fillColor: context.appColors.surfaceCardFill,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,

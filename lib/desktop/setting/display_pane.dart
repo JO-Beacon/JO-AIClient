@@ -27,6 +27,10 @@ class _DisplaySettingsBody extends StatelessWidget {
                   const _RowDivider(),
                   const _ToggleRowUseLayeredSurfaces(),
                   const _RowDivider(),
+                  const _ToggleRowUseLayeredSheetTiles(),
+                  const _RowDivider(),
+                  const _ToggleRowLongMessageEditor(),
+                  const _RowDivider(),
                   const _MessageStyleRow(),
                   const _RowDivider(),
                   const _TopicPositionRow(),
@@ -846,6 +850,37 @@ class _ToggleRowUseLayeredSurfaces extends StatelessWidget {
       value: sp.useLayeredSurfaces,
       onChanged: (v) =>
           context.read<SettingsProvider>().setUseLayeredSurfaces(v),
+    );
+  }
+}
+
+class _ToggleRowUseLayeredSheetTiles extends StatelessWidget {
+  const _ToggleRowUseLayeredSheetTiles();
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final sp = context.watch<SettingsProvider>();
+    return _ToggleRow(
+      label: l10n.themeAdvancedSettingsPageUseLayeredSheetTilesTitle,
+      tip: l10n.themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle,
+      value: sp.useLayeredSheetTiles,
+      onChanged: (v) =>
+          context.read<SettingsProvider>().setUseLayeredSheetTiles(v),
+    );
+  }
+}
+
+class _ToggleRowLongMessageEditor extends StatelessWidget {
+  const _ToggleRowLongMessageEditor();
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final sp = context.watch<SettingsProvider>();
+    return _ToggleRow(
+      label: l10n.displaySettingsPageLongMessageEditorTitle,
+      value: sp.useLongMessageEditor,
+      onChanged: (v) =>
+          context.read<SettingsProvider>().setUseLongMessageEditor(v),
     );
   }
 }

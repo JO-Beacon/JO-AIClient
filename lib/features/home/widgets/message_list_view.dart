@@ -1924,7 +1924,11 @@ class _MessageListViewState extends State<MessageListView> {
 
             final userScrollAwareList = Listener(
               onPointerDown: (event) {
-                if (_isDesktopPlatform) _keyboardFocusNode.requestFocus();
+                // 双击的第二下落回列表时，不要把焦点从已经选中的文字上抢走，
+                // 否则接下来的复制快捷键就不生效了。
+                if (_isDesktopPlatform && !_keyboardFocusNode.hasFocus) {
+                  _keyboardFocusNode.requestFocus();
+                }
                 if (event.buttons != 0 &&
                     event.buttons != kSecondaryMouseButton) {
                   _pointerDragInProgress = true;

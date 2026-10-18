@@ -9,6 +9,9 @@ const String multimodalInternalRevisionIdKey = '_kelivo_revision_id';
 const String multimodalInternalDocumentPathsKey = '_kelivo_document_paths';
 const String multimodalInternalClaudeContainerKey = '_kelivo_claude_container';
 const String multimodalInternalClaudeTurnKey = '_kelivo_claude_turn';
+const String multimodalInternalClaudeThinkingRecoveryKey =
+    '_kelivo_claude_thinking_recovery';
+const String multimodalInternalResponsesItemKey = '_kelivo_responses_item';
 const String multimodalInternalGeminiThoughtSignatureKey =
     '_kelivo_gemini_thought_signature';
 

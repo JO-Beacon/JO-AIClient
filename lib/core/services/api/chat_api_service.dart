@@ -301,11 +301,7 @@ class ChatApiService {
       if (sessionToken.isCancelled) return;
       if (textOnly) config = _textOnlyConfig(config, modelId);
       if (config.oauthProvider == OAuthProvider.chatgpt) stream = true;
-      if (config.oauthProvider == OAuthProvider.kimi &&
-          (config.modelOverrides[modelId] as Map?)?['oauthProtocol'] ==
-              'anthropic') {
-        config = config.copyWith(providerType: ProviderKind.claude);
-      }
+      config = config.forModelProtocol(modelId);
       final kind = ProviderConfig.classify(
         config.id,
         explicitType: config.providerType,
@@ -368,33 +364,35 @@ class ChatApiService {
       // 早先版本外层再套一次 retryingStream，会与轮内重试相乘（3×3 层退避
       // 叠加超过 30s），让 Vertex/HTTP 错误测试超时。
       yield* retryRound(
-        () => _sendMessageStreamEventsOnce(
-          config: config,
-          modelId: modelId,
-          messages: messages,
-          userImagePaths: userImagePaths,
-          thinkingBudget: effectiveThinkingBudget,
-          reasoning: resolvedReasoning,
-          temperature: temperature,
-          topP: topP,
-          maxTokens: maxTokens,
-          tools: textOnly ? null : tools,
-          onToolCall: toolHandler == null
-              ? null
-              : (name, args, {toolCallId}) => toolCancellation.run(
-                  () => toolHandler(name, args, toolCallId: toolCallId),
-                ),
-          extraHeaders: sessionHeaders,
-          extraBody: textOnly ? null : extraBody,
-          conversationId: conversationId,
-          stream: stream,
-          allowImagesApiRouting: allowImagesApiRouting,
-          ocrActive: ocrActive,
-          builtInSearchOnly: builtInSearchOnly,
-          skipImageParsing:
-              textOnly || skipImageParsing || !parseMarkdownImageLinks,
-          sessionToken: sessionToken,
-          retryRound: retryRound,
+        () => toolCancellation.runStream(
+          () => _sendMessageStreamEventsOnce(
+            config: config,
+            modelId: modelId,
+            messages: messages,
+            userImagePaths: userImagePaths,
+            thinkingBudget: effectiveThinkingBudget,
+            reasoning: resolvedReasoning,
+            temperature: temperature,
+            topP: topP,
+            maxTokens: maxTokens,
+            tools: textOnly ? null : tools,
+            onToolCall: toolHandler == null
+                ? null
+                : (name, args, {toolCallId}) => toolCancellation.run(
+                    () => toolHandler(name, args, toolCallId: toolCallId),
+                  ),
+            extraHeaders: sessionHeaders,
+            extraBody: textOnly ? null : extraBody,
+            conversationId: conversationId,
+            stream: stream,
+            allowImagesApiRouting: allowImagesApiRouting,
+            ocrActive: ocrActive,
+            builtInSearchOnly: builtInSearchOnly,
+            skipImageParsing:
+                textOnly || skipImageParsing || !parseMarkdownImageLinks,
+            sessionToken: sessionToken,
+            retryRound: retryRound,
+          ),
         ),
       );
     } finally {

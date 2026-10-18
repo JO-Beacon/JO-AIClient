@@ -1198,12 +1198,14 @@ void main() {
       expect(apiMessages.last['content'], 'message-1506');
     });
 
-    test('上下文裁剪不会保留缺少 tool result 的 assistant tool call', () {
+    test('上下文裁剪从 user 边界开始，不切断工具轮次', () {
       final service = MessageBuilderService(
         chatService: _FakeChatService({}),
         contextProvider: _FakeBuildContext(),
       );
       final apiMessages = <Map<String, dynamic>>[
+        {'role': 'user', 'content': 'older'},
+        {'role': 'assistant', 'content': 'older reply'},
         {'role': 'user', 'content': 'before'},
         {
           'role': 'assistant',
@@ -1236,18 +1238,24 @@ void main() {
         ),
       );
 
+      // 条数是软上限：3 条装不下整轮工具交换，于是退到最近的 user 边界，
+      // 从 'before' 开始保留，宁可多留也不切断调用与结果。
+      expect(apiMessages.first['content'], 'before');
+      expect(apiMessages.map((message) => message['role']).toList(), [
+        'user',
+        'assistant',
+        'tool',
+        'assistant',
+        'user',
+      ]);
       expect(
         apiMessages.where((message) => message['tool_calls'] is List),
-        isEmpty,
+        hasLength(1),
       );
       expect(
         apiMessages.where((message) => message['role'] == 'tool'),
-        isEmpty,
+        hasLength(1),
       );
-      expect(apiMessages.map((message) => message['content']).toList(), [
-        'done',
-        'next',
-      ]);
     });
 
     test('上下文裁剪会保留完整的 assistant tool call 与 tool result', () {
@@ -1296,7 +1304,9 @@ void main() {
         apiMessages.where((message) => message['role'] == 'tool'),
         hasLength(1),
       );
+      // 软上限：要装下整轮工具交换，就会把前面的 user 边界一起带上。
       expect(apiMessages.map((message) => message['role']).toList(), [
+        'user',
         'assistant',
         'tool',
         'assistant',

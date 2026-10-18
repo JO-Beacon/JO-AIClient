@@ -18,6 +18,10 @@
 *.html text eol=lf
 *.css text eol=lf
 *.js text eol=lf
+
+# 这份校验单是构建输入（`tool/fetch_proot.sh` 逐行读它），必须是 LF。
+# 不能整类改成 LF：仓库里已有若干 .txt 是 CRLF（上游自带或测试夹具）。
+tool/proot_checksums.txt text eol=lf
 *.svg text eol=lf
 *.py text eol=lf
 

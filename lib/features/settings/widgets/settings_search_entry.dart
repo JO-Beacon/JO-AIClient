@@ -73,8 +73,17 @@ class _SettingsSearchListState extends State<SettingsSearchList> {
     if (!mounted) return null;
     final box = _entryKey.currentContext?.findRenderObject();
     final overlay = Navigator.of(context).overlay?.context.findRenderObject();
-    if (box is! RenderBox || !box.attached || !box.hasSize || overlay == null) {
+    if (box is! RenderBox || !box.attached || overlay == null) {
       return null;
+    }
+    // 被路由暂时移出屏幕的入口，可能已经挂到尚未布局的新动画节点下：
+    // 即使入口自身还有尺寸，也要确认它到 overlay 之间的祖先都有尺寸。
+    RenderObject? ancestor = box;
+    while (ancestor != overlay) {
+      if (ancestor == null || (ancestor is RenderBox && !ancestor.hasSize)) {
+        return null;
+      }
+      ancestor = ancestor.parent;
     }
     return box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
   }
@@ -82,9 +91,22 @@ class _SettingsSearchListState extends State<SettingsSearchList> {
   Future<void> _openSearch() async {
     if (_searching) return;
     _searching = true;
+    var trackOrigin = true;
     try {
-      await widget.onSearch(_entryRect);
+      var origin = _entryRect();
+      void refreshOrigin(Duration _) {
+        if (!mounted || !trackOrigin) return;
+        origin = _entryRect() ?? origin;
+        WidgetsBinding.instance.addPostFrameCallback(refreshOrigin);
+      }
+
+      // 先取一次再推入搜索路由，之后按已完成的帧采样。
+      // 搜索页构建时不得去量一个还没布局完的源路由。
+      // 帧后回调跟随已有帧，不会额外排新帧。
+      WidgetsBinding.instance.addPostFrameCallback(refreshOrigin);
+      await widget.onSearch(() => mounted ? origin : null);
     } finally {
+      trackOrigin = false;
       _searching = false;
     }
   }

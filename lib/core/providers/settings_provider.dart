@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import '../services/search/search_service.dart';
+import '../services/search/web_fetch_service.dart';
 import '../services/tts/network_tts.dart';
 import '../services/tts/tts_text_selection.dart';
 import '../services/asr/asr_service_options.dart';
@@ -25,6 +26,7 @@ import '../models/backup.dart';
 import '../models/compress_context_options.dart';
 import '../models/provider_group.dart';
 import '../models/assistant.dart';
+import '../models/memory_entry.dart';
 import '../models/reasoning_request.dart';
 import '../models/tool_schema_override.dart';
 import '../services/app_exit_flush.dart';
@@ -161,6 +163,8 @@ class SettingsProvider extends ChangeNotifier {
   static const int maxMemoryMigrationBatchSize = 24;
   static const String _memoryInjectionMaxItemsKey =
       'memory_injection_max_items_v1';
+  static const String _memoryFullInjectionTypesKey =
+      'memory_full_injection_types_v1';
   static const int defaultMemoryInjectionMaxItems = 10;
   static const int minMemoryInjectionMaxItems = 1;
   static const int maxMemoryInjectionMaxItems = 100;
@@ -300,6 +304,14 @@ class SettingsProvider extends ChangeNotifier {
       'display_use_pure_background_v1';
   static const String _displayUseLayeredSurfacesKey =
       'display_use_layered_surfaces_v1';
+  // 面板里的操作行是否铺卡片底色。**本仓库默认开**（上游默认关，见
+  // plans/应用侧待办总览.md 第 20 条）：开关关着时保持本仓库一直以来的观感。
+  static const String _displayUseLayeredSheetTilesKey =
+      'display_use_layered_sheet_tiles_v1';
+  // 长文本编辑是否使用按行编辑器。本机偏好：不同设备的输入法与性能差异大，
+  // 不随备份或同步流转（已在 BusinessKeyRegistry.localOnlyKeys 登记）。
+  static const String _displayLongMessageEditorKey =
+      'display_long_message_editor_v1';
   static const String _displayChatMessageBackgroundStyleKey =
       'display_chat_message_background_style_v1';
   static const String _displayAssistantBubbleSplitParagraphsKey =
@@ -368,6 +380,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _searchEnabledKey = 'search_enabled_v1';
   static const String _searchAutoTestOnLaunchKey =
       'search_auto_test_on_launch_v1';
+  static const String _webFetchModeKey = 'search_web_fetch_v1';
   static const String _webDavConfigKey = 'webdav_config_v1';
   static const String _s3ConfigKey = 's3_config_v1';
   // 全局网络代理
@@ -508,6 +521,13 @@ class SettingsProvider extends ChangeNotifier {
   bool _useLayeredSurfaces = false;
   bool get useLayeredSurfaces => _useLayeredSurfaces;
 
+  bool _useLayeredSheetTiles = true;
+  bool get useLayeredSheetTiles => _useLayeredSheetTiles;
+
+  // 默认关：未打开时输入与编辑完全走现有输入框。
+  bool _useLongMessageEditor = false;
+  bool get useLongMessageEditor => _useLongMessageEditor;
+
   // 桌面端 UI 持久化状态
   double _desktopSidebarWidth = 240;
   bool _desktopSidebarOpen = true;
@@ -571,6 +591,9 @@ class SettingsProvider extends ChangeNotifier {
   bool get searchEnabled => _searchEnabled;
   bool _searchAutoTestOnLaunch = false;
   bool get searchAutoTestOnLaunch => _searchAutoTestOnLaunch;
+  // follow | local | off | 某个搜索服务的 id（见 WebFetchMode）
+  String _webFetchMode = WebFetchMode.follow;
+  String get webFetchMode => _webFetchMode;
   // 临时连接测试结果：serviceId -> 已连接（true）、失败（false）或 null（未测试）
   final Map<String, bool?> _searchConnection = <String, bool?>{};
   Map<String, bool?> get searchConnection =>
@@ -915,6 +938,13 @@ class SettingsProvider extends ChangeNotifier {
         (prefs.getInt(_memoryInjectionMaxItemsKey) ??
                 defaultMemoryInjectionMaxItems)
             .clamp(minMemoryInjectionMaxItems, maxMemoryInjectionMaxItems);
+    final fullInjectionTypes =
+        prefs.getStringList(_memoryFullInjectionTypesKey) ?? const <String>[];
+    _memoryFullInjectionTypes = Set<MemoryType>.unmodifiable(
+      MemoryType.values.where(
+        (type) => fullInjectionTypes.contains(MemoryEntry.typeToString(type)),
+      ),
+    );
 
     // 显示设置
     _autoRetry = const AutoRetryOptions.defaults().copyWith(enabled: true);
@@ -1091,6 +1121,10 @@ class SettingsProvider extends ChangeNotifier {
       _usePureBackground = pureBgPref;
     }
     _useLayeredSurfaces = prefs.getBool(_displayUseLayeredSurfacesKey) ?? false;
+    _useLayeredSheetTiles =
+        prefs.getBool(_displayUseLayeredSheetTilesKey) ?? true;
+    _useLongMessageEditor =
+        localPreferences.getBool(_displayLongMessageEditorKey) ?? false;
     // 显示：markdown/math 渲染
     _enableDollarLatex = prefs.getBool(_displayEnableDollarLatexKey) ?? true;
     _enableMathRendering =
@@ -1307,6 +1341,7 @@ class SettingsProvider extends ChangeNotifier {
     _searchEnabled = prefs.getBool(_searchEnabledKey) ?? false;
     _searchAutoTestOnLaunch =
         prefs.getBool(_searchAutoTestOnLaunchKey) ?? false;
+    _webFetchMode = prefs.getString(_webFetchModeKey) ?? WebFetchMode.follow;
 
     // 加载全局代理
     _globalProxyEnabled = prefs.getBool(_globalProxyEnabledKey) ?? false;
@@ -2555,6 +2590,22 @@ class SettingsProvider extends ChangeNotifier {
     _useLayeredSurfaces = v;
     notifyListeners();
     await _preferences.setBool(_displayUseLayeredSurfacesKey, v);
+  }
+
+  Future<void> setUseLayeredSheetTiles(bool v) async {
+    if (_useLayeredSheetTiles == v) return;
+    _useLayeredSheetTiles = v;
+    notifyListeners();
+    await _preferences.setBool(_displayUseLayeredSheetTilesKey, v);
+  }
+
+  Future<void> setUseLongMessageEditor(bool v) async {
+    if (_useLongMessageEditor == v) return;
+    _useLongMessageEditor = v;
+    notifyListeners();
+    // 本机键直写 SharedPreferences：BusinessPreferences 拒绝写 localOnly 键。
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_displayLongMessageEditorKey, v);
   }
 
   void _loadCustomThemes(BusinessPreferences prefs) {
@@ -4116,6 +4167,7 @@ Requirements:
   String _memoryMigratePromptEn = MemoryPrompts.migrateEn;
   int _memoryMigrationBatchSize = defaultMemoryMigrationBatchSize;
   int _memoryInjectionMaxItems = defaultMemoryInjectionMaxItems;
+  Set<MemoryType> _memoryFullInjectionTypes = const {};
 
   String get memoryRulesPromptZh => _memoryRulesPromptZh;
   String get memoryRulesPromptEn => _memoryRulesPromptEn;
@@ -4133,6 +4185,9 @@ Requirements:
   String get memoryMigratePromptEn => _memoryMigratePromptEn;
   int get memoryMigrationBatchSize => _memoryMigrationBatchSize;
   int get memoryInjectionMaxItems => _memoryInjectionMaxItems;
+
+  /// 这些类型不受“最多注入 N 条”限制。
+  Set<MemoryType> get memoryFullInjectionTypes => _memoryFullInjectionTypes;
 
   Future<void> setMemoryModel(String providerKey, String modelId) async {
     _memoryModelProvider = providerKey;
@@ -4363,6 +4418,19 @@ Requirements:
     _memoryInjectionMaxItems = next;
     notifyListeners();
     await _preferences.setInt(_memoryInjectionMaxItemsKey, next);
+  }
+
+  Future<void> setMemoryFullInjectionTypes(Set<MemoryType> types) async {
+    final next = Set<MemoryType>.unmodifiable(
+      MemoryType.values.where(types.contains),
+    );
+    if (setEquals(_memoryFullInjectionTypes, next)) return;
+    _memoryFullInjectionTypes = next;
+    notifyListeners();
+    await _preferences.setStringList(
+      _memoryFullInjectionTypesKey,
+      next.map(MemoryEntry.typeToString).toList(),
+    );
   }
 
   Future<void> resetMemoryRulesPromptZh() async =>
@@ -5540,6 +5608,13 @@ Requirements:
   // 搜索服务设置
   Future<void> setSearchServices(List<SearchServiceOptions> services) async {
     _searchServices = List.from(services);
+    // 删掉或改到不再支持读页面的服务时，把“钉住某个服务”回退为跟随搜索。
+    final nextFetchMode = WebFetchService.effectiveMode(
+      _webFetchMode,
+      _searchServices,
+    );
+    final resetFetchMode = _webFetchMode != nextFetchMode;
+    _webFetchMode = nextFetchMode;
     if (_searchServiceSelected >= _searchServices.length) {
       _searchServiceSelected = _searchServices.isNotEmpty
           ? _searchServices.length - 1
@@ -5552,6 +5627,7 @@ Requirements:
       jsonEncode(_searchServices.map((e) => e.toJson()).toList()),
     );
     await prefs.setInt(_searchSelectedKey, _searchServiceSelected);
+    if (resetFetchMode) await prefs.setString(_webFetchModeKey, _webFetchMode);
   }
 
   Future<void> setSearchCommonOptions(SearchCommonOptions options) async {
@@ -5585,6 +5661,13 @@ Requirements:
     await prefs.setBool(_searchAutoTestOnLaunchKey, enabled);
   }
 
+  Future<void> setWebFetchMode(String mode) async {
+    _webFetchMode = WebFetchService.effectiveMode(mode, _searchServices);
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setString(_webFetchModeKey, _webFetchMode);
+  }
+
   // 用于设置的组合更新
   Future<void> updateSettings(SettingsProvider newSettings) async {
     if (!listEquals(_searchServices, newSettings._searchServices)) {
@@ -5602,6 +5685,9 @@ Requirements:
     if (_searchAutoTestOnLaunch != newSettings._searchAutoTestOnLaunch) {
       await setSearchAutoTestOnLaunch(newSettings._searchAutoTestOnLaunch);
     }
+    if (_webFetchMode != newSettings._webFetchMode) {
+      await setWebFetchMode(newSettings._webFetchMode);
+    }
   }
 
   SettingsProvider copyWith({
@@ -5610,6 +5696,7 @@ Requirements:
     int? searchServiceSelected,
     bool? searchEnabled,
     bool? searchAutoTestOnLaunch,
+    String? webFetchMode,
   }) {
     final copy = SettingsProvider._withoutLoad(_preferences);
     copy._searchServices = searchServices ?? _searchServices;
@@ -5619,6 +5706,7 @@ Requirements:
     copy._searchEnabled = searchEnabled ?? _searchEnabled;
     copy._searchAutoTestOnLaunch =
         searchAutoTestOnLaunch ?? _searchAutoTestOnLaunch;
+    copy._webFetchMode = webFetchMode ?? _webFetchMode;
     copy._ttsServices = _ttsServices;
     copy._selectedTtsServiceId = _selectedTtsServiceId;
     copy._ttsAutoPlayAssistantReplies = _ttsAutoPlayAssistantReplies;
@@ -5696,6 +5784,7 @@ Requirements:
     copy._memoryMigratePromptEn = _memoryMigratePromptEn;
     copy._memoryMigrationBatchSize = _memoryMigrationBatchSize;
     copy._memoryInjectionMaxItems = _memoryInjectionMaxItems;
+    copy._memoryFullInjectionTypes = _memoryFullInjectionTypes;
     copy._showUserAvatar = _showUserAvatar;
     copy._showModelIcon = _showModelIcon;
     copy._showModelNameTimestamp = _showModelNameTimestamp;
@@ -6031,6 +6120,9 @@ class ProviderConfig {
   final OAuthProvider? oauthProvider;
   final ProviderOAuthCredentials? oauthCredentials;
   final DateTime? oauthModelsSyncedAt;
+
+  /// 上次同步模型列表时使用的客户端版本；版本变了要重拉。
+  final String? oauthModelsClientVersion;
   bool get isOAuth => oauthProvider != null;
   final String baseUrl;
   final ProviderKind? providerType; // 显式指定 provider 类型，避免误分类
@@ -6115,6 +6207,7 @@ class ProviderConfig {
     this.oauthProvider,
     this.oauthCredentials,
     this.oauthModelsSyncedAt,
+    this.oauthModelsClientVersion,
     required this.baseUrl,
     this.providerType,
     this.chatPath,
@@ -6150,6 +6243,17 @@ class ProviderConfig {
   // copyWith 可空性控制的哨兵值（允许显式设置为 null）
   static const Object _sentinel = Object();
 
+  /// 单个模型可能走与供应商不同的协议：Kimi 的 OAuth 在
+  /// `oauthProtocol` 标为 anthropic 时按 Claude 协议发请求。
+  ProviderConfig forModelProtocol(String modelId) {
+    if (oauthProvider == OAuthProvider.kimi &&
+        (modelOverrides[modelId] as Map?)?['oauthProtocol'] == 'anthropic' &&
+        providerType != ProviderKind.claude) {
+      return copyWith(providerType: ProviderKind.claude);
+    }
+    return this;
+  }
+
   ProviderConfig copyWith({
     String? id,
     bool? enabled,
@@ -6158,6 +6262,7 @@ class ProviderConfig {
     OAuthProvider? oauthProvider,
     Object? oauthCredentials = _sentinel,
     DateTime? oauthModelsSyncedAt,
+    Object? oauthModelsClientVersion = _sentinel,
     String? baseUrl,
     ProviderKind? providerType,
     String? chatPath,
@@ -6198,6 +6303,9 @@ class ProviderConfig {
         ? this.oauthCredentials
         : oauthCredentials as ProviderOAuthCredentials?,
     oauthModelsSyncedAt: oauthModelsSyncedAt ?? this.oauthModelsSyncedAt,
+    oauthModelsClientVersion: identical(oauthModelsClientVersion, _sentinel)
+        ? this.oauthModelsClientVersion
+        : oauthModelsClientVersion as String?,
     baseUrl: baseUrl ?? this.baseUrl,
     providerType: providerType ?? this.providerType,
     chatPath: chatPath ?? this.chatPath,
@@ -6247,6 +6355,8 @@ class ProviderConfig {
       'oauthCredentials': oauthCredentials!.toJson(),
     if (oauthModelsSyncedAt != null)
       'oauthModelsSyncedAt': oauthModelsSyncedAt!.toIso8601String(),
+    if (oauthModelsClientVersion != null)
+      'oauthModelsClientVersion': oauthModelsClientVersion,
     'baseUrl': baseUrl,
     'providerType': providerType?.name,
     'chatPath': chatPath,
@@ -6297,13 +6407,16 @@ class ProviderConfig {
     oauthModelsSyncedAt: DateTime.tryParse(
       json['oauthModelsSyncedAt'] as String? ?? '',
     ),
+    oauthModelsClientVersion: json['oauthModelsClientVersion'] as String?,
     baseUrl: json['baseUrl'] as String? ?? '',
     providerType: json['providerType'] != null
         ? ProviderKind.values.firstWhere(
             (e) => e.name == json['providerType'],
             orElse: () => classify(json['id'] as String? ?? ''),
           )
-        : null,
+        // 旧备份没有类型字段：DeepSeek 按地址悔定（/anthropic → Claude，其余 → OpenAI），
+        // 其他厂商仍交给调用方的 classify。
+        : inferLegacyDeepSeekType(json['baseUrl'] as String? ?? ''),
     chatPath: json['chatPath'] as String?,
     useResponseApi: json['useResponseApi'] as bool?,
     promptCacheKeyEnabled: json['promptCacheKeyEnabled'] as bool? ?? false,
@@ -6387,12 +6500,22 @@ class ProviderConfig {
     if (k.contains('gemini') || k.contains('google')) {
       return ProviderKind.google;
     }
-    if (k.contains('deepseek') ||
-        k.contains('claude') ||
-        k.contains('anthropic')) {
+    if (k.contains('claude') || k.contains('anthropic')) {
       return ProviderKind.claude;
     }
     return ProviderKind.openai;
+  }
+
+  /// 旧备份/旧配置没有 `providerType` 时：DeepSeek 按**地址**判定协议
+  /// （`/anthropic` → Claude，其余 → OpenAI），其他厂商返回 null 交给调用方。
+  /// 名字不参与判定，避免把 `/v1` 的老配置按 Anthropic 格式发出去。
+  static ProviderKind? inferLegacyDeepSeekType(String baseUrl) {
+    final uri = Uri.tryParse(baseUrl.trim());
+    final host = uri?.host.toLowerCase() ?? '';
+    if (uri == null || !host.contains('deepseek')) return null;
+    return uri.path.toLowerCase().startsWith('/anthropic')
+        ? ProviderKind.claude
+        : ProviderKind.openai;
   }
 
   static bool isDeepSeek(ProviderConfig config) {
@@ -6456,7 +6579,12 @@ class ProviderConfig {
       return false; // 其他项默认禁用
     }
 
-    final kind = classify(key);
+    // “DeepSeek”预设走 Anthropic 协议（`/anthropic` 端点）。这是预设自己的选择，
+    // 不再靠 classify 把任何名字里带 deepseek 的配置都归为 claude：
+    // 导入或旧配置若没有显式类型，仍按 openai 协议处理（与上游一致）。
+    final kind = key.toLowerCase().contains('deepseek')
+        ? ProviderKind.claude
+        : classify(key);
     final lowerKey = key.toLowerCase();
     switch (kind) {
       case ProviderKind.google:

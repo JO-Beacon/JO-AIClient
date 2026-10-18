@@ -633,6 +633,48 @@ abstract class BuiltInToolsHelper {
     return supportsBuiltInSearchForModel(cfg: cfg, modelId: modelId);
   }
 
+  /// 这次请求是否已经带了供应商自带的“读网页”能力。
+  static bool isBuiltInFetchEnabled({
+    required ProviderConfig? cfg,
+    required String? modelId,
+  }) {
+    if (cfg == null || modelId == null || !_isChatModel(cfg, modelId)) {
+      return false;
+    }
+    final enabled = _enabledTools(cfg, modelId);
+    final kind = ProviderConfig.classify(
+      cfg.id,
+      explicitType: cfg.providerType,
+    );
+    if (kind == ProviderKind.google) {
+      return enabled.contains(BuiltInToolNames.urlContext);
+    }
+    if (kind == ProviderKind.claude) {
+      return claudeServerToolEntries(
+        cfg: cfg,
+        modelId: modelId,
+        enabled: enabled,
+      ).any((tool) => tool['name'] == BuiltInToolNames.webFetch);
+    }
+    return kind == ProviderKind.openai &&
+        isOpenRouterProvider(cfg) &&
+        enabled.contains(BuiltInToolNames.webFetch);
+  }
+
+  static bool _isChatModel(ProviderConfig? cfg, String? modelId) {
+    if (cfg == null || (modelId ?? '').trim().isEmpty) return false;
+    return ModelSpecResolver.instance.spec(cfg, modelId!).type ==
+        ModelType.chat;
+  }
+
+  static Set<String> _enabledTools(ProviderConfig cfg, String modelId) {
+    final spec = ModelSpecResolver.instance.spec(cfg, modelId);
+    return {
+      ...BuiltInToolNames.parseAndNormalize(spec.builtInTools),
+      ...BuiltInToolNames.parseFromOverride(cfg.modelOverrides[modelId]),
+    };
+  }
+
   static bool supportsClaudeDynamicWebSearchForModel({
     required ProviderConfig? cfg,
     required String? modelId,

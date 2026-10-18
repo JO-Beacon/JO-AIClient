@@ -1,4 +1,5 @@
 import 'core/services/scheduled_tasks_service.dart';
+import 'core/services/auth/provider_oauth_service.dart';
 import 'package:Kelivo/core/services/sandbox/workspace_channel.dart';
 import 'package:Kelivo/core/providers/external_mounts_provider.dart';
 import 'package:Kelivo/core/services/sandbox/environment_dependencies.dart';
@@ -103,6 +104,7 @@ import 'utils/app_directories.dart';
 import 'utils/platform_utils.dart';
 import 'utils/sandbox_path_resolver.dart';
 import 'shared/widgets/app_overlays.dart';
+import 'shared/widgets/floating_ipad_padding.dart';
 import 'shared/widgets/loading_dialog_card.dart';
 import 'shared/widgets/snackbar.dart';
 import 'shared/widgets/restore_failure_screen.dart';
@@ -860,6 +862,9 @@ class MyApp extends StatelessWidget {
             unawaited(
               settings.loaded.then((_) => settings.incrementAppLaunchCount()),
             );
+            unawaited(
+              ProviderOAuthService.instance.syncOutdatedModels(settings),
+            );
             return settings;
           },
         ),
@@ -956,7 +961,13 @@ class MyApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => EnvironmentProvider(preferences: businessPreferences),
+          create: (ctx) => EnvironmentProvider(
+            preferences: businessPreferences,
+            // 只有支持沙箱的平台才需要往客户机里注入代理默认值。
+            proxySettings: WorkspaceChannel.isSupportedPlatform
+                ? ctx.read<SettingsProvider>()
+                : null,
+          ),
         ),
         ChangeNotifierProvider(create: (_) => _WorkspaceStackHolder()),
         ChangeNotifierProvider(
@@ -1340,25 +1351,7 @@ class MyApp extends StatelessWidget {
                     });
                   }
 
-                  final mq = MediaQuery.of(ctx);
-                  final display = View.of(ctx).display;
-                  final displaySize = display.size / display.devicePixelRatio;
-                  final isFloatingIpad =
-                      defaultTargetPlatform == TargetPlatform.iOS &&
-                      displaySize.shortestSide >= 600 &&
-                      (mq.size.shortestSide < displaySize.shortestSide - 1 ||
-                          mq.size.longestSide < displaySize.longestSide - 1);
-                  final systemTop = mq.viewPadding.top;
-                  final controlsTop = systemTop < 56 ? 56.0 : systemTop;
-                  final appWithOverlays = MediaQuery(
-                    data: isFloatingIpad
-                        ? mq.copyWith(
-                            padding: mq.padding.copyWith(top: controlsTop),
-                            viewPadding: mq.viewPadding.copyWith(
-                              top: controlsTop,
-                            ),
-                          )
-                        : mq,
+                  final appWithOverlays = FloatingIpadPadding(
                     child: LocalSnapshotScheduler(
                       child: AppOverlays(
                         child: child ?? const SizedBox.shrink(),

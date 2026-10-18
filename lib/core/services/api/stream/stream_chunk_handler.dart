@@ -257,6 +257,15 @@ class StreamChunkHandler {
         }
         _imageIndex.remove(id);
         _imageMime.remove(id);
+      case AssistantRoundEnd(:final reasoningDetails):
+        // 一轮响应结束：先收尾所有未闭合的文本缓冲，再记下这条结构。
+        for (final index in _textBuffers.keys.toList()) {
+          _endText(index);
+        }
+        _textIndex.clear();
+        _reasoningIndex.clear();
+        _parts.add(AssistantRoundEndPart(reasoningDetails: reasoningDetails));
+        this.reasoningDetails = null;
       case ProviderArtifact():
         // 供应商状态由上层持久化，不进入消息正文。
         break;

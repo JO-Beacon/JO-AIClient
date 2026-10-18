@@ -24,8 +24,9 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 # 只装桌面/显示相关依赖。**不要**在这里装 GStreamer——那会掩盖缺库回归。
+# GTK 的 libepoxy 会动态加载 libGLESv2.so.2，只装 Mesa/EGL 提供不了它。
 apt-get install -y --no-install-recommends \
-  ca-certificates libgtk-3-0 libgl1-mesa-dri libegl1 libasound2 \
+  ca-certificates libgtk-3-0 libgl1-mesa-dri libegl1 libgles2 libasound2 \
   dbus-x11 xvfb xauth xdotool
 
 cd /tmp

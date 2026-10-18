@@ -104,7 +104,9 @@ class _TokenDisplayWidgetState extends State<TokenDisplayWidget>
 
   @override
   void didChangeMetrics() {
-    if (_isShowing) _removeOverlayImmediate();
+    // 窗口尺寸变化只要求重算根浮层边界，不是关闭浮层的理由：
+    // 即使消息的位置和它所在 Scaffold 调整过的 MediaQuery 都没变，也要刷新。
+    if (_isShowing) setState(() {});
   }
 
   void _showPopup() {
@@ -118,8 +120,13 @@ class _TokenDisplayWidgetState extends State<TokenDisplayWidget>
 
   Widget _buildPopup(BuildContext context, OverlayChildLayoutInfo info) {
     final animation = _curvedAnim!;
+    // 按根浮层自己的 MediaQuery 算内边距：消息所在的 Scaffold 可能已经把
+    // 键盘内边距从自己的 MediaQuery 里扣掉了，两侧必须对齐。
+    final overlayContext = Overlay.of(context, rootOverlay: true).context;
+    final mediaQuery = MediaQuery.of(overlayContext);
     // The portal supplies the current transform after the message is laid out,
     // even when only a preceding image resized and this widget did not rebuild.
+    // Window metrics changes use this layout too; they need not close the popup.
     final anchor = MatrixUtils.transformRect(
       info.childPaintTransform,
       Offset.zero & info.childSize,
@@ -138,8 +145,8 @@ class _TokenDisplayWidgetState extends State<TokenDisplayWidget>
             delegate: _TokenPopupLayout(
               anchor: anchor,
               padding:
-                  MediaQuery.paddingOf(context) +
-                  MediaQuery.viewInsetsOf(context) +
+                  mediaQuery.padding +
+                  mediaQuery.viewInsets +
                   const EdgeInsets.all(8),
               animation: animation,
             ),

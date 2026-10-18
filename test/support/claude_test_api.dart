@@ -12,6 +12,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 
 import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/models/reasoning_request.dart';
+import 'legacy_reasoning.dart';
 import 'package:Kelivo/core/services/api/chat_api_service.dart';
 import 'package:Kelivo/core/services/api/providers/claude/claude_history.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk.dart';
@@ -263,6 +264,7 @@ Future<ClaudeExchange> captureClaudeExchange({
   })?
   onToolCall,
   ReasoningRequest? reasoning,
+  int? thinkingBudget,
   double? temperature,
   double? topP,
   bool utilityCall = false,
@@ -275,6 +277,7 @@ Future<ClaudeExchange> captureClaudeExchange({
     },
   ],
   List<String>? sseRounds,
+  List<int>? statusCodes,
 }) async {
   final bodies = <Map<String, dynamic>>[];
   final paths = <String>[];
@@ -290,8 +293,11 @@ Future<ClaudeExchange> captureClaudeExchange({
       (jsonDecode(await utf8.decoder.bind(request).join()) as Map)
           .cast<String, dynamic>(),
     );
-    request.response.statusCode = HttpStatus.ok;
-    if (sseRounds != null) {
+    final status = statusCodes == null
+        ? HttpStatus.ok
+        : statusCodes[round.clamp(0, statusCodes.length - 1)];
+    request.response.statusCode = status;
+    if (sseRounds != null && status == HttpStatus.ok) {
       request.response.headers.contentType = ContentType(
         'text',
         'event-stream',
@@ -317,13 +323,15 @@ Future<ClaudeExchange> captureClaudeExchange({
       (Uri.tryParse(cfg.baseUrl)?.host ?? '') == 'api.anthropic.com';
 
   final chunks = <StreamChunk>[];
+  // 上游测试用整数预算（thinkingBudget），本仓库旧调用点直接传档位；两者都支持。
+  final effectiveReasoning = reasoning ?? legacyBudget(thinkingBudget);
   Future<void> send(ProviderConfig effective) async {
     if (utilityCall) {
       final text = await ChatApiService.generateText(
         config: effective,
         modelId: modelId,
         prompt: 'hello',
-        reasoning: reasoning,
+        reasoning: effectiveReasoning,
       );
       // The text of every round, in order, is what the call must hand back.
       expect(
@@ -344,7 +352,7 @@ Future<ClaudeExchange> captureClaudeExchange({
         messages: messages,
         tools: tools,
         onToolCall: onToolCall,
-        reasoning: reasoning,
+        reasoning: effectiveReasoning,
         temperature: temperature,
         topP: topP,
         stream: stream,
@@ -374,6 +382,7 @@ Future<Map<String, dynamic>> captureClaudeRequestBody({
   ],
   List<Map<String, dynamic>>? tools,
   ReasoningRequest? reasoning,
+  int? thinkingBudget,
   double? temperature,
   double? topP,
   bool utilityCall = false,
@@ -391,6 +400,7 @@ Future<Map<String, dynamic>> captureClaudeRequestBody({
   tools: tools,
   onToolCall: tools == null ? null : (name, args, {toolCallId}) async => '{}',
   reasoning: reasoning,
+  thinkingBudget: thinkingBudget,
   temperature: temperature,
   topP: topP,
   utilityCall: utilityCall,

@@ -315,6 +315,32 @@ void main() {
       },
     );
 
+    test('currentMemorySnapshot 按全量注入类型绕过条数上限', () async {
+      await seedAssistant('assistant-1');
+      await putEntry(id: 'a1', content: 'Alpha memory');
+      await putEntry(id: 'a2', content: 'Beta memory');
+      await settings.setMemoryInjectionMaxItems(1);
+      final service = buildService();
+
+      Future<String> prefix() async {
+        final snapshot = await service.currentMemorySnapshot(
+          assistant: assistant,
+          lang: MemoryPromptLang.en,
+          settings: settings,
+        );
+        return snapshot!.prefix;
+      }
+
+      final limited = await prefix();
+      expect(limited, contains('Alpha memory'));
+      expect(limited, isNot(contains('Beta memory')));
+
+      await settings.setMemoryFullInjectionTypes({MemoryType.identity});
+      final full = await prefix();
+      expect(full, contains('Alpha memory'));
+      expect(full, contains('Beta memory'));
+    });
+
     test('no snapshot in history → full snapshot', () async {
       await seedAssistant('assistant-1');
       await putEntry(id: 'mem_01', content: 'User likes Flutter.');

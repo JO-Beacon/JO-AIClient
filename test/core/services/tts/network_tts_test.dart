@@ -459,6 +459,122 @@ void main() {
       expect(result.mime, 'audio/wav');
       expect(result.sampleRate, 24000);
       expect(utf8.decode(result.bytes.take(4).toList()), 'RIFF');
+      expect(_riffChunkData(result.bytes, 'data'), pcm);
+    });
+
+    test('Qwen 的 PCM 被拆在多个事件里时按顺序拼起来', () async {
+      final result = await _synthesizeQwenChunks([
+        [0, 1, 2],
+        [3, 4, 5],
+      ]);
+      expect(_riffChunkData(result.bytes, 'data'), [0, 1, 2, 3, 4, 5]);
+      expect(result.sampleRate, 24000);
+    });
+
+    test('Qwen 直接返回 WAV 时按它自己的格式重打包，不假装成裸 PCM', () async {
+      final format = _pcmFormat(16000);
+      ByteData.sublistView(format)
+        ..setUint16(2, 2, Endian.little) // 双声道
+        ..setUint32(8, 64000, Endian.little)
+        ..setUint16(12, 4, Endian.little);
+      final samples = <int>[1, 2, 3, 4, ...ascii.encode('RIFF'), 5, 6, 7, 8];
+      final upstream = _buildWav([
+        ('JUNK', [9, 8, 7]),
+        ('fmt ', format),
+        ('LIST', [1, 2]),
+        ('data', samples.sublist(0, 4)),
+        ('data', samples.sublist(4)),
+      ]);
+
+      final result = await _synthesizeQwenChunks([upstream]);
+
+      expect(result.mime, 'audio/wav');
+      expect(result.sampleRate, 16000, reason: '采样率要取它真报的值');
+      expect(_riffChunkData(result.bytes, 'fmt '), format);
+      expect(_riffChunkData(result.bytes, 'data'), samples);
+      expect(result.bytes.length, 44 + samples.length);
+    });
+
+    for (final sizes in <(int?, int?)>[
+      (null, null),
+      (0x7fffffbf, 0x7fffff9b),
+      (0x7fffffff, 0x7fffffff),
+      (0xffffffff, 0xffffffff),
+      (0x7fffffff, 0x7fffffdb),
+      (0xffffffff, 0xffffffdb),
+      (0xffffffff, null),
+      (null, 0xffffffff),
+    ]) {
+      test('Qwen 能用占位长度 $sizes 的 WAV 头，且分片不丢样本', () async {
+        final samples = Uint8List(480);
+        final upstream = _buildWav([
+          ('fmt ', _pcmFormat(24000)),
+          ('data', samples),
+        ]);
+        final view = ByteData.sublistView(upstream);
+        if (sizes.$1 != null) view.setUint32(4, sizes.$1!, Endian.little);
+        if (sizes.$2 != null) view.setUint32(40, sizes.$2!, Endian.little);
+
+        final result = await _synthesizeQwenChunks([
+          upstream.sublist(0, 2),
+          upstream.sublist(2, 9),
+          upstream.sublist(9, 39),
+          upstream.sublist(39),
+        ]);
+
+        expect(result.sampleRate, 24000);
+        expect(_riffChunkData(result.bytes, 'data'), samples);
+        expect(
+          ByteData.sublistView(result.bytes).getUint32(4, Endian.little),
+          result.bytes.length - 8,
+          reason: '交出去的文件头里的长度必须是真的',
+        );
+        // 归一化之后必须能被正常的拼接路径接受。
+        final exported = combineWavAudio(List.filled(5, result.bytes));
+        expect(_riffChunkData(exported, 'data'), Uint8List(5 * samples.length));
+        expect(exported.length, 44 + 5 * samples.length);
+      });
+    }
+
+    test('Qwen 返回奇数长度的 8 位 WAV 时保留数据与填充', () async {
+      final format = _pcmFormat(8000);
+      ByteData.sublistView(format)
+        ..setUint32(8, 8000, Endian.little)
+        ..setUint16(12, 1, Endian.little)
+        ..setUint16(14, 8, Endian.little);
+
+      final result = await _synthesizeQwenChunks([
+        _buildWav([
+          ('fmt ', format),
+          ('data', [128, 129, 127]),
+        ]),
+      ]);
+
+      expect(_riffChunkData(result.bytes, 'data'), [128, 129, 127]);
+      expect(result.bytes.length, 48, reason: '奇数数据要带一个填充字节');
+      expect(result.sampleRate, 8000);
+    });
+
+    test('Qwen 拿到不合法的音频时直接报错，不悄悄交出一段坏音频', () async {
+      final valid = _buildWav([
+        ('fmt ', _pcmFormat(24000)),
+        ('data', [0, 1, 2, 3]),
+      ]);
+      final invalid = <String, List<int>>{
+        '奇数字节的裸 PCM': [1, 2, 3],
+        '只有 RIFF 四个字节': ascii.encode('RIFF'),
+        'RIFF 形态不对': _replaceWavUint32(valid, 8, 0),
+        'RIFF 声明的长度超出实际': _replaceWavUint32(valid, 4, 100),
+        'RIFF 之后多出字节': [...valid, 0, 0],
+        'data 块声明长度超出实际': _replaceWavUint32(valid, 40, 6),
+      };
+      for (final entry in invalid.entries) {
+        await expectLater(
+          _synthesizeQwenChunks([entry.value]),
+          throwsA(anything),
+          reason: entry.key,
+        );
+      }
     });
 
     test('synthesizes Groq audio speech response as wav', () async {
@@ -1353,6 +1469,44 @@ MiniMaxTtsOptions _miniMaxOptions(String baseUrl) {
     baseUrl: baseUrl,
     model: 'speech-2.8-turbo',
     voiceId: 'female-shaonv',
+  );
+}
+
+Uint8List _replaceWavUint32(Uint8List wav, int offset, int value) {
+  final copy = Uint8List.fromList(wav);
+  ByteData.sublistView(copy).setUint32(offset, value, Endian.little);
+  return copy;
+}
+
+/// 把若干段音频字节当作 Qwen 的 SSE 事件依次下发。
+Future<NetworkTtsResult> _synthesizeQwenChunks(List<List<int>> chunks) async {
+  final server = await _bindServer((request) async {
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType('text', 'event-stream');
+    for (final chunk in chunks) {
+      request.response.write(
+        'data: ${jsonEncode({
+          'output': {
+            'audio': {'data': base64Encode(chunk)},
+            'finish_reason': 'stop',
+          },
+        })}\n\n',
+      );
+    }
+    await request.response.close();
+  });
+  addTearDown(() async => server.close(force: true));
+  return NetworkTtsService.synthesize(
+    options: QwenTtsOptions(
+      enabled: true,
+      name: 'Qwen',
+      apiKey: 'qwen-key',
+      baseUrl: _baseUrl(server),
+      model: 'qwen3-tts-flash',
+      voice: 'Cherry',
+      languageType: 'Chinese',
+    ),
+    text: '你好',
   );
 }
 

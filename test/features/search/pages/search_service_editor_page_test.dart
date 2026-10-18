@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:Kelivo/core/services/search/search_service.dart';
 import 'package:Kelivo/core/services/search/search_service_usage_service.dart';
+import 'package:Kelivo/core/services/search/web_fetch.dart';
 import 'package:Kelivo/features/search/pages/search_api_keys_page.dart';
 import 'package:Kelivo/features/search/pages/search_service_editor_page.dart';
 import 'package:Kelivo/icons/lucide_adapter.dart';
@@ -392,20 +393,40 @@ void main() {
     expect(saved.country, 'US');
   });
 
-  testWidgets('saves Firecrawl without an API key', (tester) async {
+  testWidgets('保存不填密钥的 Exa MCP 服务', (tester) async {
     SearchServiceEditorResult? result;
     await _pumpEditor(
       tester,
-      initialService: FirecrawlOptions(id: 'firecrawl', apiKey: ''),
+      initialService: ExaMcpOptions(id: 'exa-mcp'),
       onResult: (value) => result = value,
     );
 
     await tester.tap(find.byIcon(Lucide.Check));
     await tester.pumpAndSettle();
 
-    expect(result?.deleted, isFalse);
-    expect(result?.service, isA<FirecrawlOptions>());
-    expect((result!.service! as FirecrawlOptions).apiKey, isEmpty);
+    expect(result?.service, isA<ExaMcpOptions>());
+    final saved = result!.service! as ExaMcpOptions;
+    expect(saved.apiKey, isEmpty);
+    expect(saved.resolvedUrl, ExaMcpOptions.defaultUrl);
+  });
+
+  testWidgets('保存 Exa MCP 的自定义入口与密钥', (tester) async {
+    SearchServiceEditorResult? result;
+    await _pumpEditor(
+      tester,
+      initialService: ExaMcpOptions(id: 'exa-mcp'),
+      onResult: (value) => result = value,
+    );
+
+    await tester.enterText(_apiKeyField(), 'secret');
+    await tester.enterText(_urlField(), 'https://example.com/mcp');
+    await tester.tap(find.byIcon(Lucide.Check));
+    await tester.pumpAndSettle();
+
+    expect(result?.service, isA<ExaMcpOptions>());
+    final saved = result!.service! as ExaMcpOptions;
+    expect(saved.apiKey, 'secret');
+    expect(saved.resolvedUrl, 'https://example.com/mcp');
   });
 
   testWidgets('returns a delete action after confirmation', (tester) async {
@@ -570,11 +591,107 @@ void main() {
     expect((saved as TavilyOptions?)?.apiKey, 'k2');
     expect(saved?.extraApiKeys, ['k3']);
   });
+
+  testWidgets(
+    'fetch test uses the current provider and ignores an obsolete URL',
+    (tester) async {
+      final first = Completer<WebFetchPage>();
+      final second = Completer<WebFetchPage>();
+      final urls = <String>[];
+      await _pumpEditor(
+        tester,
+        initialService: TavilyOptions(id: 'fetch-test', apiKey: 'key'),
+        pageFetcher: (url, options) {
+          expect((options as TavilyOptions).apiKey, 'key');
+          urls.add(url);
+          return urls.length == 1 ? first.future : second.future;
+        },
+        onResult: (_) {},
+      );
+      await tester.dragUntilVisible(
+        find.text('Read page'),
+        find.byType(ListView),
+        const Offset(0, -240),
+      );
+      await tester.tap(find.text('Read page'));
+      await tester.pumpAndSettle();
+      final urlField = find.byKey(const ValueKey('search-service-test-url'));
+      await tester.enterText(urlField, 'https://example.com/old');
+      await tester.pump();
+      await tester.tap(find.byIcon(Lucide.Play));
+      await tester.pump();
+      await tester.enterText(urlField, 'https://example.com/new');
+      await tester.pump();
+      await tester.tap(find.byIcon(Lucide.Play));
+      await tester.pump();
+      second.complete(
+        const WebFetchPage(
+          url: 'https://example.com/new',
+          title: 'New page',
+          content: 'New body',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('New page'), findsOneWidget);
+      expect(find.text('New body'), findsOneWidget);
+      first.complete(
+        const WebFetchPage(
+          url: 'https://example.com/old',
+          title: 'Old page',
+          content: 'Old body',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('New page'), findsOneWidget);
+      expect(find.text('Old page'), findsNothing);
+      expect(urls, ['https://example.com/old', 'https://example.com/new']);
+    },
+  );
+
+  testWidgets('switching to search ignores a pending fetch failure', (
+    tester,
+  ) async {
+    final fetch = Completer<WebFetchPage>();
+    await _pumpEditor(
+      tester,
+      initialService: TavilyOptions(id: 'fetch-mode', apiKey: 'key'),
+      pageFetcher: (_, _) => fetch.future,
+      onResult: (_) {},
+    );
+    await tester.dragUntilVisible(
+      find.text('Read page'),
+      find.byType(ListView),
+      const Offset(0, -240),
+    );
+    await tester.tap(find.text('Read page'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('search-service-test-url')),
+      'https://example.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Lucide.Play));
+    await tester.pump();
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    fetch.completeError(Exception('stale fetch error'));
+    await tester.pumpAndSettle();
+    expect(_testQueryField(), findsOneWidget);
+    expect(find.textContaining('stale fetch error'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Finder _apiKeyField() {
   return find.descendant(
     of: find.byKey(const ValueKey('search-service-field-apiKey')),
+    matching: find.byType(TextFormField),
+  );
+}
+
+Finder _urlField() {
+  return find.descendant(
+    of: find.byKey(const ValueKey('search-service-field-url')),
     matching: find.byType(TextFormField),
   );
 }
@@ -591,6 +708,7 @@ Future<void> _pumpEditor(
   bool autoQueryUsage = false,
   SearchServiceUsageFetcher? usageFetcher,
   SearchServiceTestFetcher? searchFetcher,
+  SearchServicePageFetcher? pageFetcher,
   bool settle = true,
 }) async {
   await tester.pumpWidget(
@@ -614,6 +732,7 @@ Future<void> _pumpEditor(
                           autoQueryUsage: autoQueryUsage,
                           usageFetcher: usageFetcher,
                           searchFetcher: searchFetcher,
+                          pageFetcher: pageFetcher,
                         ),
                       ),
                     );

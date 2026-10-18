@@ -29,6 +29,9 @@ final class BusinessKeyRegistry {
     'desktop_hotkeys_commands_v1',
     'desktop_hotkeys_enabled_v1',
     'display_chat_font_scale_v1',
+    // 长文本编辑是否用按行编辑器：取决于本机的输入法与性能，属本机偏好。
+    // 不登记在这里会被归入 unknownPreference，启动清理就把它删掉。
+    'display_long_message_editor_v1',
     'flutter_log_enabled_v1',
     // 模型目录的联网更新方式，同样是本机偏好。
     // 不登记在这里会归入 unknownPreference，启动时的迁移清理会把它删掉，
@@ -70,6 +73,7 @@ final class BusinessKeyRegistry {
     'search_selected_v1',
     'search_enabled_v1',
     'search_auto_test_on_launch_v1',
+    'search_web_fetch_v1',
     'tts_selected_v1',
     'tts_selected_service_id_v1',
     'tts_auto_play_assistant_replies_v1',
@@ -193,6 +197,7 @@ final class BusinessKeyRegistry {
     'memory_migrate_prompt_en_v1',
     'memory_migration_batch_size_v1',
     'memory_injection_max_items_v1',
+    'memory_full_injection_types_v1',
     'chat_bubble_style_overrides_v1',
     'chat_bubble_style_overrides_user_v1',
     'tool_schema_overrides_v1',
@@ -566,6 +571,7 @@ final class BusinessSettingsRouter {
             'apiKey',
             'oauthProvider',
             'oauthModelsSyncedAt',
+            'oauthModelsClientVersion',
             'baseUrl',
             'chatPath',
             'location',
@@ -1007,7 +1013,8 @@ final class BusinessSettingsRouter {
     );
     switch (payload['type']) {
       case 'bing_local':
-        _validateKnownFields(kind, payload, strings: const {'acceptLanguage'});
+        // 本地 Bing 只需要 type 与 id，没有额外字段要校验。
+        break;
       case 'tavily':
       case 'exa':
         _validateKnownFields(
@@ -1017,11 +1024,22 @@ final class BusinessSettingsRouter {
           strings: const {'url'},
           stringLists: const {'apiKeys'},
         );
+      case 'exa_mcp':
+        // 与上游一致：这一档校验完后继续落到下面那组。
+        // 下面的组要求 apiKey 是字符串，而 Exa MCP 无论如何都会写出它（可为空），
+        // 所以不会把不填密钥的配置挡在外面。
+        _validateKnownFields(
+          kind,
+          payload,
+          strings: const {'apiKey', 'url'},
+          stringLists: const {'apiKeys'},
+        );
       case 'zhipu':
       case 'linkup':
       case 'brave':
       case 'metaso':
       case 'ollama':
+      case 'deepseek':
       case 'jina':
       case 'doubao':
       case 'kagi':

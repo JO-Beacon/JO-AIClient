@@ -14,8 +14,10 @@ import '../../models/conversation.dart';
 import '../../models/message_part.dart';
 import '../chat/chat_service.dart';
 import '../../../utils/app_directories.dart';
+import '../../../utils/newline_normalization.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import 'cherry_direct_backup_reader.dart';
+import 'streaming_zip_entry.dart';
 
 export 'cherry_direct_backup_reader.dart'
     show CherryUnsupportedBackupVersionException;
@@ -1104,7 +1106,7 @@ class CherryImporter {
     );
     var written = false;
     try {
-      entry.writeContent(output);
+      writeZipEntryStreaming(entry, output);
       output.verifyComplete();
       written = true;
     } catch (_) {
@@ -1234,6 +1236,9 @@ class CherryImporter {
         if (content.trim().isEmpty) {
           content = (blockTexts[msgId] ?? '').toString();
         }
+        // 外部文本只在导入边界归一一次：库里只存 LF，标题、预览、导出
+        // 等按 `\n` 切分的功能才不会把 U+2028 这类分隔符当成同一行。
+        content = normalizeNewlines(content);
         DateTime ts;
         try {
           ts = DateTime.parse((m['createdAt'] ?? '').toString());

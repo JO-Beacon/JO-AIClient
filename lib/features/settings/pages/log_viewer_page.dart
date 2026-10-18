@@ -2580,7 +2580,7 @@ class _CodeBlock extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final Color neutralBg = context.appColors.surfaceFill;
+    final Color neutralBg = context.appColors.surfaceCardFill;
     final Color bg = () {
       if (tone == _CodeTone.error) {
         return Color.alphaBlend(
@@ -2658,7 +2658,7 @@ class _CollapsibleCodeBlockState extends State<_CollapsibleCodeBlock> {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
 
-    final Color neutralBg = context.appColors.surfaceFill;
+    final Color neutralBg = context.appColors.surfaceCardFill;
     final bool isError = widget.tone == _CodeTone.error;
     final Color bg = isError
         ? Color.alphaBlend(

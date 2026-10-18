@@ -1021,7 +1021,6 @@
   "messageEditPageSaveAsBranchAndSend": "Save as New Branch & Send",
   "messageEditPageOverwriteSave": "Overwrite Save",
   "messageEditPageSaveAsBranchCopyChildren": "Save as Branch with Replies",
-  "messageEditPageHint": "Enter message…",
   "messageEditTrimWhitespace": "Trim whitespace",
   "messageEditAttachmentsTitle": "Attachments",
   "messageEditAddImage": "Add image",
@@ -1141,6 +1140,14 @@
   "@chatMessageWidgetCannotOpenFile": {
     "placeholders": {
       "message": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMessageWidgetWebFetch": "Read page: {target}",
+  "@chatMessageWidgetWebFetch": {
+    "placeholders": {
+      "target": {
         "type": "String"
       }
     }
@@ -1964,6 +1971,32 @@
   "searchServicesPageAddProvider": "Add Provider",
   "searchServicesPageSearchProviders": "Search Providers",
   "searchServicesPageGeneralOptions": "General Options",
+  "searchServicesPageWebFetchSection": "Web page reading",
+  "searchServicesPageWebFetchModeTitle": "Read pages with",
+  "searchServicesPageWebFetchFollow": "Follow search service",
+  "searchServicesPageWebFetchFollowValue": "Follow search · {name}",
+  "@searchServicesPageWebFetchFollowValue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServicesPageWebFetchFollowSubtitle": "Currently {name}",
+  "@searchServicesPageWebFetchFollowSubtitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServicesPageWebFetchLocal": "Local",
+  "searchServicesPageWebFetchLocalSubtitle": "Free. This device requests the page directly.",
+  "searchServicesPageWebFetchProviderSubtitle": "Uses this service's API key and quota",
+  "searchServicesPageWebFetchOff": "Off",
+  "searchServicesPageWebFetchOffSubtitle": "Search only, without reading pages",
+  "searchServicesPageWebFetchFooter": "With web search on, the model can also read full pages. When the search service can't read pages, local reading is used, which can't handle pages that need JavaScript or block bots.",
+  "searchServicesPageWebFetchSupported": "Can read web pages",
   "searchServicesPageAutoTestTitle": "Auto-test connections on launch",
   "searchServicesPageMaxResults": "Max Results",
   "searchServicesPageTimeoutSeconds": "Timeout (seconds)",
@@ -2007,6 +2040,7 @@
   "searchServicesAddDialogApiKeyRequired": "API Key is required",
   "searchServicesFieldCustomUrlOptional": "Custom URL (optional)",
   "searchServicesDialogApiKey": "API Key",
+  "searchServicesDialogApiKeyOptional": "API Key (optional)",
   "searchServicesDialogModel": "Model",
   "searchServicesDialogSystemPrompt": "System Prompt",
   "searchServicesAddDialogInstanceUrl": "Instance URL",
@@ -2105,6 +2139,30 @@
   "@searchServiceEditorTestFailed": {
     "placeholders": {
       "message": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServiceEditorTestModeSearch": "Search",
+  "searchServiceEditorTestModeFetch": "Read page",
+  "searchServiceEditorTestUrlHint": "Enter a URL",
+  "searchServiceEditorTestFetchRun": "Run test fetch",
+  "searchServiceEditorTestFetchRunning": "Reading…",
+  "searchServiceEditorTestFetchFailed": "Fetch failed: {message}",
+  "@searchServiceEditorTestFetchFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "searchServiceEditorTestFetchStats": "{characters} characters · {seconds}s",
+  "@searchServiceEditorTestFetchStats": {
+    "placeholders": {
+      "characters": {
+        "type": "String"
+      },
+      "seconds": {
         "type": "String"
       }
     }
@@ -2280,6 +2338,7 @@
   "displaySettingsPageChatFontSampleText": "This is a sample chat text",
   "displaySettingsPageChatBackgroundMaskTitle": "Chat Background Overlay Opacity",
   "displaySettingsPageChatInputBackgroundOpacityTitle": "Input Box Background Opacity",
+  "displaySettingsPageLongMessageEditorTitle": "Line editor for long text",
   "displaySettingsPageThemeSettingsTitle": "Theme Settings",
   "displaySettingsPageThemeColorTitle": "Theme Color",
   "desktopSettingsFontsTitle": "Fonts",
@@ -2317,6 +2376,8 @@
   "searchServicesDialogMaximumTokensInvalid": "Maximum tokens must be between 1024 and 32768.",
   "searchProviderYouDescription": "You.com Search API. Returns web and news results with highlights or snippets.",
   "themeSettingsPageColorPalettesSection": "Color Palettes",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesTitle": "Layered sheet tiles",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle": "Action tiles inside sheets use a card fill. Turn off to keep sheets flat.",
   "themeSettingsPageCustomPaletteName": "Custom",
   "themeSettingsPageCustomColorReset": "Reset",
   "themeSettingsPageCustomThemesSection": "Custom Themes",
@@ -2355,6 +2416,8 @@
   "asrServicesLocalSubtitle": "Runs offline on this device after download",
   "asrServicesOpenAiTitle": "OpenAI Realtime",
   "asrServicesOpenAiSubtitle": "Low-latency streaming transcription",
+  "asrServicesGroqSubtitle": "Whisper segmented transcription",
+  "asrServicesMistralSubtitle": "Voxtral segmented transcription",
   "asrServicesDashScopeTitle": "DashScope",
   "asrServicesDashScopeSubtitle": "Qwen real-time transcription",
   "asrServicesVolcengineTitle": "Volcengine",
@@ -2595,6 +2658,7 @@
   "searchProviderDuckDuckGoDescription": "Privacy-focused DuckDuckGo search via DDGS. No API key required; supports region selection.",
   "searchProviderBraveDescription": "Independent search engine by Brave. Privacy-focused with no tracking or profiling.",
   "searchProviderExaDescription": "Neural search with semantic understanding. Great for research and finding specific content.",
+  "searchProviderExaMcpDescription": "Exa search via MCP. An API key is optional for limited free usage.",
   "searchProviderLinkUpDescription": "Search API with sourced answers. Provides both results and AI-generated summaries.",
   "searchProviderMetasoDescription": "Chinese search by Metaso. Optimized for Chinese content with AI capabilities.",
   "searchProviderSearXNGDescription": "Privacy-respecting metasearch engine. Self-hosted instance required; no tracking.",
@@ -2602,10 +2666,12 @@
   "searchProviderZhipuDescription": "Chinese AI search by Zhipu AI. Optimized for Chinese content and queries.",
   "searchProviderOllamaDescription": "Ollama web search API. Augments models with up-to-date information.",
   "searchProviderJinaDescription": "AI search foundation with embeddings, rerankers, web reader, deepsearch, and small language models. Multilingual and multimodal.",
+  "searchProviderDeepSeekDescription": "DeepSeek official web search and page fetch APIs. Uses a DeepSeek API key.",
   "searchServiceNameBingLocal": "Bing (Local)",
   "searchServiceNameDuckDuckGo": "DuckDuckGo",
   "searchServiceNameTavily": "Tavily",
   "searchServiceNameExa": "Exa",
+  "searchServiceNameExaMcp": "Exa MCP",
   "searchServiceNameZhipu": "Zhipu AI",
   "searchServiceNameSearXNG": "SearXNG",
   "searchServiceNameLinkUp": "LinkUp",
@@ -2613,6 +2679,7 @@
   "searchServiceNameMetaso": "Metaso",
   "searchServiceNameOllama": "Ollama",
   "searchServiceNameJina": "Jina",
+  "searchServiceNameDeepSeek": "DeepSeek",
   "searchServiceNamePerplexity": "Perplexity",
   "searchProviderPerplexityDescription": "Perplexity Search API. Ranked web results with region and domain filters.",
   "searchServiceNameBocha": "Bocha",
@@ -2969,7 +3036,9 @@
   "memorySettingsLegacySection": "Legacy memory",
   "memorySettingsInjectionSection": "Memory injection",
   "memorySettingsInjectionMaxItemsTitle": "Items injected per type",
-  "memorySettingsInjectionMaxItemsSubtitle": "When a type exceeds this limit, only the newest items are injected. The rest can be fetched with memory_search_profile. A larger number is more complete but uses more tokens.",
+  "memorySettingsInjectionMaxItemsSubtitle": "This limit applies to types not selected for full injection. When a type exceeds this limit, only the newest items are injected. The rest can be fetched with memory_search_profile. A larger number is more complete but uses more tokens.",
+  "memorySettingsFullInjectionTypesTitle": "Always inject these types",
+  "memorySettingsFullInjectionTypesSubtitle": "Select one or more types to inject all their active memories visible to the current assistant. These types ignore the item limit and use more context and tokens.",
   "memorySettingsInjectionMaxItemsCustomButton": "Custom",
   "memorySettingsInjectionMaxItemsCustomTitle": "Custom injection count",
   "memorySettingsInjectionMaxItemsCustomLabel": "Count",
@@ -3588,6 +3657,14 @@
   "worldBookInjectionPositionTopOfChat": "Top of chat",
   "worldBookInjectionPositionBottomOfChat": "Bottom of chat",
   "worldBookInjectionPositionAtDepth": "At depth",
+  "worldBookImportUnsupportedEntries": "Imported. {count} entries use unsupported SillyTavern features (such as macros, regex, timing, filters, or insertion rules). Their content was kept and they were disabled. Review them before enabling.",
+  "@worldBookImportUnsupportedEntries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "worldBookInjectionRoleUser": "User",
   "worldBookInjectionRoleAssistant": "Assistant",
   "mcpToolNeedsApproval": "Require approval",
@@ -4224,6 +4301,17 @@
   },
   "backupProgressCancel": "Cancel",
   "backupProgressCancelled": "Cancelled",
+  "backupProgressFailed": "Operation failed",
+  "backupProgressFailedAt": "Failed during: {phase}",
+  "@backupProgressFailedAt": {
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      }
+    }
+  },
+  "backupProgressCopyError": "Copy error",
+  "backupProgressErrorCopied": "Error copied",
   "backupProgressCommitting": "Committing",
   "backupProgressDownloading": "Downloading",
   "backupProgressExtracting": "Extracting",
@@ -4935,6 +5023,9 @@
   "workspaceEnvErrorNetwork": "Download failed. Check your connection and try again.",
   "workspaceEnvErrorChecksumMismatch": "The download was corrupted. Try again.",
   "workspaceEnvErrorExtractFailed": "Could not extract the sandbox image.",
+  "workspaceEnvErrorCleanupFailed": "Could not remove old sandbox files. Please try again.",
+  "workspaceEnvCleanupIncomplete": "The sandbox is ready, but some old files could not be removed. They still take up storage space.",
+  "workspaceEnvErrorResetFailed": "Could not finish resetting the sandbox. Please try again.",
   "workspaceEnvErrorPatchFailed": "Could not finish setting up the sandbox.",
   "workspaceEnvErrorCancelled": "Installation was cancelled.",
   "workspaceEnvErrorGeneric": "Something went wrong installing the sandbox.",
@@ -6129,5 +6220,22 @@
   "workspaceToolTitleViewImage": "View image",
   "workspaceToolHelpViewImage": "Let the model inspect an image from the workspace.",
   "oauthUsedValue": "Used {value}",
-  "@oauthUsedValue": {"placeholders": {"value": {"type": "String"}}}
+  "@oauthUsedValue": {"placeholders": {"value": {"type": "String"}}},
+  "mcpOAuthSettings": "OAuth settings",
+  "mcpOAuthAutomatic": "Automatic",
+  "mcpOAuthMetadataUrl": "Client metadata document URL",
+  "mcpOAuthClientAuthentication": "Client authentication",
+  "mcpOAuthPublicClient": "Public client",
+  "mcpOAuthRedirectUri": "Local callback URL (optional)",
+  "mcpOAuthFillRedirectExample": "Fill example",
+  "mcpOAuthRedirectHint": "Leave empty to use the platform default. Use an HTTP loopback URL if the service only allows localhost callbacks. Port 0 selects an available port; a pre-registered client may require a fixed port.",
+  "mcpOAuthClientIdRequired": "Enter a client ID or choose automatic registration.",
+  "mcpOAuthMetadataUrlInvalid": "Enter an HTTPS metadata document URL with a path.",
+  "mcpOAuthSecretRequired": "This client authentication method requires a client secret.",
+  "mcpOAuthRedirectInvalid": "Use an HTTP callback on localhost, 127.0.0.1 or [::1], without credentials, query parameters or a fragment.",
+  "mcpOAuthDiscovering": "Discovering authorization server…",
+  "mcpOAuthRegistering": "Preparing authorization…",
+  "mcpOAuthWaitingBrowser": "Waiting for browser authorization…",
+  "mcpOAuthExchangingToken": "Completing sign-in…",
+  "messageEditAssistantRoundEndPart": "End of reply round"
 }

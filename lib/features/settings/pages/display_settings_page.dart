@@ -331,6 +331,18 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
               ),
             ],
           ),
+          _iosSectionCard(
+            children: [
+              _iosSwitchRow(
+                context,
+                icon: Lucide.SquarePen,
+                label: l10n.displaySettingsPageLongMessageEditorTitle,
+                value: context.watch<SettingsProvider>().useLongMessageEditor,
+                onChanged: (v) =>
+                    context.read<SettingsProvider>().setUseLongMessageEditor(v),
+              ),
+            ],
+          ),
           // 内联卡片已被上方触发面板的行替代。
         ],
       ),

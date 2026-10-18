@@ -121,6 +121,25 @@ void main() {
     );
   });
 
+  test('长文本编辑器开关是本机键，不会被迁移清理删掉', () async {
+    final legacy = FakeLegacyBusinessPreferences({
+      'theme_mode_v1': 'dark',
+      'display_long_message_editor_v1': true,
+    });
+
+    await BusinessMigrationEngine(
+      repository: repository,
+      legacyPreferences: legacy,
+    ).run();
+
+    expect(legacy.values.containsKey('theme_mode_v1'), isFalse);
+    expect(legacy.values['display_long_message_editor_v1'], isTrue);
+    expect(
+      BusinessKeyRegistry.classify('display_long_message_editor_v1'),
+      BusinessKeyDisposition.localOnly,
+    );
+  });
+
   for (final retiredValue in <Object?>[true, 'invalid-retired-value']) {
     test(
       'retired user-image placement value $retiredValue remains inert',

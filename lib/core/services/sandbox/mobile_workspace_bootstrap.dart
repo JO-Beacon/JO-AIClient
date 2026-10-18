@@ -62,7 +62,7 @@ Future<MobileWorkspaceStack> _android(EnvironmentProvider env) async {
     rootfsDir: installer.rootfsDir,
     tmpDir: installer.tmpDir,
   );
-  final guest = _MirrorGuestRunner(runtime);
+  final guest = _MirrorGuestRunner(runtime, env);
   final mirrors = MirrorService(
     env: env,
     speedTest: speedTest,
@@ -86,7 +86,7 @@ Future<MobileWorkspaceStack> _android(EnvironmentProvider env) async {
 Future<MobileWorkspaceStack> _ios(EnvironmentProvider env) async {
   final channel = WorkspaceChannel();
   final runtime = IosIshRuntime(channel: channel);
-  final guest = _MirrorGuestRunner(runtime);
+  final guest = _MirrorGuestRunner(runtime, env);
   final mirrors = MirrorService(
     env: env,
     speedTest: MirrorSpeedTest(),
@@ -108,23 +108,31 @@ Future<MobileWorkspaceStack> _ios(EnvironmentProvider env) async {
 }
 
 class _MirrorGuestRunner {
-  _MirrorGuestRunner(this.runtime);
+  _MirrorGuestRunner(this.runtime, this.env);
 
   final WorkspaceRuntime runtime;
+  final EnvironmentProvider env;
   String? lastRunId;
 
-  Future<int> run(String script) {
-    lastRunId = 'mirror-guest-${DateTime.now().microsecondsSinceEpoch}';
+  Future<int> run(String script) async {
+    final id = 'mirror-guest-${DateTime.now().microsecondsSinceEpoch}';
+    lastRunId = id;
+    // 取配置（含代理默认值）期间可能已经被取消，所以取完要重新对一次编号。
+    final config = await env.loadExecutionConfig();
+    if (lastRunId != id) return -1;
     return runGuestScript(
       runtime,
       script,
-      runId: lastRunId,
+      runId: id,
       timeout: MirrorService.guestScriptTimeout,
+      environment: config.variables,
+      isCancelled: () => lastRunId != id,
     );
   }
 
   Future<void> cancel() async {
     final id = lastRunId;
+    lastRunId = null;
     if (id == null) return;
     await runtime.cancel(id);
   }
