@@ -104,9 +104,8 @@ final class IncrementalMarkdownDocument {
         !rawSuffix.contains('\r');
   }
 
-  /// CRLF and bare CR become LF, the same way `GptMarkdown` rewrites them
-  /// before it parses. U+2028 / U+2029 stay as content: `NewLines` only
-  /// matches `\n\n+`.
+  /// CRLF and bare CR become LF, matching the Markdown renderer's newline
+  /// contract. U+2028 / U+2029 stay as content.
   static String _normalizeNewlines(String source) {
     if (!source.contains('\r')) return source;
     return source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
@@ -126,7 +125,7 @@ final class IncrementalMarkdownDocument {
   /// Completed blocks plus the unfinished tail. A non-empty indented tail
   /// is folded into the last block for the returned list only — the scanner
   /// itself is left alone until that line is finished. A tail of only
-  /// whitespace is dropped: `GptMarkdown` trims it, so merging would only
+  /// whitespace is dropped: the renderer trims it, so merging would only
   /// rebuild a block that lays out the same.
   ///
   /// A real indented tail re-parses the last committed block on each token

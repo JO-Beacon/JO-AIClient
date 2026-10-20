@@ -1,4 +1,5 @@
 import '../../../support/business_test_harness.dart';
+import '../../../support/markdown_render_helpers.dart';
 
 import 'package:Kelivo/core/models/chat_message.dart';
 import 'package:Kelivo/core/providers/assistant_provider.dart';
@@ -49,7 +50,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('surviving message'), findsOneWidget);
+    expect(
+      renderedParagraphsWith('surviving message', exact: false),
+      hasLength(1),
+    );
   });
 }
 

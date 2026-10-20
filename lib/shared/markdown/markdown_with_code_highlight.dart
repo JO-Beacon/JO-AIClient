@@ -24,6 +24,7 @@ class MarkdownWithCodeHighlight extends StatelessWidget {
     this.conversationId,
     this.highlightRanges = const [],
     this.highlightColor,
+    this.onLinkTap,
   });
   final String text;
   final void Function(String id)? onCitationTap;
@@ -37,6 +38,7 @@ class MarkdownWithCodeHighlight extends StatelessWidget {
   final String? conversationId;
   final List<SourceSpan> highlightRanges;
   final Color? highlightColor;
+  final ValueChanged<String>? onLinkTap;
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -58,7 +60,9 @@ class MarkdownWithCodeHighlight extends StatelessWidget {
           codeHighlighter: const KelivoCodeHighlighter(),
           mathRenderer: const KelivoMathRenderer(),
           imageBuilder: const KelivoImageBuilder(),
-          linkHandler: const KelivoLinkHandler(),
+          linkHandler: onLinkTap == null
+              ? const KelivoLinkHandler()
+              : KelivoLinkHandler(onLinkTap: onLinkTap),
           codeOptions: markdownCodeOptions(settings),
           labels: markdownLabels(context),
           exporting: exporting,

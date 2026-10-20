@@ -652,13 +652,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  gpt_markdown:
-    dependency: "direct main"
-    description:
-      path: "dependencies/gpt_markdown"
-      relative: true
-    source: path
-    version: "1.1.7"
   graphs:
     dependency: transitive
     description:

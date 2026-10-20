@@ -1,3 +1,4 @@
+import '../../../support/markdown_render_helpers.dart';
 import 'package:Kelivo/core/services/api/stream/stream_chunk.dart';
 import "../../../support/business_test_harness.dart";
 import 'dart:convert';
@@ -1032,7 +1033,10 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.textContaining('<think>literal answer'), findsOneWidget);
+      expect(
+        renderedParagraphsWith('literal answer', exact: false),
+        hasLength(1),
+      );
       expect(find.text('Deep Thinking'), findsNothing);
     });
 
@@ -1063,10 +1067,10 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
 
         expect(find.text('Deep Thinking'), findsOneWidget);
-        expect(find.textContaining('结构化思考'), findsOneWidget);
+        expect(renderedParagraphsWith('结构化思考', exact: false), hasLength(1));
         expect(
-          find.textContaining('正文 <think>literal</think> 继续显示'),
-          findsOneWidget,
+          renderedParagraphsWith('正文 literal 继续显示', exact: false),
+          hasLength(1),
         );
       },
     );
@@ -1095,10 +1099,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Deep Thinking'), findsOneWidget);
-      expect(find.textContaining('Final answer'), findsOneWidget);
       expect(
-        find.textContaining('<think>legacy reasoning</think>'),
-        findsNothing,
+        renderedParagraphsWith('Final answer', exact: false),
+        hasLength(1),
+      );
+      expect(
+        renderedParagraphsWith('<think>legacy reasoning</think>', exact: false),
+        isEmpty,
       );
     });
 

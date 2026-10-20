@@ -1,8 +1,8 @@
 import 'package:Kelivo/icons/lucide_adapter.dart';
+import 'package:Kelivo/shared/markdown/markdown_with_code_highlight.dart';
 import 'package:Kelivo/theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 import 'ios_tactile.dart';
 
 class UpdateReleaseNotesCard extends StatelessWidget {
@@ -27,13 +27,6 @@ class UpdateReleaseNotesCard extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final body = notes.trim();
-    final headingBase = TextStyle(
-      color: cs.onSurface,
-      fontWeight: AppFontWeights.emphasis,
-      height: 1.25,
-      letterSpacing: 0,
-    );
-
     final border = BorderSide(
       width: 0.5,
       color: isDark
@@ -73,34 +66,15 @@ class UpdateReleaseNotesCard extends StatelessWidget {
               ),
               if (body.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                GptMarkdownTheme(
-                  gptThemeData: GptMarkdownThemeData(
-                    brightness: theme.brightness,
-                    h1: headingBase.copyWith(fontSize: 18),
-                    h2: headingBase.copyWith(fontSize: 17),
-                    h3: headingBase.copyWith(fontSize: 16),
-                    h4: headingBase.copyWith(fontSize: 15),
-                    h5: headingBase.copyWith(fontSize: 14),
-                    h6: headingBase.copyWith(fontSize: 14),
-                    linkColor: cs.primary,
-                    linkHoverColor: cs.primary,
-                    hrLineColor: cs.outlineVariant,
-                    autoAddDividerLineAfterH1: false,
+                MarkdownWithCodeHighlight(
+                  text: body,
+                  baseStyle: TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: cs.onSurface.withValues(alpha: 0.85),
+                    letterSpacing: 0,
                   ),
-                  child: GptMarkdown(
-                    body,
-                    textDirection: Directionality.of(context),
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.45,
-                      color: cs.onSurface.withValues(alpha: 0.85),
-                      letterSpacing: 0,
-                    ),
-                    followLinkColor: true,
-                    onLinkTap: onLinkTap == null
-                        ? null
-                        : (url, _) => onLinkTap!(url),
-                  ),
+                  onLinkTap: onLinkTap,
                 ),
               ],
             ],

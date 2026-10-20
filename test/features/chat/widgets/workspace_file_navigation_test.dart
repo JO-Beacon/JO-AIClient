@@ -22,10 +22,11 @@ import 'package:Kelivo/features/chat/widgets/workspace_tool_ui.dart';
 import 'package:Kelivo/features/workspace/widgets/files/file_browser.dart';
 import 'package:Kelivo/features/workspace/widgets/preview/file_preview.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
-import 'package:Kelivo/shared/widgets/markdown_with_highlight.dart';
+import 'package:Kelivo/shared/markdown/markdown_with_code_highlight.dart';
 import 'package:Kelivo/shared/widgets/snackbar.dart';
 
 import '../../../support/business_test_harness.dart';
+import '../../../support/markdown_render_helpers.dart';
 
 class _Chat extends ChatService {
   _Chat(this.conversation);
@@ -163,7 +164,11 @@ void main() {
                   ),
           ),
         );
-        await tester.tap(find.text('folder').first);
+        if (markdown) {
+          await tester.tapAt(markdownGlyphCenter(tester, 'folder'));
+        } else {
+          await tester.tap(find.text('folder').first);
+        }
         await settle(tester);
         expect(find.byType(FileBrowser), findsOneWidget);
         final browser = tester.widget<FileBrowser>(find.byType(FileBrowser));

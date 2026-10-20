@@ -133,7 +133,7 @@ void main() {
               p.join(root.path, 'test-download'),
             ).create();
             final source = await File(
-              'dependencies/gpt_markdown/lib/fonts/JetBrainsMono-Regular.ttf',
+              'test/fixtures/fonts/JetBrainsMono-Regular.ttf',
             ).copy(p.join(downloadDirectory.path, 'font.ttf'));
             final download = DownloadedGoogleFont(
               file: source,

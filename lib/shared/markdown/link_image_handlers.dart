@@ -33,12 +33,18 @@ class MarkdownLinkScope extends InheritedWidget {
 }
 
 class KelivoLinkHandler implements LinkHandler {
-  const KelivoLinkHandler();
+  const KelivoLinkHandler({this.onLinkTap});
+  final ValueChanged<String>? onLinkTap;
   @override
   Future<void> open(BuildContext context, LinkNode link) async {
     final url = link.destination
         .replaceAll(RegExp(r'[\u200B\u200C\u200D\uFEFF]'), '')
         .trim();
+    final onLinkTap = this.onLinkTap;
+    if (onLinkTap != null) {
+      onLinkTap(url);
+      return;
+    }
     if (KelivoLink.tryParse(url) != null) {
       await openWorkspaceLinkedFile(
         context,

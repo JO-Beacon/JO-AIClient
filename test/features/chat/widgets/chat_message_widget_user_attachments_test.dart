@@ -1,3 +1,4 @@
+import '../../../support/markdown_render_helpers.dart';
 import "../../../support/business_test_harness.dart";
 import '../../../support/fake_audioplayers_platform.dart';
 import 'package:Kelivo/core/models/chat_message.dart';
@@ -172,8 +173,10 @@ void main() {
     expect(bubbleFinder, findsOneWidget);
     expect(attachmentsFinder, findsOneWidget);
     expect(
-      find.descendant(of: bubbleFinder, matching: find.text('请看这个')),
-      findsOneWidget,
+      renderParagraphs(
+        bubbleFinder,
+      ).map((p) => p.text.toPlainText()).join('\n'),
+      contains('请看这个'),
     );
     expect(
       find.descendant(of: bubbleFinder, matching: find.text('spec.pdf')),
@@ -228,13 +231,13 @@ void main() {
       find.byKey(ValueKey('user-message-text-bubble:$messageId')),
       findsOneWidget,
     );
+    final literalText = renderParagraphs(
+      find.byKey(ValueKey('user-message-text-bubble:$messageId')),
+    ).map((p) => p.text.toPlainText()).join('\n');
+    expect(literalText, contains('[image:missing-user-image.png]'));
     expect(
-      find.textContaining('[image:missing-user-image.png]'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('[file:/tmp/spec.pdf|spec.pdf|application/pdf]'),
-      findsOneWidget,
+      literalText,
+      contains('[file:/tmp/spec.pdf|spec.pdf|application/pdf]'),
     );
   });
 
