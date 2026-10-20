@@ -35,3 +35,9 @@ analyzer:
     - dependencies/flutter_math_fork/**
     - dependencies/flutter_tts/**
     - 参考文件/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**

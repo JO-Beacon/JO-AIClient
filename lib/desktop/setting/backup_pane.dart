@@ -718,6 +718,21 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                               await _applyS3Partial(scope: scope);
                             },
                     ),
+                    const SizedBox(height: 8),
+                    _rowDivider(context),
+                    // 本机设置随包开关同时影响本地文件、WebDAV 与 S3。
+                    _ItemRow(
+                      label: l10n.backupIncludeLocalSettings,
+                      subtitle: includeLocalSettingsSubtitle(
+                        l10n,
+                        _includeLocalSettings,
+                      ),
+                      vpad: 6,
+                      trailing: IosSwitch(
+                        value: _includeLocalSettings,
+                        onChanged: _setIncludeLocalSettings,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -976,21 +991,6 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                                   },
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _rowDivider(context),
-                    // 云备份与本地导出共用同一“带本机设置”档位。
-                    _ItemRow(
-                      label: l10n.backupIncludeLocalSettings,
-                      subtitle: includeLocalSettingsSubtitle(
-                        l10n,
-                        _includeLocalSettings,
-                      ),
-                      vpad: 6,
-                      trailing: IosSwitch(
-                        value: _includeLocalSettings,
-                        onChanged: _setIncludeLocalSettings,
                       ),
                     ),
                   ],
@@ -1263,21 +1263,6 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    _rowDivider(context),
-                    // 云备份与本地导出共用同一“带本机设置”档位。
-                    _ItemRow(
-                      label: l10n.backupIncludeLocalSettings,
-                      subtitle: includeLocalSettingsSubtitle(
-                        l10n,
-                        _includeLocalSettings,
-                      ),
-                      vpad: 6,
-                      trailing: IosSwitch(
-                        value: _includeLocalSettings,
-                        onChanged: _setIncludeLocalSettings,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -1359,20 +1344,6 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              _rowDivider(context),
-              _ItemRow(
-                label: l10n.backupIncludeLocalSettings,
-                subtitle: includeLocalSettingsSubtitle(
-                  l10n,
-                  _includeLocalSettings,
-                ),
-                vpad: 6,
-                trailing: IosSwitch(
-                  value: _includeLocalSettings,
-                  onChanged: _setIncludeLocalSettings,
-                ),
               ),
             ],
           ),

@@ -1029,6 +1029,10 @@ class _HomePageState extends State<HomePage>
         _closeMiniMapRoute();
         await _controller.createNewConversationAnimated();
       },
+      onClearConversation: () async {
+        _closeMiniMapRoute();
+        await _controller.clearToEmptyState();
+      },
       onOpenMiniMap: _openMiniMap,
       onCreateNewConversation: () async {
         _closeMiniMapRoute();
@@ -1175,6 +1179,10 @@ class _HomePageState extends State<HomePage>
       onNewConversation: () async {
         _closeMiniMapRoute();
         await _controller.createNewConversationAnimated();
+      },
+      onClearConversation: () async {
+        _closeMiniMapRoute();
+        await _controller.clearToEmptyState();
       },
       onCreateNewConversation: () async {
         _closeMiniMapRoute();
@@ -1616,13 +1624,19 @@ class _HomePageState extends State<HomePage>
   Widget _buildChatInputBar(BuildContext context, {required bool isTablet}) {
     final conversation = _controller.currentConversation;
     final settings = context.watch<SettingsProvider>();
+    final assistantProvider = context.watch<AssistantProvider>();
     final chatModel = resolveChatModel(
       settings,
       conversation: conversation,
-      assistant: context.watch<AssistantProvider>().currentAssistant,
+      assistant: assistantProvider.currentAssistant,
+    );
+    final ownerAssistant = assistantProvider.resolveConversationAssistant(
+      conversation?.assistantId,
     );
     return ChatInputSection(
       inputBarKey: _inputBarKey,
+      hintForUnassignedAssistant:
+          ownerAssistant?.id == AssistantProvider.unassignedAssistantId,
       chatModelProviderKey: chatModel.providerKey,
       chatModelId: chatModel.modelId,
       chatModelIsConversationOverride:

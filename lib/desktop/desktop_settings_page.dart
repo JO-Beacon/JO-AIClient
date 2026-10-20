@@ -55,6 +55,7 @@ import '../features/settings/pages/settings_search_page.dart';
 import '../features/settings/search/settings_search_index.dart';
 import '../features/settings/widgets/settings_search_entry.dart';
 import '../features/settings/widgets/settings_search_target.dart';
+import '../shared/dialogs/assistant_delete_confirm_dialog.dart';
 import '../shared/widgets/snackbar.dart';
 import 'setting/default_model_pane.dart';
 import 'setting/search_services_pane.dart';

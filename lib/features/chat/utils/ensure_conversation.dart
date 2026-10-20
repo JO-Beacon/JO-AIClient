@@ -26,6 +26,9 @@ Future<String?> ensureConversationId(
           .currentAssistantId;
     } catch (_) {}
   }
+  if (resolvedAssistantId == AssistantProvider.unassignedAssistantId) {
+    return null;
+  }
   try {
     final draft = await chat.createDraftConversation(
       assistantId: resolvedAssistantId,

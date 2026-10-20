@@ -337,6 +337,7 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                 context,
                 icon: Lucide.SquarePen,
                 label: l10n.displaySettingsPageLongMessageEditorTitle,
+                subtitle: l10n.displaySettingsPageLongMessageEditorSubtitle,
                 value: context.watch<SettingsProvider>().useLongMessageEditor,
                 onChanged: (v) =>
                     context.read<SettingsProvider>().setUseLongMessageEditor(v),

@@ -4,6 +4,7 @@ import 'package:Kelivo/theme/app_font_weights.dart';
 
 import '../../../core/providers/settings_provider.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/long_text_field.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
@@ -86,7 +87,7 @@ Future<void> showOcrPromptSheet(BuildContext context) async {
                 ),
               ),
               const SizedBox(height: 8),
-              TextField(
+              LongTextField(
                 controller: controller,
                 maxLines: 8,
                 decoration: InputDecoration(

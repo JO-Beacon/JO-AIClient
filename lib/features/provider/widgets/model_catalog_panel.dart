@@ -45,7 +45,7 @@ class _ModelCatalogPanelState extends State<ModelCatalogPanel> {
         final actionRows = [
           _refreshRow(context),
           _manualModeRow(context),
-          _dailyModeRow(context),
+          _startupDailyModeRow(context),
         ];
         if (widget.compact) {
           return Column(
@@ -131,11 +131,11 @@ class _ModelCatalogPanelState extends State<ModelCatalogPanel> {
     );
   }
 
-  Widget _dailyModeRow(BuildContext context) {
+  Widget _startupDailyModeRow(BuildContext context) {
     return _modeRow(
       context,
-      key: const ValueKey('model-catalog-update-daily'),
-      mode: ModelCatalogUpdateMode.daily,
+      key: const ValueKey('model-catalog-update-startup-daily'),
+      mode: ModelCatalogUpdateMode.startupDaily,
       label: AppLocalizations.of(context)!.modelCatalogAutoUpdate,
     );
   }

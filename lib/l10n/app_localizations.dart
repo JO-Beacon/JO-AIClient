@@ -1156,6 +1156,12 @@ abstract class AppLocalizations {
   /// **'Default Assistant'**
   String get assistantProviderDefaultAssistantName;
 
+  /// No description provided for @assistantProviderUnassignedAssistantName.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned assistant'**
+  String get assistantProviderUnassignedAssistantName;
+
   /// No description provided for @assistantProviderSampleAssistantName.
   ///
   /// In en, this message translates to:
@@ -3346,6 +3352,12 @@ abstract class AppLocalizations {
   /// **'Are you sure you want to delete this assistant? This action cannot be undone.'**
   String get assistantSettingsDeleteDialogContent;
 
+  /// No description provided for @assistantDeleteConversationsOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Also delete all conversations from this assistant (cannot be undone)'**
+  String get assistantDeleteConversationsOption;
+
   /// No description provided for @assistantSettingsDeleteDialogCancel.
   ///
   /// In en, this message translates to:
@@ -3363,6 +3375,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'At least one assistant is required'**
   String get assistantSettingsAtLeastOneAssistantRequired;
+
+  /// No description provided for @unassignedAssistantCannotCreateConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'The unassigned assistant cannot start a new chat. Select another assistant first.'**
+  String get unassignedAssistantCannotCreateConversation;
+
+  /// No description provided for @unassignedAssistantCannotSend.
+  ///
+  /// In en, this message translates to:
+  /// **'The unassigned assistant cannot send messages. Move this conversation to another assistant first.'**
+  String get unassignedAssistantCannotSend;
 
   /// No description provided for @mcpAssistantSheetTitle.
   ///
@@ -6051,6 +6075,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type a message for AI'**
   String get chatInputBarHint;
+
+  /// No description provided for @chatInputBarHintUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'This chat\'s assistant was deleted. Move it to another assistant first.'**
+  String get chatInputBarHintUnassigned;
 
   /// No description provided for @chatInputBarSelectModelTooltip.
   ///
@@ -9612,6 +9642,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Line editor for long text'**
   String get displaySettingsPageLongMessageEditorTitle;
+
+  /// No description provided for @displaySettingsPageLongMessageEditorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Only text longer than 2,048 characters, and without bidirectional text or unusual line breaks, switches to the line editor. Short text keeps the system input field.'**
+  String get displaySettingsPageLongMessageEditorSubtitle;
+
+  /// No description provided for @longMessageEditorActiveIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'Line editor active'**
+  String get longMessageEditorActiveIndicator;
 
   /// No description provided for @displaySettingsPageThemeSettingsTitle.
   ///
@@ -24783,7 +24825,7 @@ abstract class AppLocalizations {
   /// No description provided for @modelCatalogAutoUpdate.
   ///
   /// In en, this message translates to:
-  /// **'Auto-update every 24 hours'**
+  /// **'Check for updates on startup, skip if already updated today'**
   String get modelCatalogAutoUpdate;
 
   /// No description provided for @modelCatalogUpdateManual.

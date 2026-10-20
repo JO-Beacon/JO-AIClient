@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../database/business_preferences.dart';
 import '../models/assistant_group.dart';
+import 'assistant_provider.dart';
 
 /// 管理助手分组、分配、顺序和折叠状态。
 class AssistantGroupProvider extends ChangeNotifier {
@@ -164,6 +165,8 @@ class AssistantGroupProvider extends ChangeNotifier {
   ) async {
     var changed = false;
     for (final assistantId in assistantIds.toSet()) {
+      // 未指定助手固定置顶，不参与分组管理。
+      if (assistantId == AssistantProvider.unassignedAssistantId) continue;
       if (groupId == null || groupId.isEmpty) {
         changed = _assignment.remove(assistantId) != null || changed;
       } else if (_assignment[assistantId] != groupId) {

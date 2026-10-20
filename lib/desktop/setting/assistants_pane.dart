@@ -14,6 +14,7 @@ class _DesktopAssistantsBodyState extends State<_DesktopAssistantsBody> {
   final Set<String> _selectedIds = <String>{};
 
   void _toggle(String id) {
+    if (id == AssistantProvider.unassignedAssistantId) return;
     setState(() {
       if (!_selectedIds.add(id)) _selectedIds.remove(id);
     });
@@ -28,30 +29,24 @@ class _DesktopAssistantsBodyState extends State<_DesktopAssistantsBody> {
     final ids = List<String>.of(_selectedIds);
     if (ids.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.assistantSelectionDeleteConfirmTitle),
-        content: Text(l10n.assistantSelectionDeleteConfirmContent(ids.length)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.assistantSettingsDeleteDialogCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.assistantSelectionDelete),
-          ),
-        ],
-      ),
+    final choice = await showAssistantDeleteConfirmDialog(
+      context,
+      title: l10n.assistantSelectionDeleteConfirmTitle,
+      content: l10n.assistantSelectionDeleteConfirmContent(ids.length),
+      keepConversationsOption: l10n.assistantDeleteConversationsOption,
+      cancelLabel: l10n.assistantSettingsDeleteDialogCancel,
+      confirmLabel: l10n.assistantSelectionDelete,
     );
-    if (!mounted || ok != true) return;
+    if (!mounted || choice == null) return;
     for (final id in ids) {
       await ChatActions.cancelActiveGenerationsForAssistant(id);
     }
     if (!mounted) return;
     final assistantProvider = context.read<AssistantProvider>();
-    await assistantProvider.deleteAssistants(ids);
+    await assistantProvider.deleteAssistants(
+      ids,
+      deleteConversations: choice.deleteConversations,
+    );
     if (!mounted) return;
     final remainingIds = assistantProvider.assistants.map((a) => a.id).toSet();
     await context.read<AssistantGroupProvider>().assignAssistantsToGroup(
@@ -74,7 +69,16 @@ class _DesktopAssistantsBodyState extends State<_DesktopAssistantsBody> {
 
   @override
   Widget build(BuildContext context) {
-    final assistants = context.watch<AssistantProvider>().assistantDirectory;
+    final chatService = context.watch<ChatService>();
+    final assistants = context
+        .watch<AssistantProvider>()
+        .assistantDirectory
+        .where(
+          (a) =>
+              a.id != AssistantProvider.unassignedAssistantId ||
+              chatService.hasConversationsForAssistant(a.id),
+        )
+        .toList();
     final cs = Theme.of(context).colorScheme;
     return Container(
       alignment: Alignment.topCenter,
@@ -180,7 +184,10 @@ class _DesktopAssistantsBodyState extends State<_DesktopAssistantsBody> {
                       );
                       return KeyedSubtree(
                         key: ValueKey('desktop-assistant-${item.id}'),
-                        child: _selectionMode
+                        child:
+                            _selectionMode ||
+                                item.id ==
+                                    AssistantProvider.unassignedAssistantId
                             ? card
                             : ReorderableDragStartListener(
                                 index: index,
@@ -450,10 +457,13 @@ class _CopyAssistantIconState extends State<_CopyAssistantIcon> {
   }
 }
 
-Future<bool?> _confirmDeleteDesktop(BuildContext context) async {
+Future<AssistantDeleteChoice?> _confirmDeleteDesktop(
+  BuildContext context,
+) async {
   final l10n = AppLocalizations.of(context)!;
   final cs = Theme.of(context).colorScheme;
-  return showGeneralDialog<bool>(
+  var deleteConversations = false;
+  return showGeneralDialog<AssistantDeleteChoice>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'assistant-delete',
@@ -504,7 +514,7 @@ Future<bool?> _confirmDeleteDesktop(BuildContext context) async {
                             ).closeButtonTooltip,
                             icon: const Icon(lucide.Lucide.X, size: 18),
                             color: cs.onSurface,
-                            onPressed: () => Navigator.of(ctx).maybePop(false),
+                            onPressed: () => Navigator.of(ctx).maybePop(),
                           ),
                         ],
                       ),
@@ -527,6 +537,11 @@ Future<bool?> _confirmDeleteDesktop(BuildContext context) async {
                             fontSize: 13.5,
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        _DeleteConversationsCheckbox(
+                          label: l10n.assistantDeleteConversationsOption,
+                          onChanged: (value) => deleteConversations = value,
+                        ),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
@@ -535,7 +550,7 @@ Future<bool?> _confirmDeleteDesktop(BuildContext context) async {
                               label: l10n.assistantSettingsDeleteDialogCancel,
                               filled: false,
                               dense: true,
-                              onTap: () => Navigator.of(ctx).pop(false),
+                              onTap: () => Navigator.of(ctx).pop(),
                             ),
                             const SizedBox(width: 8),
                             _DeskIosButton(
@@ -543,7 +558,11 @@ Future<bool?> _confirmDeleteDesktop(BuildContext context) async {
                               filled: true,
                               danger: true,
                               dense: true,
-                              onTap: () => Navigator.of(ctx).pop(true),
+                              onTap: () => Navigator.of(ctx).pop(
+                                AssistantDeleteChoice(
+                                  deleteConversations: deleteConversations,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -694,7 +713,9 @@ class _DesktopAssistantCardState extends State<_DesktopAssistantCard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (widget.selectionMode) ...[
+                if (widget.selectionMode &&
+                    widget.item.id !=
+                        AssistantProvider.unassignedAssistantId) ...[
                   IosCheckbox(
                     value: widget.selected,
                     size: 22,
@@ -723,7 +744,9 @@ class _DesktopAssistantCardState extends State<_DesktopAssistantCard> {
                               ),
                             ),
                           ),
-                          if (!widget.selectionMode)
+                          if (!widget.selectionMode &&
+                              widget.item.id !=
+                                  AssistantProvider.unassignedAssistantId)
                             _CopyAssistantIcon(
                               onCopy: () async {
                                 final assistantProvider = context
@@ -747,7 +770,9 @@ class _DesktopAssistantCardState extends State<_DesktopAssistantCard> {
                                 }
                               },
                             ),
-                          if (!widget.selectionMode)
+                          if (!widget.selectionMode &&
+                              widget.item.id !=
+                                  AssistantProvider.unassignedAssistantId)
                             _DeleteAssistantIcon(
                               onConfirm: () async {
                                 final assistantProvider = context
@@ -764,15 +789,21 @@ class _DesktopAssistantCardState extends State<_DesktopAssistantCard> {
                                   );
                                   return;
                                 }
-                                final ok = await _confirmDeleteDesktop(context);
-                                if (ok == true) {
+                                final choice = await _confirmDeleteDesktop(
+                                  context,
+                                );
+                                if (choice != null) {
                                   if (!context.mounted) return;
                                   await ChatActions.cancelActiveGenerationsForAssistant(
                                     widget.item.id,
                                   );
                                   if (!context.mounted) return;
                                   final success = await assistantProvider
-                                      .deleteAssistant(widget.item.id);
+                                      .deleteAssistant(
+                                        widget.item.id,
+                                        deleteConversations:
+                                            choice.deleteConversations,
+                                      );
                                   if (!context.mounted) return;
                                   if (success != true) {
                                     showAppSnackBar(
@@ -821,4 +852,63 @@ class _AssistantAvatarDesktop extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       AssistantAvatar.fromListItem(item: item, size: size);
+}
+
+/// 桌面删除弹窗里的“同时删除会话”勾选项。
+class _DeleteConversationsCheckbox extends StatefulWidget {
+  const _DeleteConversationsCheckbox({
+    required this.label,
+    required this.onChanged,
+  });
+
+  final String label;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  State<_DeleteConversationsCheckbox> createState() =>
+      _DeleteConversationsCheckboxState();
+}
+
+class _DeleteConversationsCheckboxState
+    extends State<_DeleteConversationsCheckbox> {
+  bool _value = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        setState(() => _value = !_value);
+        widget.onChanged(_value);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            IosCheckbox(
+              value: _value,
+              size: 20,
+              hitTestSize: 28,
+              enableHaptics: false,
+              onChanged: (value) {
+                setState(() => _value = value);
+                widget.onChanged(_value);
+              },
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: cs.onSurface.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

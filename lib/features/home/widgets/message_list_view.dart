@@ -2146,6 +2146,45 @@ class _MessageListViewState extends State<MessageListView> {
         'pinned=${widget.isPinnedIndicatorActive} visible=$visible',
         tag: 'ChatBottom',
       );
+      if (tailOverflow != null && tailOverflow > 24) {
+        final self = context.findRenderObject();
+        final sliver = self is RenderBox
+            ? _findSliverMultiBoxAdaptor(self)
+            : null;
+        if (sliver != null) {
+          RenderBox? child = sliver.firstChild;
+          var checked = 0;
+          var mismatches = 0;
+          while (child != null) {
+            final index = sliver.indexOf(child);
+            if (index >= 0 && index < items) {
+              checked++;
+              final cached = controller.extentForIndex(index).$1;
+              final actual = child.size.height;
+              final delta = actual - cached;
+              if (delta.abs() > 1) {
+                mismatches++;
+                final id = index < _effectiveRenderModels.length
+                    ? _effectiveRenderModels[index].message.id
+                    : '?';
+                FlutterLogger.log(
+                  'extent-mismatch index=$index id=$id '
+                  'cached=${cached.toStringAsFixed(1)} '
+                  'actual=${actual.toStringAsFixed(1)} '
+                  'delta=${delta.toStringAsFixed(1)}',
+                  tag: 'ChatBottom',
+                );
+              }
+            }
+            child = sliver.childAfter(child);
+          }
+          FlutterLogger.log(
+            'extent-scan checked=$checked mismatches=$mismatches '
+            'items=$items tailOverflow=${tailOverflow.toStringAsFixed(1)}',
+            tag: 'ChatBottom',
+          );
+        }
+      }
     } catch (_) {}
   }
 

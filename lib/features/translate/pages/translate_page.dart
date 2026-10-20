@@ -18,6 +18,7 @@ import '../../settings/widgets/language_select_sheet.dart'
 import '../../../core/services/haptics.dart';
 import '../../model/widgets/model_select_sheet.dart' show showModelSelector;
 import '../../../theme/app_font_weights.dart';
+import '../../../shared/widgets/long_text_field.dart';
 
 class TranslatePage extends StatefulWidget {
   const TranslatePage({super.key});
@@ -354,9 +355,8 @@ class _TranslatePageState extends State<TranslatePage> {
               child: SizedBox(
                 height: 200,
                 child: _Card(
-                  child: TextField(
+                  child: LongTextField(
                     controller: _src,
-                    keyboardType: TextInputType.multiline,
                     expands: true,
                     maxLines: null,
                     minLines: null,
@@ -365,8 +365,6 @@ class _TranslatePageState extends State<TranslatePage> {
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                     ),
-                    contextMenuBuilder: (context, editableTextState) =>
-                        const SizedBox.shrink(),
                     style: TextStyle(fontSize: 15, height: 1.4),
                   ),
                 ),

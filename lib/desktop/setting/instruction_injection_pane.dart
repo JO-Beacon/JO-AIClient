@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../../core/models/instruction_injection.dart';
 import '../../core/providers/instruction_injection_group_provider.dart';
 import '../../core/providers/instruction_injection_provider.dart';
+import '../../shared/widgets/long_text_field.dart';
 import '../../shared/widgets/snackbar.dart';
 import '../../theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
@@ -502,7 +503,7 @@ class _InstructionInjectionEditDialogState
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  LongTextField(
                     controller: _promptController,
                     maxLines: 8,
                     decoration: _deskInputDecoration(

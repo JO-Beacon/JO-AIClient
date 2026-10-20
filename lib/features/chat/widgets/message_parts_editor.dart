@@ -14,6 +14,7 @@ import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/long_message_editor.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../utils/newline_normalization.dart';
+import '../utils/round_structure.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'message_attachment_editor.dart';
 
@@ -59,9 +60,24 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
   @override
   void didUpdateWidget(covariant MessagePartsEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.parts, widget.parts)) {
-      _resetParts(widget.parts);
+    if (identical(oldWidget.parts, widget.parts)) return;
+    // 父级每敲一个字都会回传一份新列表。只要部件种类与数量没变，就只换内容，
+    // 不重建编号与输入框：重建会让正在输入的框失去焦点，安卓上表现为
+    // 敲一个字软键盘就收起来。
+    if (_sameStructure(widget.parts)) {
+      _parts = List<MessagePart>.of(widget.parts);
+      _syncPartKeys();
+      return;
     }
+    _resetParts(widget.parts);
+  }
+
+  bool _sameStructure(List<MessagePart> next) {
+    if (next.length != _parts.length) return false;
+    for (var i = 0; i < next.length; i++) {
+      if (next[i].runtimeType != _parts[i].runtimeType) return false;
+    }
+    return true;
   }
 
   void _resetParts(List<MessagePart> parts) {
@@ -111,7 +127,9 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
   void _emit() => widget.onChanged(List<MessagePart>.unmodifiable(_parts));
 
   Future<void> _remove(int index) async {
-    // 分界是结构信息，不是内容：不允许单独删除（空段的会在保存时自动收掉）。
+    // 分界是结构信息，不是内容：不允许单独删除。
+    // 但删掉某个段的最后一个部件后，空出来的分界会立即从列表里消失，
+    // 不需要等到保存。
     if (_parts[index] is AssistantRoundEndPart) return;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
@@ -136,8 +154,20 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
     final key = _partKeys.removeAt(index);
     _parts.removeAt(index);
     _controllers.remove(key)?.dispose();
+    _dropEmptyRoundBoundaries();
     _emit();
     setState(() {});
+  }
+
+  /// 删完部件后，把因此变空的分界一并收掉；不写库，只改编辑中的列表。
+  void _dropEmptyRoundBoundaries() {
+    final dropped = droppedRoundBoundaryIndices(_parts);
+    if (dropped.isEmpty) return;
+    for (final index in dropped.reversed) {
+      final key = _partKeys.removeAt(index);
+      _parts.removeAt(index);
+      _controllers.remove(key)?.dispose();
+    }
   }
 
   void _addText() {
@@ -150,10 +180,11 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
   /// 在大窗口中编辑（正文）或查看（思考 / 工具等只读部件）。
   Future<void> _expandPart(int index) async {
     final part = _parts[index];
+    final key = _partKeys[index];
     final l10n = AppLocalizations.of(context)!;
     final editable = part is TextPart;
     final initial = part is TextPart
-        ? (_controllers[index]?.text ?? part.text)
+        ? (_controllers[key]?.text ?? part.text)
         : _partSummary(part);
     final title = '${index + 1} ${_partLabel(l10n, part)}';
     final next = await showMessagePartExpandedEditor(
@@ -164,7 +195,7 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
     );
     if (!mounted || next == null || !editable || next == initial) return;
     _parts[index] = TextPart(next);
-    _controllers[index]?.text = next;
+    _controllers[key]?.text = next;
     _emit();
     setState(() {});
   }
@@ -172,22 +203,33 @@ class _MessagePartsEditorState extends State<MessagePartsEditor> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // 编辑列表只展示可编辑／可看懂的内容；分界不出现在界面上，
+    // 但真实下标仍指向 _parts，删除与展开都按真实下标操作。
+    final visibleParts = <({int index, MessagePart part})>[
+      for (var i = 0; i < _parts.length; i++)
+        if (_parts[i] is! AssistantRoundEndPart) (index: i, part: _parts[i]),
+    ];
     final list = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 部件顺序就是事实顺序（哪段话在工具调用前、哪段在结果之后），
         // 换序只能靠删了重加，不提供拖动：能拖的几种换法要么没意义、
         // 要么会把续写挪到工具结果前面。
+        //
+        // “续答分界”是结构标记而不是内容，不在编辑列表里占一行；
+        // 但它仍留在 _parts 里，按真实下标记住，保存时原样写回。
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _parts.length,
-          itemBuilder: (context, index) {
-            final part = _parts[index];
+          itemCount: visibleParts.length,
+          itemBuilder: (context, displayIndex) {
+            final entry = visibleParts[displayIndex];
+            final index = entry.index;
+            final part = entry.part;
             final partKey = _partKeys[index];
             return _PartCard(
               key: ValueKey('part-$partKey-${part.kind}'),
-              index: index,
+              index: displayIndex,
               part: part,
               controller: part is TextPart
                   ? _controllerFor(partKey, part.text)

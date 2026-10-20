@@ -22,12 +22,16 @@ enum ModelCatalogUpdateMode {
   /// 只有用户点“立即更新”时才联网。
   manual,
 
-  /// 启动时检查一次，数据超过 24 小时就自动更新。
-  daily;
+  /// 每次应用启动时检查；当天已成功更新过则跳过。
+  startupDaily;
 
-  /// 解析存储值；缺省与未知值都落到 [manual]。
+  /// 解析存储值；旧的 daily 与 startup 都迁移为 startupDaily，
+  /// 未知值落到 [manual]。
   static ModelCatalogUpdateMode parse(String? raw) {
-    return raw == daily.name ? daily : manual;
+    if (raw == startupDaily.name || raw == 'daily' || raw == 'startup') {
+      return startupDaily;
+    }
+    return manual;
   }
 }
 
@@ -243,12 +247,24 @@ class ModelCatalogService extends ChangeNotifier {
     try {
       await _ensurePrefsLoaded();
       await ensureLoaded();
-      if (_updateMode == ModelCatalogUpdateMode.daily && isStale) {
-        await refresh();
+      if (_updateMode == ModelCatalogUpdateMode.startupDaily &&
+          !_updatedToday) {
+        await refresh(force: true);
       }
     } catch (error) {
       _lastError = error.toString();
     }
+  }
+
+  /// 当前缓存是否在本机日历的“今天”成功更新过。
+  bool get _updatedToday {
+    final data = _data;
+    if (data == null || _isBundled) return false;
+    final now = _now().toLocal();
+    final updated = data.generatedAt.toLocal();
+    return now.year == updated.year &&
+        now.month == updated.month &&
+        now.day == updated.day;
   }
 
   List<String> catalogProviderIdsFor(ProviderConfig cfg) {

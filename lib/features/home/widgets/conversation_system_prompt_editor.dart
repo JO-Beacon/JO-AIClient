@@ -6,11 +6,14 @@ import '../../../core/services/chat/chat_service.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/responsive/screen_type_helper.dart';
+import '../../../core/providers/settings_provider.dart';
 import '../../../shared/widgets/form_sheet.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
+import '../../../utils/newline_normalization.dart';
 
 Future<void> editConversationSystemPrompt(
   BuildContext context, {
@@ -118,6 +121,19 @@ class _ConversationSystemPromptEditorState
         maxLines: 14,
         keyboardType: TextInputType.multiline,
         outerPadding: EdgeInsets.zero,
+        editorBuilder: context.watch<SettingsProvider>().useLongMessageEditor
+            ? (ctx) => LongMessageEditor(
+                controller: _controller,
+                minLines: 6,
+                maxLines: 14,
+                inputFormatters: const [NormalizeNewlinesFormatter()],
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              )
+            : null,
       ),
       if (widget.initial.trim().isNotEmpty) ...[
         const SizedBox(height: 8),

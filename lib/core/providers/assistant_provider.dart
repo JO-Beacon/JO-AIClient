@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../utils/sandbox_path_resolver.dart';
@@ -20,8 +21,37 @@ import '../../utils/app_directories.dart';
 class AssistantProvider extends ChangeNotifier {
   static const String _assistantsKey = 'assistants_v1';
   static const String _currentAssistantKey = 'current_assistant_id_v1';
-  static const String _orphanedAssistantKey =
-      'orphaned_conversations_assistant_id_v1';
+  static const String unassignedAssistantId = Assistant.unassignedId;
+  String _unassignedAssistantName = '';
+
+  /// 仅在占位助手尚未创建时作为回退，避免首帧之前出现空归属。
+  Assistant get unassignedAssistant =>
+      Assistant(id: unassignedAssistantId, name: _unassignedAssistantName);
+
+  /// 确保“未指定助手”作为真实条目存在于助手列表末尾。
+  ///
+  /// 它可被选中、可查看其会话，但不能被删除；名字随当前语言更新。
+  Future<void> ensureUnassignedAssistant(String name) async {
+    await loaded;
+    _unassignedAssistantName = name;
+    final idx = _assistants.indexWhere((a) => a.id == unassignedAssistantId);
+    if (idx == -1) {
+      // 未指定助手固定在列表最前面。
+      _assistants.insert(0, unassignedAssistant);
+      _rebuildAssistantIndex();
+      _rebuildAssistantDirectory();
+      await _persist();
+      notifyListeners();
+      return;
+    }
+    if (_assistants[idx].name != name) {
+      _assistants[idx] = _assistants[idx].copyWith(name: name);
+      _rebuildAssistantIndex();
+      _rebuildAssistantDirectory();
+      await _persist();
+      notifyListeners();
+    }
+  }
 
   final BusinessPreferences preferences;
   final List<Assistant> _assistants = <Assistant>[];
@@ -29,7 +59,6 @@ class AssistantProvider extends ChangeNotifier {
   List<AssistantListItem> _assistantDirectory = const <AssistantListItem>[];
   int _directoryRevision = 0;
   String? _currentAssistantId;
-  String? _orphanedAssistantId;
   final ChatService? chatService;
   final BusinessRepository? businessRepository;
 
@@ -38,7 +67,7 @@ class AssistantProvider extends ChangeNotifier {
   /// 列表和搜索使用的轻量目录，不包含完整助手配置。
   List<AssistantListItem> get assistantDirectory => _assistantDirectory;
   int get assistantDirectoryRevision => _directoryRevision;
-  String? get currentAssistantId => currentAssistant?.id;
+  String? get currentAssistantId => _currentAssistantId;
   Assistant? get currentAssistant {
     final selectedId = _currentAssistantId;
     if (selectedId != null) {
@@ -171,7 +200,6 @@ class AssistantProvider extends ChangeNotifier {
           ? _assistants.first.id
           : null;
     }
-    await _ensureOrphanedAssistant();
     // 选中的助手不存在（或本就没选）时，把实际生效的那个写回，
     // 避免下次启动又回到另一个。
     if (_currentAssistantId != null && savedValue != _currentAssistantId) {
@@ -180,30 +208,15 @@ class AssistantProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 记住“找不到归属的会话”统一挂到哪个助手。
-  ///
-  /// 优先沿用已保存的那个（如果它还在）；不在了才换成列表第一个。
-  /// 这样重排、重启、切换选中都不会让孤立会话的归属漂移。
-  Future<void> _ensureOrphanedAssistant() async {
-    final savedValue = preferences.get(_orphanedAssistantKey);
-    final savedId = savedValue is String ? savedValue : null;
-    _orphanedAssistantId =
-        (savedId == null ? null : getById(savedId))?.id ??
-        (_assistants.isNotEmpty ? _assistants.first.id : null);
-    if (_orphanedAssistantId != null && savedValue != _orphanedAssistantId) {
-      await preferences.setString(_orphanedAssistantKey, _orphanedAssistantId!);
-    }
-  }
-
   /// 所有“这个会话属于谁”的唯一解析。
   ///
-  /// 未绑定归属的会话跟着当前选中的助手；归属助手不存在时用持久化的
-  /// 恢复助手顶替，但不改写会话里存的归属。
+  /// 未绑定归属的会话跟着当前选中的助手；归属助手已被删掉时，
+  /// 统一落到“未指定助手”这个专用占位，不借用列表里任何真实助手。
   Assistant? resolveConversationAssistant(String? assistantId) {
     if (assistantId == null) return currentAssistant;
     return getById(assistantId) ??
-        getById(_orphanedAssistantId ?? '') ??
-        (_assistants.isNotEmpty ? _assistants.first : null);
+        getById(unassignedAssistantId) ??
+        unassignedAssistant;
   }
 
   /// 已废弃的“全局思考预算”存储键。
@@ -242,6 +255,14 @@ class AssistantProvider extends ChangeNotifier {
   }
 
   void _rebuildAssistantIndex() {
+    // 未指定助手始终置顶，普通助手重排不得把它挤下去。
+    final unassignedIndex = _assistants.indexWhere(
+      (assistant) => assistant.id == unassignedAssistantId,
+    );
+    if (unassignedIndex > 0) {
+      final unassigned = _assistants.removeAt(unassignedIndex);
+      _assistants.insert(0, unassigned);
+    }
     _assistantsById
       ..clear()
       ..addEntries(
@@ -347,32 +368,48 @@ class AssistantProvider extends ChangeNotifier {
   // 确保本地化默认助手存在；请在本地化就绪后调用此方法。
   Future<void> ensureDefaults(dynamic context) async {
     await loaded;
-    if (_assistants.isNotEmpty) return;
-    final l10n = AppLocalizations.of(context)!;
-    // 1) 默认助手
-    _assistants.add(_defaultAssistant(l10n));
-    // 2) 示例助手（带提示词模板）
-    _assistants.add(
-      Assistant(
-        id: const Uuid().v4(),
-        name: l10n.assistantProviderSampleAssistantName,
-        systemPrompt: l10n.assistantProviderSampleAssistantSystemPrompt(
-          '{model_name}',
-        ),
-        temperature: null,
-        topP: null,
-        limitContextMessages: false,
-      ),
+    // 测试与部分调用方不传 context；此时不创建默认值，也不改名。
+    final l10n = context == null
+        ? null
+        : AppLocalizations.of(context as BuildContext);
+    final hasRealAssistant = _assistants.any(
+      (a) => a.id != unassignedAssistantId,
     );
-    _rebuildAssistantIndex();
-    _rebuildAssistantDirectory();
-    await _persist();
-    // 若当前助手未设置，则进行设置
-    if (_currentAssistantId == null && _assistants.isNotEmpty) {
-      _currentAssistantId = _assistants.first.id;
+    if (l10n != null && !hasRealAssistant) {
+      // 1) 默认助手
+      _assistants.add(_defaultAssistant(l10n));
+      // 2) 示例助手（带提示词模板）
+      _assistants.add(
+        Assistant(
+          id: const Uuid().v4(),
+          name: l10n.assistantProviderSampleAssistantName,
+          systemPrompt: l10n.assistantProviderSampleAssistantSystemPrompt(
+            '{model_name}',
+          ),
+          temperature: null,
+          topP: null,
+          limitContextMessages: false,
+        ),
+      );
+      _rebuildAssistantIndex();
+      _rebuildAssistantDirectory();
+      await _persist();
+    }
+    if (l10n != null) {
+      await ensureUnassignedAssistant(
+        l10n.assistantProviderUnassignedAssistantName,
+      );
+    }
+    if (_assistants.isEmpty) return;
+    // 若当前助手未设置（或指向已不存在的条目），落到第一个真实助手；
+    // 没有真实助手时才用未指定助手。
+    if (_currentAssistantId == null || getById(_currentAssistantId!) == null) {
+      final firstReal = _assistants
+          .where((a) => a.id != unassignedAssistantId)
+          .firstOrNull;
+      _currentAssistantId = firstReal?.id ?? _assistants.first.id;
       await preferences.setString(_currentAssistantKey, _currentAssistantId!);
     }
-    await _ensureOrphanedAssistant();
     notifyListeners();
   }
 
@@ -536,12 +573,20 @@ class AssistantProvider extends ChangeNotifier {
 
   Future<void> setCurrentAssistant(String id) async {
     await loaded;
-    await _ensureOrphanedAssistant();
     if (getById(id) == null) return;
     if (_currentAssistantId == id) return;
     _currentAssistantId = id;
     notifyListeners();
     await preferences.setString(_currentAssistantKey, id);
+  }
+
+  /// 取消选中任何助手（用于删光占位助手最后一个会话后的空状态）。
+  Future<void> clearCurrentAssistant() async {
+    await loaded;
+    if (_currentAssistantId == null) return;
+    _currentAssistantId = null;
+    await preferences.remove(_currentAssistantKey);
+    notifyListeners();
   }
 
   Assistant? getById(String id) {
@@ -842,22 +887,43 @@ class AssistantProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> deleteAssistant(String id) async {
+  List<Assistant> get _realAssistants => [
+    for (final a in _assistants)
+      if (a.id != unassignedAssistantId) a,
+  ];
+
+  Future<bool> deleteAssistant(
+    String id, {
+    bool deleteConversations = false,
+  }) async {
+    // 未指定助手是内置条目，不能被删除。
+    if (id == unassignedAssistantId) return false;
     final idx = _assistants.indexWhere((a) => a.id == id);
     if (idx == -1) return false;
-    // 不允许删除最后一个剩余的助手
+    // 不允许把助手列表删空（未指定助手本身也算一个可显示条目）。
     if (_assistants.length <= 1) return false;
-
-    await chatService?.deleteConversationsForAssistant(id);
-
     final removingCurrent = _assistants[idx].id == _currentAssistantId;
-    _assistants.removeAt(idx);
+
+    if (deleteConversations) {
+      await chatService?.deleteConversationsForAssistant(id);
+    } else {
+      // 保留会话：把归属改成“未指定助手”，它们会出现在该条目下。
+      await ensureUnassignedAssistant(_unassignedAssistantName);
+      await chatService?.moveAllConversationsFromAssistant(
+        fromAssistantId: id,
+        toAssistantId: unassignedAssistantId,
+      );
+    }
+
+    // ensureUnassignedAssistant 可能往列表头部插入占位条目，
+    // 这里必须重新定位目标，不能沿用旧的 idx。
+    final currentIdx = _assistants.indexWhere((a) => a.id == id);
+    if (currentIdx == -1) return false;
+    _assistants.removeAt(currentIdx);
     _assistantsById.remove(id);
     _rebuildAssistantDirectory();
     if (removingCurrent) {
-      _currentAssistantId = _assistants.isNotEmpty
-          ? _assistants.first.id
-          : null;
+      _currentAssistantId = _realAssistants.firstOrNull?.id;
     }
     if (businessRepository != null) {
       await _deleteAssistantRow(id);
@@ -870,26 +936,35 @@ class AssistantProvider extends ChangeNotifier {
     } else {
       await preferences.remove(_currentAssistantKey);
     }
-    await _ensureOrphanedAssistant();
     notifyListeners();
     return true;
   }
 
   /// 删除多个助手。至少保留一个助手；当请求包含全部助手时保留当前列表中的第一个。
-  Future<int> deleteAssistants(Iterable<String> ids) async {
-    final uniqueIds = ids.toSet();
-    if (uniqueIds.isEmpty || _assistants.length <= 1) return 0;
+  Future<int> deleteAssistants(
+    Iterable<String> ids, {
+    bool deleteConversations = false,
+  }) async {
+    final uniqueIds = ids.toSet()..remove(unassignedAssistantId);
+    if (uniqueIds.isEmpty ||
+        _assistants.where((a) => a.id != unassignedAssistantId).length <= 1) {
+      return 0;
+    }
     final deletable = _assistants
         .where((assistant) => uniqueIds.contains(assistant.id))
         .map((assistant) => assistant.id)
         .toList();
-    if (deletable.length >= _assistants.length) {
-      final keepId = _currentAssistantId ?? _assistants.first.id;
+    if (deletable.length >= _realAssistants.length) {
+      final keepId = _realAssistants.any((a) => a.id == _currentAssistantId)
+          ? _currentAssistantId!
+          : _realAssistants.first.id;
       deletable.remove(keepId);
     }
     var deleted = 0;
     for (final id in deletable) {
-      if (await deleteAssistant(id)) deleted++;
+      if (await deleteAssistant(id, deleteConversations: deleteConversations)) {
+        deleted++;
+      }
     }
     return deleted;
   }

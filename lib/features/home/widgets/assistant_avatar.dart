@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/assistant_list_item.dart';
 import '../../../core/models/avatar_transform.dart';
+import '../../../core/providers/assistant_provider.dart';
+import '../../../icons/lucide_adapter.dart';
 import '../../../shared/widgets/avatar_image_editor.dart';
 import '../../../shared/widgets/emoji_text.dart';
 import '../../../utils/avatar_cache.dart';
@@ -16,6 +18,7 @@ class AssistantAvatar extends StatelessWidget {
   const AssistantAvatar({
     super.key,
     required this.assistant,
+    this.assistantId,
     this.fallbackName,
     this.size = 28,
     this.avatarSource,
@@ -29,6 +32,7 @@ class AssistantAvatar extends StatelessWidget {
   }) => AssistantAvatar(
     key: key,
     assistant: null,
+    assistantId: item.id,
     fallbackName: item.name,
     avatarSource: item.avatar,
     avatarTransform: item.avatarTransform,
@@ -36,6 +40,7 @@ class AssistantAvatar extends StatelessWidget {
   );
 
   final Assistant? assistant;
+  final String? assistantId;
   final String? fallbackName;
   final double size;
   final String? avatarSource;
@@ -48,6 +53,31 @@ class AssistantAvatar extends StatelessWidget {
     final avatarValue = (avatarSource ?? assistant?.avatar)?.trim() ?? '';
     final transform = avatarTransform ?? assistant?.avatarTransform;
     final name = (assistant?.name ?? fallbackName ?? '').trim();
+    final effectiveId = assistantId ?? assistant?.id;
+
+    // “未指定助手”是内置条目：用虚线质感的中性图标，与真实助手的头像区分。
+    if (effectiveId == AssistantProvider.unassignedAssistantId) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cs.surfaceContainerHighest.withValues(
+            alpha: isDark ? 0.35 : 0.6,
+          ),
+          border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: isDark ? 0.7 : 0.9),
+            width: 1,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Lucide.MessageCircleDashed,
+          size: size * 0.55,
+          color: cs.onSurfaceVariant,
+        ),
+      );
+    }
 
     Widget avatar;
     if (avatarValue.isNotEmpty) {

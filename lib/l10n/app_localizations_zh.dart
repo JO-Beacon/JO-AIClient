@@ -570,6 +570,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get assistantProviderDefaultAssistantName => '默认助手';
 
   @override
+  String get assistantProviderUnassignedAssistantName => '未指定助手';
+
+  @override
   String get assistantProviderSampleAssistantName => '示例助手';
 
   @override
@@ -1714,6 +1717,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get assistantSettingsDeleteDialogContent => '确定要删除该助手吗？此操作不可撤销。';
 
   @override
+  String get assistantDeleteConversationsOption => '同时删除该助手的全部会话（不可恢复）';
+
+  @override
   String get assistantSettingsDeleteDialogCancel => '取消';
 
   @override
@@ -1721,6 +1727,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get assistantSettingsAtLeastOneAssistantRequired => '至少需要保留一个助手';
+
+  @override
+  String get unassignedAssistantCannotCreateConversation =>
+      '未指定助手不能创建新会话，请先选择其他助手';
+
+  @override
+  String get unassignedAssistantCannotSend => '未指定助手不能发送消息，请先把该会话移动到其他助手';
 
   @override
   String get mcpAssistantSheetTitle => 'MCP服务器';
@@ -3175,6 +3188,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatInputBarHint => '输入消息与AI聊天';
+
+  @override
+  String get chatInputBarHintUnassigned => '该会话的助手已被删除，请先移动到其他助手';
 
   @override
   String get chatInputBarSelectModelTooltip => '选择模型';
@@ -5064,6 +5080,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get displaySettingsPageLongMessageEditorTitle => '长文本使用按行编辑器';
+
+  @override
+  String get displaySettingsPageLongMessageEditorSubtitle =>
+      '仅当文本超过 2048 字符、且不含双向文字或异常换行时，才改用按行编辑器；短文本仍用系统输入框。';
+
+  @override
+  String get longMessageEditorActiveIndicator => '按行编辑器已启用';
 
   @override
   String get displaySettingsPageThemeSettingsTitle => '主题设置';
@@ -13265,7 +13288,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get modelCatalogAutoUpdate => '每 24 小时自动更新';
+  String get modelCatalogAutoUpdate => '启动时检查更新，当天已更新则跳过';
 
   @override
   String get modelCatalogUpdateManual => '仅手动更新';
@@ -14048,6 +14071,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get assistantProviderDefaultAssistantName => '默认助手';
+
+  @override
+  String get assistantProviderUnassignedAssistantName => '未指定助手';
 
   @override
   String get assistantProviderSampleAssistantName => '示例助手';
@@ -15194,6 +15220,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get assistantSettingsDeleteDialogContent => '确定要删除该助手吗？此操作不可撤销。';
 
   @override
+  String get assistantDeleteConversationsOption => '同时删除该助手的全部会话（不可恢复）';
+
+  @override
   String get assistantSettingsDeleteDialogCancel => '取消';
 
   @override
@@ -15201,6 +15230,13 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get assistantSettingsAtLeastOneAssistantRequired => '至少需要保留一个助手';
+
+  @override
+  String get unassignedAssistantCannotCreateConversation =>
+      '未指定助手不能创建新会话，请先选择其他助手';
+
+  @override
+  String get unassignedAssistantCannotSend => '未指定助手不能发送消息，请先把该会话移动到其他助手';
 
   @override
   String get mcpAssistantSheetTitle => 'MCP服务器';
@@ -16655,6 +16691,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get chatInputBarHint => '输入消息与AI聊天';
+
+  @override
+  String get chatInputBarHintUnassigned => '该会话的助手已被删除，请先移动到其他助手';
 
   @override
   String get chatInputBarSelectModelTooltip => '选择模型';
@@ -18544,6 +18583,13 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get displaySettingsPageLongMessageEditorTitle => '长文本使用按行编辑器';
+
+  @override
+  String get displaySettingsPageLongMessageEditorSubtitle =>
+      '仅当文本超过 2048 字符、且不含双向文字或异常换行时，才改用按行编辑器；短文本仍用系统输入框。';
+
+  @override
+  String get longMessageEditorActiveIndicator => '按行编辑器已启用';
 
   @override
   String get displaySettingsPageThemeSettingsTitle => '主题设置';
@@ -26745,7 +26791,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   }
 
   @override
-  String get modelCatalogAutoUpdate => '每 24 小时自动更新';
+  String get modelCatalogAutoUpdate => '启动时检查更新，当天已更新则跳过';
 
   @override
   String get modelCatalogUpdateManual => '仅手动更新';
@@ -27528,6 +27574,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get assistantProviderDefaultAssistantName => '預設助理';
+
+  @override
+  String get assistantProviderUnassignedAssistantName => '未指定助理';
 
   @override
   String get assistantProviderSampleAssistantName => '範例助理';
@@ -28674,6 +28723,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get assistantSettingsDeleteDialogContent => '確定要刪除該助理嗎？此操作不可撤銷。';
 
   @override
+  String get assistantDeleteConversationsOption => '同時刪除該助理的全部會話（不可恢復）';
+
+  @override
   String get assistantSettingsDeleteDialogCancel => '取消';
 
   @override
@@ -28681,6 +28733,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get assistantSettingsAtLeastOneAssistantRequired => '至少需要保留一個助理';
+
+  @override
+  String get unassignedAssistantCannotCreateConversation =>
+      '未指定助理不能建立新會話，請先選擇其他助理';
+
+  @override
+  String get unassignedAssistantCannotSend => '未指定助理不能傳送訊息，請先把該會話移動到其他助理';
 
   @override
   String get mcpAssistantSheetTitle => 'MCP伺服器';
@@ -30135,6 +30194,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get chatInputBarHint => '輸入訊息與AI聊天';
+
+  @override
+  String get chatInputBarHintUnassigned => '該會話的助理已被刪除，請先移動到其他助理';
 
   @override
   String get chatInputBarSelectModelTooltip => '選擇模型';
@@ -32024,6 +32086,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get displaySettingsPageLongMessageEditorTitle => '長文字使用按行編輯器';
+
+  @override
+  String get displaySettingsPageLongMessageEditorSubtitle =>
+      '僅當文字超過 2048 字元、且不含雙向文字或異常換行時，才改用按行編輯器；短文字仍用系統輸入框。';
+
+  @override
+  String get longMessageEditorActiveIndicator => '按行編輯器已啟用';
 
   @override
   String get displaySettingsPageThemeSettingsTitle => '主題設定';
@@ -40231,7 +40300,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get modelCatalogAutoUpdate => '每 24 小時自動更新';
+  String get modelCatalogAutoUpdate => '啟動時檢查更新，當天已更新則跳過';
 
   @override
   String get modelCatalogUpdateManual => '僅手動更新';

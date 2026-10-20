@@ -14,7 +14,7 @@ This checkout serves Kelivo's plain message editor. Its native input configurati
 
 Plain messages also treat copy/cut with a collapsed selection as no-ops, preserving both the document and existing clipboard. The default code mode retains its whole-line copy/cut behavior.
 
-An already focused node attaches its input connection after mounting, including when a paste switches from the paragraph editor to the line editor.
+An already focused node attaches its input connection after mounting, including when a paste switches from the paragraph editor to the line editor. It also starts the cursor blink timer in `initState` when mounted with focus, so switching renderers does not leave an invisible caret.
 
 Plain input also forwards the app's submit action, keyboard shortcuts and keyboard media insertion contract. A read-only transition closes the input connection; native editing callbacks cannot alter locked drafts. Mobile hardware key handling uses `onKeyEvent` and lets the app handle a key first.
 

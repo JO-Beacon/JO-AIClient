@@ -26,6 +26,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/dialogs/assistant_delete_confirm_dialog.dart';
 import '../../../shared/widgets/snackbar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:animations/animations.dart';
@@ -66,6 +67,7 @@ class SideDrawer extends StatefulWidget {
     required this.assistantName,
     this.onSelectConversation,
     this.onNewConversation,
+    this.onClearConversation,
     this.loadingConversationIds = const <String>{},
     this.embeddedWidth,
     this.showBottomBar = true,
@@ -84,6 +86,9 @@ class SideDrawer extends StatefulWidget {
   final FutureOr<void> Function(String id, {bool closeDrawer})?
   onSelectConversation;
   final FutureOr<void> Function({bool closeDrawer})? onNewConversation;
+
+  /// 删除未指定助手的最后一个会话后：清空消息区并取消助手选择。
+  final Future<void> Function()? onClearConversation;
   final Set<String> loadingConversationIds;
   final double? embeddedWidth; // 停靠模式的可选显式宽度
   final bool showBottomBar; // 桌面端可隐藏此底部区域
@@ -379,6 +384,9 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
               if (!confirmed) return;
               final deletingCurrent =
                   chatService.currentConversationId == chat.id;
+              final deletingUnassigned =
+                  chatService.getConversation(chat.id)?.assistantId ==
+                  AssistantProvider.unassignedAssistantId;
               final nextId = _nextRecentConversation(chatService, chat.id);
               await ChatActions.cancelActiveGenerationFor(chat.id);
               await chatService.deleteConversation(chat.id);
@@ -393,6 +401,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                 chatService: chatService,
                 deletingCurrent: deletingCurrent,
                 nextConversationId: nextId,
+                deletedUnassigned: deletingUnassigned,
               );
               Navigator.of(context).maybePop();
             },
@@ -593,6 +602,9 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                         if (!confirmed) return;
                         final deletingCurrent =
                             chatService.currentConversationId == chat.id;
+                        final deletingUnassigned =
+                            chatService.getConversation(chat.id)?.assistantId ==
+                            AssistantProvider.unassignedAssistantId;
                         final nextId = _nextRecentConversation(
                           chatService,
                           chat.id,
@@ -610,6 +622,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                           chatService: chatService,
                           deletingCurrent: deletingCurrent,
                           nextConversationId: nextId,
+                          deletedUnassigned: deletingUnassigned,
                         );
                         Navigator.of(context).maybePop();
                       },
@@ -711,6 +724,8 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
   }
 
   void _enterAssistantSelectionMode(String seedId) {
+    // 未指定助手不参与多选。
+    if (seedId == AssistantProvider.unassignedAssistantId) return;
     Haptics.light();
     if (!mounted) return;
     setState(() {
@@ -730,6 +745,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
   }
 
   void _toggleAssistantSelected(String id) {
+    if (id == AssistantProvider.unassignedAssistantId) return;
     setState(() {
       if (!_selectedAssistantIds.add(id)) _selectedAssistantIds.remove(id);
     });
@@ -739,30 +755,24 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final ids = List<String>.of(_selectedAssistantIds);
     if (ids.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.assistantSelectionDeleteConfirmTitle),
-        content: Text(l10n.assistantSelectionDeleteConfirmContent(ids.length)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.assistantSettingsDeleteDialogCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.assistantSelectionDelete),
-          ),
-        ],
-      ),
+    final choice = await showAssistantDeleteConfirmDialog(
+      context,
+      title: l10n.assistantSelectionDeleteConfirmTitle,
+      content: l10n.assistantSelectionDeleteConfirmContent(ids.length),
+      keepConversationsOption: l10n.assistantDeleteConversationsOption,
+      cancelLabel: l10n.assistantSettingsDeleteDialogCancel,
+      confirmLabel: l10n.assistantSelectionDelete,
     );
-    if (!mounted || confirmed != true) return;
+    if (!mounted || choice == null) return;
     final provider = context.read<AssistantProvider>();
     for (final id in ids) {
       await ChatActions.cancelActiveGenerationsForAssistant(id);
     }
     if (!mounted) return;
-    await provider.deleteAssistants(ids);
+    await provider.deleteAssistants(
+      ids,
+      deleteConversations: choice.deleteConversations,
+    );
     if (!mounted) return;
     final remainingIds = provider.assistants.map((a) => a.id).toSet();
     await context.read<AssistantGroupProvider>().assignAssistantsToGroup(
@@ -818,12 +828,22 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final chatService = context.read<ChatService>();
     final l10n = AppLocalizations.of(context)!;
     final deletingCurrent = ids.contains(chatService.currentConversationId);
+    final hadUnassigned = ids.any(
+      (id) =>
+          chatService.getConversation(id)?.assistantId ==
+          AssistantProvider.unassignedAssistantId,
+    );
     final nextId = _nextRecentConversationExcluding(chatService, ids.toSet());
     for (final id in ids) {
       await ChatActions.cancelActiveGenerationFor(id);
     }
     final deleted = await chatService.deleteConversations(ids);
     if (!mounted) return;
+    final deletedUnassigned =
+        hadUnassigned &&
+        !chatService.hasConversationsForAssistant(
+          AssistantProvider.unassignedAssistantId,
+        );
     showAppSnackBar(
       context,
       message: l10n.sideDrawerDeleteSelectedSnackbar(deleted),
@@ -834,6 +854,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
       chatService: chatService,
       deletingCurrent: deletingCurrent,
       nextConversationId: nextId,
+      deletedUnassigned: deletedUnassigned,
     );
     _exitSelectionMode();
   }
@@ -946,8 +967,14 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     required ChatService chatService,
     required bool deletingCurrent,
     required String? nextConversationId,
+    bool deletedUnassigned = false,
   }) {
     if (!(deletingCurrent || chatService.currentConversationId == null)) return;
+    // 未指定助手的最后一个会话被删后，不触发新建：回到空状态。
+    if (deletedUnassigned && nextConversationId == null) {
+      widget.onClearConversation?.call();
+      return;
+    }
     final closeDrawer = !context
         .read<SettingsProvider>()
         .keepSidebarOpenOnTopicTap;
@@ -1923,12 +1950,22 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                               context
                                   .read<AssistantProvider>()
                                   .assistants
+                                  .where(
+                                    (a) =>
+                                        a.id !=
+                                        AssistantProvider.unassignedAssistantId,
+                                  )
                                   .length,
                           onCancel: _exitAssistantSelectionMode,
                           onToggleSelectAll: () {
                             final ids = context
                                 .read<AssistantProvider>()
                                 .assistants
+                                .where(
+                                  (a) =>
+                                      a.id !=
+                                      AssistantProvider.unassignedAssistantId,
+                                )
                                 .map((a) => a.id)
                                 .toList();
                             setState(() {
@@ -2518,7 +2555,14 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                     return _buildGlobalSearchResultsList(context);
                   }
                   if (assistOnly || _assistantSelectionMode) {
-                    return _buildAssistantsList(context, inlineMode: true);
+                    // 助手列表的可见性依赖会话归属（未指定助手无会话时隐藏），
+                    // 所以必须跟着会话列表版本立刻重建。
+                    return Selector<ChatService, int>(
+                      selector: (_, service) =>
+                          service.conversationListRevision,
+                      builder: (context, _, __) =>
+                          _buildAssistantsList(context, inlineMode: true),
+                    );
                   }
                   // 侧边栏细粒度订阅（缓存方案第 16 项）：
                   // 列表仅在会话列表语义变化时重建；
@@ -2556,7 +2600,12 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                             : 10.0;
                         return _DesktopTabViews(
                           controller: _tabController!,
-                          buildAssistants: () => _buildAssistantsList(context),
+                          buildAssistants: () => Selector<ChatService, int>(
+                            selector: (_, service) =>
+                                service.conversationListRevision,
+                            builder: (context, _, __) =>
+                                _buildAssistantsList(context),
+                          ),
                           buildConversations: () => _buildConversationsList(
                             context,
                             cs,
@@ -3645,6 +3694,15 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final textBase2 = Theme.of(context).colorScheme.onSurface;
 
     List<AssistantListItem> assistants = ap2.assistantDirectory;
+    // 未指定助手没有会话时不占位置。
+    final chatForAssistants = context.watch<ChatService>();
+    assistants = assistants
+        .where(
+          (a) =>
+              a.id != AssistantProvider.unassignedAssistantId ||
+              chatForAssistants.hasConversationsForAssistant(a.id),
+        )
+        .toList();
     // 在以下情况下应用搜索筛选：
     // - 桌面标签模式（inlineMode == false），或
     // - 桌面仅助手模式（主题在右侧时，助手在左侧边栏）
@@ -3660,6 +3718,11 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final ungrouped = <AssistantListItem>[];
     final groupedByGroup = <String, List<AssistantListItem>>{};
     for (final assistant in assistants) {
+      // 未指定助手固定在最上面（未分组区），不参与分组。
+      if (assistant.id == AssistantProvider.unassignedAssistantId) {
+        ungrouped.add(assistant);
+        continue;
+      }
       final groupId = groupProvider.groupOfAssistant(assistant.id);
       if (groupId == null) {
         ungrouped.add(assistant);
@@ -3740,10 +3803,12 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
         );
       }
       final assistant = entry.assistant!;
+      final isUnassigned =
+          assistant.id == AssistantProvider.unassignedAssistantId;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: _AssistantInlineTile(
-          avatar: reorderHandle
+          avatar: reorderHandle && !isUnassigned
               ? ReorderableDragStartListener(
                   index: index,
                   child: AssistantAvatar.fromListItem(
@@ -3760,17 +3825,26 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
           docked: _docked,
           pointerInteractions: _pointerInteractions,
           selected: ap2.currentAssistantId == assistant.id,
-          selectionMode: _assistantSelectionMode,
-          selectedForSelection: _selectedAssistantIds.contains(assistant.id),
-          onToggleSelect: () => _toggleAssistantSelected(assistant.id),
+          selectionMode: _assistantSelectionMode && !isUnassigned,
+          selectedForSelection:
+              !isUnassigned && _selectedAssistantIds.contains(assistant.id),
+          onToggleSelect: isUnassigned
+              ? null
+              : () => _toggleAssistantSelected(assistant.id),
           onTap: () => _handleSelectAssistant(assistant.id),
-          onEditTap: () => _openAssistantSettings(assistant.id),
-          onLongPress: () => _assistantSelectionMode
-              ? _toggleAssistantSelected(assistant.id)
-              : _showAssistantItemMenu(assistant.id),
-          onSecondaryTapDown: (pos) => _assistantSelectionMode
-              ? _toggleAssistantSelected(assistant.id)
-              : _showAssistantItemMenu(assistant.id, anchor: pos),
+          onEditTap: isUnassigned
+              ? null
+              : () => _openAssistantSettings(assistant.id),
+          onLongPress: isUnassigned
+              ? null
+              : () => _assistantSelectionMode
+                    ? _toggleAssistantSelected(assistant.id)
+                    : _showAssistantItemMenu(assistant.id),
+          onSecondaryTapDown: isUnassigned
+              ? null
+              : (pos) => _assistantSelectionMode
+                    ? _toggleAssistantSelected(assistant.id)
+                    : _showAssistantItemMenu(assistant.id, anchor: pos),
         ),
       );
     }
@@ -4951,7 +5025,7 @@ class _AssistantInlineTile extends StatefulWidget {
     required this.docked,
     required this.pointerInteractions,
     required this.onTap,
-    required this.onEditTap,
+    this.onEditTap,
     this.onLongPress,
     this.onSecondaryTapDown,
     this.selected = false,
@@ -4966,7 +5040,7 @@ class _AssistantInlineTile extends StatefulWidget {
   final bool docked;
   final bool pointerInteractions;
   final VoidCallback onTap;
-  final VoidCallback onEditTap;
+  final VoidCallback? onEditTap;
   final VoidCallback? onLongPress;
   final void Function(Offset globalPosition)? onSecondaryTapDown;
   final bool selected;
@@ -5047,7 +5121,7 @@ class _AssistantInlineTileState extends State<_AssistantInlineTile> {
                 ),
               ),
             ),
-            if (!widget.pointerInteractions) ...[
+            if (!widget.pointerInteractions && widget.onEditTap != null) ...[
               const SizedBox(width: 8),
               IosIconButton(
                 icon: Lucide.Pencil,

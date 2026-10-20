@@ -14,6 +14,7 @@ import '../../features/world_book/utils/world_book_import.dart';
 import '../../icons/lucide_adapter.dart' as lucide;
 import '../../l10n/app_localizations.dart';
 import '../../shared/widgets/ios_switch.dart';
+import '../../shared/widgets/long_text_field.dart';
 import '../../shared/widgets/snackbar.dart';
 import '../widgets/desktop_select_dropdown.dart';
 import '../../theme/app_font_weights.dart';
@@ -1394,11 +1395,10 @@ class _WorldBookEntryEditDialogState extends State<_WorldBookEntryEditDialog> {
                             child: _labeledField(
                               cs: cs,
                               label: l10n.worldBookEntryContentLabel,
-                              child: TextField(
+                              child: LongTextField(
                                 controller: _contentController,
                                 minLines: 12,
                                 maxLines: 18,
-                                keyboardType: TextInputType.multiline,
                                 decoration: _deskInputDecoration(context)
                                     .copyWith(
                                       hintText: l10n.worldBookEntryContentLabel,

@@ -54,6 +54,7 @@ class HomeDesktopScaffold extends StatelessWidget {
     required this.onToggleRightSidebar,
     required this.onSelectConversation,
     required this.onNewConversation,
+    this.onClearConversation,
     required this.onCreateNewConversation,
     required this.onToggleTemporaryConversation,
     required this.onSelectModel,
@@ -91,6 +92,7 @@ class HomeDesktopScaffold extends StatelessWidget {
   final VoidCallback onToggleRightSidebar;
   final void Function(String id) onSelectConversation;
   final VoidCallback onNewConversation;
+  final Future<void> Function()? onClearConversation;
   final Future<void> Function() onCreateNewConversation;
   final Future<void> Function() onToggleTemporaryConversation;
   final VoidCallback onSelectModel;
@@ -206,6 +208,7 @@ class HomeDesktopScaffold extends StatelessWidget {
       },
       onOpenGlobalSearchResult: onOpenGlobalSearchResult,
       onNewConversation: ({closeDrawer = true}) => onNewConversation(),
+      onClearConversation: onClearConversation,
       onSelectConversation: (id, {closeDrawer = true}) =>
           onSelectConversation(id),
     );
@@ -272,6 +275,7 @@ class HomeDesktopScaffold extends StatelessWidget {
                       onSelectConversation(id),
                   onNewConversation: ({closeDrawer = true}) =>
                       onNewConversation(),
+                  onClearConversation: onClearConversation,
                 ),
               ),
             ),

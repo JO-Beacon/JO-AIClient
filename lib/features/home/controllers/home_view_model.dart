@@ -446,6 +446,17 @@ class HomeViewModel extends ChangeNotifier {
     }
 
     final activeConversation = conversation ?? currentConversation!;
+    if (!_contextProvider.mounted) {
+      return ChatInputSubmissionResult.rejected;
+    }
+    // 未指定助手只用于存放无主会话，不能继续生成内容。
+    final resolvedAssistant = _contextProvider
+        .read<AssistantProvider>()
+        .resolveConversationAssistant(activeConversation.assistantId);
+    if (resolvedAssistant?.id == AssistantProvider.unassignedAssistantId) {
+      onWarning?.call('unassigned_assistant');
+      return ChatInputSubmissionResult.rejected;
+    }
     if (_queuedInput != null &&
         _chatService.getConversation(_queuedInput!.conversationId) == null) {
       _queuedInput = null;
@@ -1164,6 +1175,10 @@ class HomeViewModel extends ChangeNotifier {
     }
     if (!_contextProvider.mounted) return null;
     final targetAssistantId = assistantId ?? ap.currentAssistantId;
+    // 未指定助手只用于存放已失去归属的会话，不能新建。
+    if (targetAssistantId == AssistantProvider.unassignedAssistantId) {
+      return null;
+    }
     final a = ap.getById(targetAssistantId ?? '');
     final existingEntryId = _chatService.composerDrafts
         ?.newEntry(targetAssistantId)
@@ -1240,6 +1255,9 @@ class HomeViewModel extends ChangeNotifier {
       return;
     }
     if (!_contextProvider.mounted) return;
+    if (ap.currentAssistantId == AssistantProvider.unassignedAssistantId) {
+      return;
+    }
     final conversation = await _chatService.createDraftConversation(
       title: AppLocalizations.of(_contextProvider)!.temporaryChatTitle,
       assistantId: ap.currentAssistantId,

@@ -8,6 +8,7 @@ import '../../../core/providers/quick_phrase_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/services/haptics.dart';
 import '../../../theme/app_font_weights.dart';
+import '../../../shared/widgets/long_text_field.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
 class QuickPhrasesPage extends StatefulWidget {
@@ -415,7 +416,7 @@ class _QuickPhraseEditSheetState extends State<_QuickPhraseEditSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            LongTextField(
               controller: _contentController,
               maxLines: 5,
               decoration: InputDecoration(

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../home/controllers/chat_actions.dart';
+import '../../../core/services/chat/chat_service.dart';
 import '../../../core/models/assistant_list_item.dart';
 import 'assistant_settings_edit_page.dart';
 import '../../home/widgets/assistant_avatar.dart';
@@ -12,6 +13,7 @@ import '../../../core/services/haptics.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
+import '../../../shared/dialogs/assistant_delete_confirm_dialog.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
@@ -34,6 +36,7 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage> {
   final Set<String> _selectedIds = <String>{};
 
   void _enterSelection(String id) {
+    if (id == AssistantProvider.unassignedAssistantId) return;
     setState(() {
       _selectionMode = true;
       _selectedIds.add(id);
@@ -46,11 +49,14 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage> {
   });
 
   void _toggleSelectAll(List<AssistantListItem> assistants) {
+    final selectable = assistants
+        .where((a) => a.id != AssistantProvider.unassignedAssistantId)
+        .toList();
     setState(() {
-      if (_selectedIds.length == assistants.length) {
+      if (_selectedIds.length == selectable.length) {
         _selectedIds.clear();
       } else {
-        _selectedIds.addAll(assistants.map((a) => a.id));
+        _selectedIds.addAll(selectable.map((a) => a.id));
       }
     });
   }
@@ -59,30 +65,24 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage> {
     final ids = List<String>.of(_selectedIds);
     if (ids.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.assistantSelectionDeleteConfirmTitle),
-        content: Text(l10n.assistantSelectionDeleteConfirmContent(ids.length)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.assistantSettingsDeleteDialogCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.assistantSelectionDelete),
-          ),
-        ],
-      ),
+    final choice = await showAssistantDeleteConfirmDialog(
+      context,
+      title: l10n.assistantSelectionDeleteConfirmTitle,
+      content: l10n.assistantSelectionDeleteConfirmContent(ids.length),
+      keepConversationsOption: l10n.assistantDeleteConversationsOption,
+      cancelLabel: l10n.assistantSettingsDeleteDialogCancel,
+      confirmLabel: l10n.assistantSelectionDelete,
     );
-    if (!mounted || confirmed != true) return;
+    if (!mounted || choice == null) return;
     for (final id in ids) {
       await ChatActions.cancelActiveGenerationsForAssistant(id);
     }
     if (!mounted) return;
     final assistantProvider = context.read<AssistantProvider>();
-    await assistantProvider.deleteAssistants(ids);
+    await assistantProvider.deleteAssistants(
+      ids,
+      deleteConversations: choice.deleteConversations,
+    );
     if (!mounted) return;
     final remainingIds = assistantProvider.assistants.map((a) => a.id).toSet();
     final deletedIds = ids.where((id) => !remainingIds.contains(id));
@@ -111,7 +111,14 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage> {
     final cs = Theme.of(context).colorScheme;
 
     final provider = context.watch<AssistantProvider>();
-    final assistants = provider.assistantDirectory;
+    final chatService = context.watch<ChatService>();
+    final assistants = provider.assistantDirectory
+        .where(
+          (a) =>
+              a.id != AssistantProvider.unassignedAssistantId ||
+              chatService.hasConversationsForAssistant(a.id),
+        )
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -223,9 +230,12 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage> {
             padding: const EdgeInsets.only(bottom: 10),
             child: _AssistantCard(
               item: item,
-              selectionMode: _selectionMode,
+              selectionMode:
+                  _selectionMode &&
+                  item.id != AssistantProvider.unassignedAssistantId,
               selected: _selectedIds.contains(item.id),
               onToggleSelect: () {
+                if (item.id == AssistantProvider.unassignedAssistantId) return;
                 if (!_selectionMode) {
                   _enterSelection(item.id);
                 } else {
@@ -240,7 +250,9 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage> {
           );
           return KeyedSubtree(
             key: ValueKey('reorder-assistant-${item.id}'),
-            child: _selectionMode
+            child:
+                _selectionMode ||
+                    item.id == AssistantProvider.unassignedAssistantId
                 ? card
                 : ReorderableDelayedDragStartListener(
                     index: index,
@@ -373,125 +385,136 @@ class _AssistantCard extends StatelessWidget {
         motion: const StretchMotion(),
         extentRatio: 0.6,
         children: [
-          CustomSlidableAction(
-            autoClose: true,
-            backgroundColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            onPressed: (_) async {
-              final assistantProvider = context.read<AssistantProvider>();
-              final newId = await assistantProvider.duplicateAssistant(
-                item.id,
-                l10n: l10n,
-                insertAtTop: context
-                    .read<SettingsProvider>()
-                    .insertNewAssistantAtTop,
-              );
-              if (!context.mounted) return;
-              if (newId != null) {
-                showAppSnackBar(
-                  context,
-                  message: l10n.assistantSettingsCopySuccess,
-                  type: NotificationType.success,
+          if (item.id != AssistantProvider.unassignedAssistantId)
+            CustomSlidableAction(
+              autoClose: true,
+              backgroundColor: Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              onPressed: (_) async {
+                final assistantProvider = context.read<AssistantProvider>();
+                final newId = await assistantProvider.duplicateAssistant(
+                  item.id,
+                  l10n: l10n,
+                  insertAtTop: context
+                      .read<SettingsProvider>()
+                      .insertNewAssistantAtTop,
                 );
-              }
-            },
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? cs.primary.withValues(alpha: 0.16)
-                    : cs.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: SizedBox.expand(
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Lucide.Copy, color: cs.primary, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          l10n.assistantSettingsCopyButton,
-                          style: TextStyle(
-                            color: cs.primary,
-                            fontWeight: AppFontWeights.emphasis,
+                if (!context.mounted) return;
+                if (newId != null) {
+                  showAppSnackBar(
+                    context,
+                    message: l10n.assistantSettingsCopySuccess,
+                    type: NotificationType.success,
+                  );
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? cs.primary.withValues(alpha: 0.16)
+                      : cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: SizedBox.expand(
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Lucide.Copy, color: cs.primary, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            l10n.assistantSettingsCopyButton,
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontWeight: AppFontWeights.emphasis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          CustomSlidableAction(
-            autoClose: true,
-            backgroundColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            onPressed: (_) async {
-              final assistantProvider = context.read<AssistantProvider>();
-              final count = assistantProvider.assistants.length;
-              if (count <= 1) {
-                showAppSnackBar(
-                  context,
-                  message: l10n.assistantSettingsAtLeastOneAssistantRequired,
-                  type: NotificationType.warning,
+          if (item.id != AssistantProvider.unassignedAssistantId)
+            CustomSlidableAction(
+              autoClose: true,
+              backgroundColor: Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              onPressed: (_) async {
+                final assistantProvider = context.read<AssistantProvider>();
+                final count = assistantProvider.assistants.length;
+                if (count <= 1) {
+                  showAppSnackBar(
+                    context,
+                    message: l10n.assistantSettingsAtLeastOneAssistantRequired,
+                    type: NotificationType.warning,
+                  );
+                  return;
+                }
+                final choice = await _confirmDelete(context, l10n);
+                if (!context.mounted || choice == null) return;
+                await ChatActions.cancelActiveGenerationsForAssistant(item.id);
+                if (!context.mounted) return;
+                final success = await assistantProvider.deleteAssistant(
+                  item.id,
+                  deleteConversations: choice.deleteConversations,
                 );
-                return;
-              }
-              final ok = await _confirmDelete(context, l10n);
-              if (!context.mounted || ok != true) return;
-              await ChatActions.cancelActiveGenerationsForAssistant(item.id);
-              if (!context.mounted) return;
-              final success = await assistantProvider.deleteAssistant(item.id);
-              if (!context.mounted) return;
-              if (success != true) {
-                showAppSnackBar(
-                  context,
-                  message: l10n.assistantSettingsAtLeastOneAssistantRequired,
-                  type: NotificationType.warning,
-                );
-              }
-            },
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? cs.error.withValues(alpha: 0.22)
-                    : cs.error.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cs.error.withValues(alpha: 0.35)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: SizedBox.expand(
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Lucide.Trash2, color: cs.error, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          l10n.assistantSettingsDeleteButton,
-                          style: TextStyle(
-                            color: cs.error,
-                            fontWeight: AppFontWeights.emphasis,
+                if (!context.mounted) return;
+                if (success != true) {
+                  showAppSnackBar(
+                    context,
+                    message: l10n.assistantSettingsAtLeastOneAssistantRequired,
+                    type: NotificationType.warning,
+                  );
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? cs.error.withValues(alpha: 0.22)
+                      : cs.error.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.error.withValues(alpha: 0.35)),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: SizedBox.expand(
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Lucide.Trash2, color: cs.error, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            l10n.assistantSettingsDeleteButton,
+                            style: TextStyle(
+                              color: cs.error,
+                              fontWeight: AppFontWeights.emphasis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
       child: content,
@@ -703,32 +726,17 @@ Future<String?> _showAddAssistantSheet(BuildContext context) async {
   return trimmed;
 }
 
-Future<bool?> _confirmDelete(
+Future<AssistantDeleteChoice?> _confirmDelete(
   BuildContext context,
   AppLocalizations l10n,
-) async {
-  return showDialog<bool>(
-    context: context,
-    builder: (ctx) {
-      final cs = Theme.of(ctx).colorScheme;
-      return AlertDialog(
-        title: Text(l10n.assistantSettingsDeleteDialogTitle),
-        content: Text(l10n.assistantSettingsDeleteDialogContent),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.assistantSettingsDeleteDialogCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(
-              l10n.assistantSettingsDeleteDialogConfirm,
-              style: TextStyle(color: cs.error),
-            ),
-          ),
-        ],
-      );
-    },
+) {
+  return showAssistantDeleteConfirmDialog(
+    context,
+    title: l10n.assistantSettingsDeleteDialogTitle,
+    content: l10n.assistantSettingsDeleteDialogContent,
+    keepConversationsOption: l10n.assistantDeleteConversationsOption,
+    cancelLabel: l10n.assistantSettingsDeleteDialogCancel,
+    confirmLabel: l10n.assistantSettingsDeleteDialogConfirm,
   );
 }
 

@@ -16,9 +16,11 @@ import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
 import '../../../utils/platform_utils.dart';
+import '../../../core/providers/settings_provider.dart';
 
 final DateFormat memoryEntryDateFormat = DateFormat('yyyy-MM-dd');
 
@@ -1224,6 +1226,19 @@ class _MemoryEntryEditFormState extends State<MemoryEntryEditForm> {
             textAlign: TextAlign.start,
             textInputAction: TextInputAction.newline,
             keyboardType: TextInputType.multiline,
+            editorBuilder:
+                context.watch<SettingsProvider>().useLongMessageEditor
+                ? (ctx) => LongMessageEditor(
+                    controller: _content,
+                    minLines: 4,
+                    maxLines: 10,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isCollapsed: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  )
+                : null,
           ),
         ],
       ),

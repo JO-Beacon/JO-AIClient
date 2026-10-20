@@ -32,7 +32,14 @@ void main() {
     await provider.loaded;
 
     expect(await provider.deleteAssistants(const ['a', 'b', 'c']), 2);
-    expect(provider.assistants, hasLength(1));
+    // 保留一个真实助手，另外始终有“未指定助手”这个内置条目。
+    expect(provider.assistants, hasLength(2));
+    expect(
+      provider.assistants.where(
+        (a) => a.id != AssistantProvider.unassignedAssistantId,
+      ),
+      hasLength(1),
+    );
     expect(await provider.deleteAssistants(const ['a']), 0);
   });
 
@@ -40,9 +47,18 @@ void main() {
     final provider = AssistantGroupProvider(preferences: session.preferences);
     final groupId = await provider.createGroup('Work');
 
-    await provider.assignAssistantsToGroup(const ['a', 'b'], groupId);
+    await provider.assignAssistantsToGroup(const [
+      'a',
+      'b',
+      AssistantProvider.unassignedAssistantId,
+    ], groupId);
     expect(provider.groupOfAssistant('a'), groupId);
     expect(provider.groupOfAssistant('b'), groupId);
+    // 未指定助手不参与分组。
+    expect(
+      provider.groupOfAssistant(AssistantProvider.unassignedAssistantId),
+      isNull,
+    );
 
     await provider.assignAssistantsToGroup(const ['a', 'b'], null);
     expect(provider.groupOfAssistant('a'), isNull);

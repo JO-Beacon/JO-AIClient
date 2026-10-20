@@ -340,21 +340,19 @@ class _PromptTabState extends State<_PromptTab> {
               ],
             ),
             const SizedBox(height: 10),
-            TextField(
+            LongMessageEditor(
               controller: _sysCtrl,
               focusNode: _sysFocus,
+              enabled: context.watch<SettingsProvider>().useLongMessageEditor,
+              minLines: 1,
+              maxLines: 8,
               onChanged: (v) {
                 setState(() {});
                 context.read<AssistantProvider>().updateAssistant(
                   a.copyWith(systemPrompt: v),
                 );
               },
-              // minLines: 1,
-              maxLines: 8,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
               inputFormatters: const [NormalizeNewlinesFormatter()],
-              enableInteractiveSelection: true,
               decoration: InputDecoration(
                 hintText: l10n.assistantEditSystemPromptHint,
                 border: OutlineInputBorder(
@@ -1290,15 +1288,16 @@ class _SystemPromptMobileSheetState extends State<_SystemPromptMobileSheet> {
                     color: cs.outlineVariant.withValues(alpha: 0.2),
                   ),
                 ),
-                child: TextField(
+                child: LongMessageEditor(
                   controller: _controller,
                   autofocus: true,
+                  enabled: context
+                      .watch<SettingsProvider>()
+                      .useLongMessageEditor,
                   expands: true,
                   maxLines: null,
                   minLines: null,
-                  keyboardType: TextInputType.multiline,
                   inputFormatters: const [NormalizeNewlinesFormatter()],
-                  textAlignVertical: TextAlignVertical.top,
                   decoration: InputDecoration(
                     hintText: l10n.assistantEditSystemPromptHint,
                     border: InputBorder.none,
@@ -1387,15 +1386,16 @@ class _SystemPromptDesktopDialogState
                       color: cs.outlineVariant.withValues(alpha: 0.2),
                     ),
                   ),
-                  child: TextField(
+                  child: LongMessageEditor(
                     controller: _controller,
                     autofocus: true,
+                    enabled: context
+                        .watch<SettingsProvider>()
+                        .useLongMessageEditor,
                     expands: true,
                     maxLines: null,
                     minLines: null,
-                    keyboardType: TextInputType.multiline,
                     inputFormatters: const [NormalizeNewlinesFormatter()],
-                    textAlignVertical: TextAlignVertical.top,
                     decoration: InputDecoration(
                       hintText: l10n.assistantEditSystemPromptHint,
                       border: InputBorder.none,

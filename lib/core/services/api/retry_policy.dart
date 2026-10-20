@@ -110,6 +110,8 @@ bool _isRetryableDioError(DioException error) {
     case DioExceptionType.connectionTimeout:
     case DioExceptionType.sendTimeout:
     case DioExceptionType.receiveTimeout:
+    // 响应转换超时也属于超时类；与其它超时一样允许重试。
+    case DioExceptionType.transformTimeout:
     case DioExceptionType.connectionError:
       return true;
     case DioExceptionType.unknown:

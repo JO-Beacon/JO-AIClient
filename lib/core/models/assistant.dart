@@ -18,6 +18,9 @@ enum MemoryWriteScope {
 }
 
 class Assistant {
+  /// 内置的“未指定助手”编号：只用来接收已失去归属的会话，不能新建。
+  static const String unassignedId = 'jo-unassigned-assistant';
+
   static const int defaultRecentChatsSummaryMessageCount = 5;
   static const int defaultMemoryOrganizeEveryNTurns = 1;
   static const int minMemoryOrganizeEveryNTurns = 1;

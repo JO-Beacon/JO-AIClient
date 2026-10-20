@@ -337,6 +337,21 @@ class _BackupPageState extends State<BackupPage> {
                         s3Vm.updateConfig(newS3Cfg);
                       },
                     ),
+                    _iosDivider(context),
+                    // 本机设置随包开关同时影响本地文件、WebDAV 与 S3。
+                    _iosSwitchRow(
+                      context,
+                      icon: Lucide.Settings2,
+                      label: l10n.backupIncludeLocalSettings,
+                      value: _includeLocalSettings,
+                      onChanged: _setIncludeLocalSettings,
+                    ),
+                    _BackupSubcategoryLabel(
+                      label: includeLocalSettingsSubtitle(
+                        l10n,
+                        _includeLocalSettings,
+                      ),
+                    ),
                   ],
                 ),
 
@@ -364,21 +379,6 @@ class _BackupPageState extends State<BackupPage> {
                       label: l10n.backupPageWebDavServerSettings,
                       onTap: () =>
                           _showWebDavSettingsPage(context, settings, vm, cfg),
-                    ),
-                    _iosDivider(context),
-                    // 云备份与本地导出共用同一“带本机设置”档位。
-                    _iosSwitchRow(
-                      context,
-                      icon: Lucide.Settings2,
-                      label: l10n.backupIncludeLocalSettings,
-                      value: _includeLocalSettings,
-                      onChanged: _setIncludeLocalSettings,
-                    ),
-                    _BackupSubcategoryLabel(
-                      label: includeLocalSettingsSubtitle(
-                        l10n,
-                        _includeLocalSettings,
-                      ),
                     ),
                     _iosDivider(context),
                     _iosNavRow(
@@ -812,21 +812,6 @@ class _BackupPageState extends State<BackupPage> {
                           _showS3SettingsPage(context, settings, s3Vm, s3Cfg),
                     ),
                     _iosDivider(context),
-                    // 云备份与本地导出共用同一“带本机设置”档位。
-                    _iosSwitchRow(
-                      context,
-                      icon: Lucide.Settings2,
-                      label: l10n.backupIncludeLocalSettings,
-                      value: _includeLocalSettings,
-                      onChanged: _setIncludeLocalSettings,
-                    ),
-                    _BackupSubcategoryLabel(
-                      label: includeLocalSettingsSubtitle(
-                        l10n,
-                        _includeLocalSettings,
-                      ),
-                    ),
-                    _iosDivider(context),
                     _iosNavRow(
                       context,
                       icon: Lucide.Cable,
@@ -1256,17 +1241,6 @@ class _BackupPageState extends State<BackupPage> {
               label: l10n.backupPageRestore,
               onTap: () => _doImportLocal(context, vm, joaiclient: true),
             ),
-          ),
-          _iosDivider(context),
-          _iosSwitchRow(
-            context,
-            icon: Lucide.Settings2,
-            label: l10n.backupIncludeLocalSettings,
-            value: _includeLocalSettings,
-            onChanged: _setIncludeLocalSettings,
-          ),
-          _BackupSubcategoryLabel(
-            label: includeLocalSettingsSubtitle(l10n, _includeLocalSettings),
           ),
         ],
       ),

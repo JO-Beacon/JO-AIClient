@@ -13,6 +13,7 @@ import '../core/providers/assistant_provider.dart';
 import '../core/services/api/chat_api_service.dart';
 import '../core/services/api/stream/stream_chunk.dart';
 import '../shared/widgets/snackbar.dart';
+import '../shared/widgets/long_text_field.dart';
 import '../features/model/widgets/model_select_sheet.dart'
     show showModelSelector;
 import '../features/settings/widgets/language_select_sheet.dart'
@@ -315,9 +316,8 @@ class _DesktopTranslatePageState extends State<DesktopTranslatePage> {
                                     _output.clear();
                                   },
                                 ),
-                                child: TextField(
+                                child: LongTextField(
                                   controller: _source,
-                                  keyboardType: TextInputType.multiline,
                                   maxLines: null,
                                   expands: true,
                                   decoration: InputDecoration(

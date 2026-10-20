@@ -248,6 +248,9 @@ class ChatScrollController {
   bool _autoStickToBottom = true;
   bool get autoStickToBottom => _autoStickToBottom;
 
+  /// 上一次滚动回调时的像素位置，用于分辨“内容变长”与“用户离开底部”。
+  double? _lastPixels;
+
   /// 检测用户滚动结束的计时器。
   Timer? _userScrollTimer;
 
@@ -343,11 +346,22 @@ class ChatScrollController {
     try {
       if (!_scrollController.hasClients) return;
       final autoScrollEnabled = _getAutoScrollEnabled();
+      final position = _scrollController.position;
+      final pixels = position.pixels;
+      final previousPixels = _lastPixels;
+      _lastPixels = pixels;
+      // 内容变长（流式排版、末条从估算变实测）时，与底部的距离会变大，
+      // 但像素并未向上移动；这不代表用户想停止跟随。只有像素真的上移
+      // 或用户主动滚动，才算离开底部。
+      final pixelsMovedUp =
+          previousPixels != null && pixels < previousPixels - 0.5;
 
       // 仅在不在底部附近时显示
       final atBottom = isNearBottom(24);
       if (!atBottom) {
-        _autoStickToBottom = false;
+        if (pixelsMovedUp || _isUserScrolling) {
+          _autoStickToBottom = false;
+        }
       } else if (_isUserScrolling) {
         // 用户主动滚动回底部时立即重新启用自动跟随，
         // 使流式内容无需等待空闲计时器就能继续固定。

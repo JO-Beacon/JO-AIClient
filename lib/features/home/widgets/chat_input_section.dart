@@ -88,6 +88,7 @@ class ChatInputSection extends StatelessWidget {
     this.clearContextLabel,
     this.sendButtonTooltip,
     this.backgroundImageActive = false,
+    this.hintForUnassignedAssistant = false,
   });
 
   final GlobalKey inputBarKey;
@@ -96,6 +97,9 @@ class ChatInputSection extends StatelessWidget {
   final ChatInputBarController mediaController;
   final bool isTablet;
   final bool isLoading;
+
+  /// 会话归属落在“未指定助手”时，输入框提示改为不可发送的原因。
+  final bool hintForUnassignedAssistant;
 
   // 模型能力检查器
   final IsToolModelCallback isToolModel;
@@ -189,6 +193,7 @@ class ChatInputSection extends StatelessWidget {
 
     final bar = ChatInputBar(
       key: inputBarKey,
+      hintForUnassignedAssistant: hintForUnassignedAssistant,
       chatModelProviderKey: pk,
       chatModelId: mid,
       onMore: onMore,

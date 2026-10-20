@@ -9,6 +9,7 @@ import 'package:Kelivo/core/providers/backup_reminder_provider.dart';
 import 'package:Kelivo/core/providers/assistant_group_provider.dart';
 import 'package:Kelivo/core/services/chat/chat_service.dart';
 import 'package:Kelivo/core/models/assistant.dart';
+import 'package:Kelivo/core/models/assistant_list_item.dart';
 import 'package:Kelivo/core/models/conversation.dart';
 import 'package:Kelivo/features/home/widgets/side_drawer.dart';
 import 'package:Kelivo/features/home/widgets/sidebar_presentation.dart';
@@ -150,6 +151,12 @@ class _TestAssistantProvider extends AssistantProvider {
 
   @override
   List<Assistant> get assistants => _stubAssistants;
+
+  @override
+  List<AssistantListItem> get assistantDirectory => [
+    for (var i = 0; i < _stubAssistants.length; i++)
+      AssistantListItem.fromAssistant(_stubAssistants[i], sortOrder: i),
+  ];
 
   @override
   String? get currentAssistantId => _stubCurrentAssistantId;
@@ -1218,5 +1225,116 @@ void main() {
     await tester.tap(find.text(l10n.desktopSidebarTabTopics));
     await tester.pumpAndSettle();
     expect(find.text('Topic A'), findsOneWidget);
+  });
+
+  testWidgets('未指定助手没有会话时隐藏，有会话时显示', (tester) async {
+    await asDesktop(() async {
+      final service = createService();
+      await tester.runAsync(service.init);
+      final provider = _TestAssistantProvider(
+        preferences: createBusinessTestPreferences(),
+      );
+      addTearDown(provider.dispose);
+      provider.seedAssistants(const <Assistant>[
+        Assistant(
+          id: AssistantProvider.unassignedAssistantId,
+          name: 'Unassigned',
+        ),
+        Assistant(id: 'kept-assistant', name: 'Kept'),
+      ], currentAssistantId: 'kept-assistant');
+
+      await pumpDrawer(
+        tester,
+        service,
+        desktopTopicsOnly: false,
+        desktopAssistantsOnly: true,
+        assistantProvider: provider,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Unassigned'), findsNothing);
+
+      late String orphanId;
+      await tester.runAsync(() async {
+        orphanId = (await service.createConversation(
+          title: 'Orphan topic',
+          assistantId: AssistantProvider.unassignedAssistantId,
+        )).id;
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Unassigned'), findsOneWidget);
+
+      // 把这些会话全部删掉后，未指定助手应重新隐藏；
+      // 即使应用还留着一条空的新建草稿，也不能把它撑出来。
+      await tester.runAsync(() async {
+        await service.deleteConversations([orphanId]);
+        final emptyDraft = await service.createDraftConversation(
+          title: 'Empty draft',
+          assistantId: 'kept-assistant',
+        );
+        await service.moveConversationToAssistant(
+          conversationId: emptyDraft.id,
+          assistantId: AssistantProvider.unassignedAssistantId,
+        );
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Unassigned'), findsNothing);
+    });
+  });
+
+  testWidgets('桌面标签模式下，会话删光后未指定助手也会隐藏', (tester) async {
+    await asDesktop(() async {
+      final service = createService();
+      await tester.runAsync(service.init);
+      final provider = _TestAssistantProvider(
+        preferences: createBusinessTestPreferences(),
+      );
+      addTearDown(provider.dispose);
+      provider.seedAssistants(const <Assistant>[
+        Assistant(
+          id: AssistantProvider.unassignedAssistantId,
+          name: 'Unassigned',
+        ),
+        Assistant(id: 'kept-assistant', name: 'Kept'),
+      ], currentAssistantId: 'kept-assistant');
+      late String orphanId;
+      await tester.runAsync(() async {
+        orphanId = (await service.createConversation(
+          title: 'Orphan topic',
+          assistantId: AssistantProvider.unassignedAssistantId,
+        )).id;
+      });
+
+      await pumpDrawer(
+        tester,
+        service,
+        desktopTopicsOnly: false,
+        desktopAssistantsOnly: false,
+        assistantProvider: provider,
+      );
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(SideDrawer)),
+      )!;
+      await tester.tap(find.text(l10n.desktopSidebarTabAssistants));
+      await tester.pumpAndSettle();
+      expect(find.text('Unassigned'), findsOneWidget);
+
+      await tester.runAsync(() async {
+        await service.deleteConversations([orphanId]);
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Unassigned'), findsNothing);
+    });
+  });
+
+  test('未指定助手在服务层也不能创建草稿会话', () async {
+    final service = createService();
+    await service.init();
+    await expectLater(
+      service.createDraftConversation(
+        assistantId: AssistantProvider.unassignedAssistantId,
+      ),
+      throwsStateError,
+    );
   });
 }

@@ -136,6 +136,43 @@ void main() {
     },
   );
 
+  test('取消排队中的提交后，下一次发送能重新登记', () async {
+    await store.load('a');
+    store.setInput('a', const ComposerDraftInput(text: 'queued'));
+    final queued = await store.beginSubmission('a', store.peek('a')!.active);
+    expect(store.submitting, contains('a'));
+
+    store.cancelSubmission(queued);
+
+    expect(store.submitting, isNot(contains('a')));
+    expect(store.peek('a')!.pending, isNull);
+    expect(store.peek('a')!.submissionId, isNull);
+
+    store.setInput('a', const ComposerDraftInput(text: 'queued'));
+    final next = await store.beginSubmission('a', store.peek('a')!.active);
+    expect(next.id, isNot(queued.id));
+    expect(store.peek('a')!.submissionId, next.id);
+  });
+
+  test('重启后残留的排队提交不会永久卡住这个会话的发送', () async {
+    await store.load('a');
+    store.setInput('a', const ComposerDraftInput(text: 'queued'));
+    final queued = await store.beginSubmission('a', store.peek('a')!.active);
+    await store.flush();
+
+    // 模拟重启：数据库里的 pending 还在，但内存中的 submitting 已清空。
+    await reopen();
+    await store.load('a');
+    expect(store.peek('a')!.pending, isNotNull);
+
+    store.setInput('a', const ComposerDraftInput(text: 'second try'));
+    final next = await store.beginSubmission('a', store.peek('a')!.active);
+
+    expect(next.id, isNot(queued.id));
+    expect(store.peek('a')!.submissionId, next.id);
+    expect(store.peek('a')!.pending?.text, 'second try');
+  });
+
   test(
     'editing suspends ordinary input and preserves message identity',
     () async {

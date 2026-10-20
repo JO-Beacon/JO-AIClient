@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../core/models/quick_phrase.dart';
 import '../../core/providers/quick_phrase_provider.dart';
 import '../../theme/app_font_weights.dart';
+import '../../shared/widgets/long_text_field.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 import '../widgets/desktop_dialog_style.dart';
 
@@ -335,7 +336,7 @@ class _QuickPhraseEditDialogState extends State<_QuickPhraseEditDialog> {
                     ).copyWith(hintText: l10n.quickPhraseTitleLabel),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  LongTextField(
                     controller: _contentController,
                     maxLines: 8,
                     decoration: _deskInputDecoration(

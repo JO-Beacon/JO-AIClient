@@ -23,6 +23,7 @@ import '../../../shared/widgets/ios_date_picker.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
 import '../../../shared/widgets/ios_settings_rows.dart';
 import '../../../shared/widgets/ios_tactile.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../../../shared/widgets/ios_time_picker.dart';
 import '../../../shared/widgets/option_sheet.dart';
 import '../../../shared/widgets/section_card.dart';
@@ -558,6 +559,19 @@ class _ScheduledTaskEditorPageState extends State<ScheduledTaskEditorPage> {
               inlineLabel: false,
               minLines: 4,
               maxLines: 8,
+              editorBuilder:
+                  context.watch<SettingsProvider>().useLongMessageEditor
+                  ? (ctx) => LongMessageEditor(
+                      controller: prompt,
+                      minLines: 4,
+                      maxLines: 8,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isCollapsed: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    )
+                  : null,
             ),
           ],
         ),

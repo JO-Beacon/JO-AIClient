@@ -49,7 +49,7 @@ dependencies:
   material_color_utilities: ^0.13.0
   lucide_icons_flutter: ^3.1.13
   shared_preferences: ^2.2.3
-  image_picker: 1.1.2
+  image_picker: 1.2.4
   image_cropper: ^12.2.1
   flutter_svg: ^2.2.1
   http: ^1.5.0
@@ -58,7 +58,7 @@ dependencies:
   # Claude OAuth 的请求校验值用 XXHash64（与上游一致）
   hashlib: ^2.4.2
   ffi: ^2.2.0
-  dio: 5.9.2
+  dio: 5.11.1
   socks5_proxy: ^2.1.1
   jose: ^0.3.4
   reorderable_grid_view: ^2.2.8
@@ -84,7 +84,7 @@ dependencies:
   xml: ^6.5.0
   open_filex: ^4.5.0
   easy_image_viewer: ^1.4.6
-  share_plus: ^11.1.0
+  share_plus: ^12.0.2
   pretty_qr_code: ^3.5.0
   mobile_scanner: ^7.0.1
   mcp_client: # ^1.0.2

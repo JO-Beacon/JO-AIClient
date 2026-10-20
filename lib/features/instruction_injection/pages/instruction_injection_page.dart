@@ -11,9 +11,12 @@ import '../../../l10n/app_localizations.dart';
 import '../../../core/models/instruction_injection.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/providers/instruction_injection_group_provider.dart';
+import '../../../core/providers/settings_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/services/haptics.dart';
 import '../../../shared/widgets/snackbar.dart';
+import '../../../shared/widgets/long_message_editor.dart';
+import '../../../utils/newline_normalization.dart';
 import '../../../theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
@@ -676,9 +679,12 @@ class _InstructionInjectionEditSheetState
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            LongMessageEditor(
               controller: _promptController,
+              enabled: context.watch<SettingsProvider>().useLongMessageEditor,
+              minLines: 1,
               maxLines: 8,
+              inputFormatters: const [NormalizeNewlinesFormatter()],
               decoration: InputDecoration(
                 labelText: l10n.instructionInjectionPromptLabel,
                 alignLabelWithHint: true,

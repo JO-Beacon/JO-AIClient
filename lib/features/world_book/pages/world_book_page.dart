@@ -9,17 +9,20 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/models/world_book.dart';
+import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/services/haptics.dart';
 import '../utils/world_book_import.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/section_card.dart';
 import '../../../theme/app_font_weights.dart';
+import '../../../utils/newline_normalization.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
 class WorldBookPage extends StatefulWidget {
@@ -1735,6 +1738,24 @@ class _WorldBookEntryEditSheetState extends State<_WorldBookEntryEditSheet> {
                           inlineLabel: false,
                           textAlign: TextAlign.start,
                           textInputAction: TextInputAction.newline,
+                          editorBuilder:
+                              context
+                                  .watch<SettingsProvider>()
+                                  .useLongMessageEditor
+                              ? (ctx) => LongMessageEditor(
+                                  controller: _contentController,
+                                  minLines: 8,
+                                  maxLines: 12,
+                                  inputFormatters: const [
+                                    NormalizeNewlinesFormatter(),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    isCollapsed: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                )
+                              : null,
                         ),
                       ],
                     ),

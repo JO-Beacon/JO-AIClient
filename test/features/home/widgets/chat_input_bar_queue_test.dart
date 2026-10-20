@@ -42,6 +42,7 @@ void main() {
     ReasoningRequest? reasoning,
     bool reasoningCustomBudget = false,
     bool reasoningActive = false,
+    bool hintForUnassignedAssistant = false,
   }) {
     return MultiProvider(
       providers: [
@@ -84,6 +85,7 @@ void main() {
             reasoning: reasoning,
             reasoningCustomBudget: reasoningCustomBudget,
             reasoningActive: reasoningActive,
+            hintForUnassignedAssistant: hintForUnassignedAssistant,
           ),
         ),
       ),
@@ -842,6 +844,27 @@ void main() {
     await tester.pump();
 
     expect(find.text('2.0k'), findsOneWidget);
+  });
+
+  testWidgets('未指定助手下的会话显示专用提示语', (tester) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      buildHarness(
+        controller: controller,
+        focusNode: focusNode,
+        hintForUnassignedAssistant: true,
+        onSend: (input) async => ChatInputSubmissionResult.sent,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final l10n = AppLocalizations.of(tester.element(find.byType(Scaffold)))!;
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    expect(field.decoration?.hintText, l10n.chatInputBarHintUnassigned);
   });
 }
 

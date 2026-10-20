@@ -10,6 +10,7 @@ import '../../../desktop/setting/memory_dialogs.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_switch.dart';
+import '../../../shared/widgets/long_text_field.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../widgets/memory_ui.dart';
@@ -887,11 +888,10 @@ class _PromptField extends StatelessWidget {
         border: Border.all(color: context.appColors.fieldBorder),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      child: TextField(
+      child: LongTextField(
         controller: controller,
         maxLines: null,
         minLines: 12,
-        textAlignVertical: TextAlignVertical.top,
         style: TextStyle(fontSize: 13.5, height: 1.5, color: cs.onSurface),
         decoration: const InputDecoration(
           isCollapsed: true,

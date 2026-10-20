@@ -58,9 +58,12 @@ class BackupScopeTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            // 固定占据右半边并右对齐：既不留空隙，窄屏也不会溢出。
             Flexible(
+              fit: FlexFit.tight,
               child: Text(
                 l10n.backupScopeSummary(selected, total),
+                textAlign: TextAlign.right,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

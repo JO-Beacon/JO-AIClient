@@ -11,6 +11,7 @@ import '../../../core/providers/assistant_group_provider.dart';
 import '../../../desktop/desktop_context_menu.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/dialogs/assistant_delete_confirm_dialog.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../assistant/pages/assistant_settings_edit_page.dart';
@@ -20,6 +21,10 @@ import 'package:Kelivo/theme/app_font_weights.dart';
 
 class AssistantEntryActions {
   const AssistantEntryActions._();
+
+  /// “未指定助手”是内置条目：可查看、可接收会话，但不能改名或删除。
+  static bool _isUnassigned(Assistant assistant) =>
+      assistant.id == AssistantProvider.unassignedAssistantId;
 
   static bool get _isDesktopPlatform =>
       defaultTargetPlatform == TargetPlatform.macOS ||
@@ -50,6 +55,8 @@ class AssistantEntryActions {
     VoidCallback? beforeAction,
     VoidCallback? onSelect,
   }) async {
+    // 未指定助手是内置条目：不提供复制、多选、分组、改名或删除。
+    if (_isUnassigned(assistant)) return;
     if (_isDesktopPlatform) {
       if (globalPosition == null) return;
       await _showAssistantItemMenuDesktop(
@@ -102,15 +109,16 @@ class AssistantEntryActions {
       context,
       globalPosition: globalPosition,
       items: [
-        DesktopContextMenuItem(
-          icon: Lucide.Pencil,
-          label: l10n.assistantGroupsContextMenuEditAssistant,
-          onTap: () => openAssistantSettings(
-            context,
-            assistant.id,
-            beforeAction: beforeAction,
+        if (!_isUnassigned(assistant))
+          DesktopContextMenuItem(
+            icon: Lucide.Pencil,
+            label: l10n.assistantGroupsContextMenuEditAssistant,
+            onTap: () => openAssistantSettings(
+              context,
+              assistant.id,
+              beforeAction: beforeAction,
+            ),
           ),
-        ),
         if (onSelect != null)
           DesktopContextMenuItem(
             icon: Lucide.CheckSquare,
@@ -150,15 +158,16 @@ class AssistantEntryActions {
             );
           },
         ),
-        DesktopContextMenuItem(
-          icon: Lucide.Trash2,
-          label: l10n.assistantGroupsContextMenuDeleteAssistant,
-          danger: true,
-          onTap: () async {
-            beforeAction?.call();
-            await _deleteAssistant(context, assistant);
-          },
-        ),
+        if (!_isUnassigned(assistant))
+          DesktopContextMenuItem(
+            icon: Lucide.Trash2,
+            label: l10n.assistantGroupsContextMenuDeleteAssistant,
+            danger: true,
+            onTap: () async {
+              beforeAction?.call();
+              await _deleteAssistant(context, assistant);
+            },
+          ),
       ],
     );
   }
@@ -229,15 +238,16 @@ class AssistantEntryActions {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                row(
-                  l10n.assistantGroupsContextMenuEditAssistant,
-                  Lucide.Pencil,
-                  () => openAssistantSettings(
-                    context,
-                    assistant.id,
-                    beforeAction: beforeAction,
+                if (!_isUnassigned(assistant))
+                  row(
+                    l10n.assistantGroupsContextMenuEditAssistant,
+                    Lucide.Pencil,
+                    () => openAssistantSettings(
+                      context,
+                      assistant.id,
+                      beforeAction: beforeAction,
+                    ),
                   ),
-                ),
                 if (onSelect != null)
                   row(
                     l10n.assistantSelectionActionSelect,
@@ -276,15 +286,16 @@ class AssistantEntryActions {
                     );
                   },
                 ),
-                row(
-                  l10n.assistantGroupsContextMenuDeleteAssistant,
-                  Lucide.Trash2,
-                  () async {
-                    beforeAction?.call();
-                    await _deleteAssistant(context, assistant);
-                  },
-                  danger: true,
-                ),
+                if (!_isUnassigned(assistant))
+                  row(
+                    l10n.assistantGroupsContextMenuDeleteAssistant,
+                    Lucide.Trash2,
+                    () async {
+                      beforeAction?.call();
+                      await _deleteAssistant(context, assistant);
+                    },
+                    danger: true,
+                  ),
               ],
             ),
           ),
@@ -300,28 +311,22 @@ class AssistantEntryActions {
     final l10n = AppLocalizations.of(context)!;
     final assistantProvider = context.read<AssistantProvider>();
     final groupProvider = context.read<AssistantGroupProvider>();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.assistantSettingsDeleteDialogTitle),
-        content: Text(l10n.assistantSettingsDeleteDialogContent),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.assistantSettingsDeleteDialogCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.assistantSettingsDeleteDialogConfirm),
-          ),
-        ],
-      ),
+    final choice = await showAssistantDeleteConfirmDialog(
+      context,
+      title: l10n.assistantSettingsDeleteDialogTitle,
+      content: l10n.assistantSettingsDeleteDialogContent,
+      keepConversationsOption: l10n.assistantDeleteConversationsOption,
+      cancelLabel: l10n.assistantSettingsDeleteDialogCancel,
+      confirmLabel: l10n.assistantSettingsDeleteDialogConfirm,
     );
 
-    if (!context.mounted || confirmed != true) return;
+    if (!context.mounted || choice == null) return;
     await ChatActions.cancelActiveGenerationsForAssistant(assistant.id);
     if (!context.mounted) return;
-    final ok = await assistantProvider.deleteAssistant(assistant.id);
+    final ok = await assistantProvider.deleteAssistant(
+      assistant.id,
+      deleteConversations: choice.deleteConversations,
+    );
     if (!context.mounted) return;
 
     if (!ok) {

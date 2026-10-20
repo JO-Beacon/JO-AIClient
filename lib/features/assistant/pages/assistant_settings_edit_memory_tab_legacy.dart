@@ -71,7 +71,7 @@ class _LegacyMemoryTabBody extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
+                        LongTextField(
                           controller: controller,
                           minLines: 3,
                           maxLines: 8,
@@ -201,7 +201,7 @@ class _LegacyMemoryTabBody extends StatelessWidget {
                   const SizedBox(height: 12),
                   Flexible(
                     fit: FlexFit.loose,
-                    child: TextField(
+                    child: LongTextField(
                       controller: controller,
                       minLines: 1,
                       maxLines: 16,
@@ -677,7 +677,7 @@ class _LegacyMemoryTabBody extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
+                        LongTextField(
                           controller: controller,
                           minLines: 3,
                           maxLines: 8,

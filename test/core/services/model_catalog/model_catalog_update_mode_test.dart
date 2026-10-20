@@ -35,14 +35,18 @@ class _CountingClient extends http.BaseClient {
   }
 }
 
-ModelCatalogService _service(List<http.Request> requests) {
+ModelCatalogService _service(
+  List<http.Request> requests, {
+  Directory? cacheDirectory,
+  DateTime? now,
+}) {
   return ModelCatalogService(
     // 无效的内置数据：目录始终没加载成功，isStale 恒为真，便于观察刷新决策。
     loadBundledJson: () async => '{}',
     cacheDirectory: () async =>
-        Directory.systemTemp.createTemp('catalog_mode_test_'),
+        cacheDirectory ?? Directory.systemTemp.createTemp('catalog_mode_test_'),
     clientFactory: () => _CountingClient(requests),
-    now: () => DateTime.utc(2026, 1, 1),
+    now: () => now ?? DateTime.utc(2026, 1, 1),
   );
 }
 
@@ -64,14 +68,14 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final requests = <http.Request>[];
     final service = _service(requests);
-    await service.setUpdateMode(ModelCatalogUpdateMode.daily);
+    await service.setUpdateMode(ModelCatalogUpdateMode.startupDaily);
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString(kModelCatalogUpdateModePrefsKey), 'daily');
+    expect(prefs.getString(kModelCatalogUpdateModePrefsKey), 'startupDaily');
 
     final reopened = _service(requests);
     await reopened.ensureLoaded();
-    expect(reopened.updateMode, ModelCatalogUpdateMode.daily);
+    expect(reopened.updateMode, ModelCatalogUpdateMode.startupDaily);
 
     SharedPreferences.setMockInitialValues({
       kModelCatalogUpdateModePrefsKey: 'unknown-value',
@@ -81,7 +85,7 @@ void main() {
     expect(fallback.updateMode, ModelCatalogUpdateMode.manual);
   });
 
-  test('24 小时模式且数据陈旧时会联网刷新', () async {
+  test('旧版 daily 与 startup 都按“启动时检查”处理', () async {
     SharedPreferences.setMockInitialValues({
       kModelCatalogUpdateModePrefsKey: 'daily',
     });
@@ -92,6 +96,85 @@ void main() {
 
     expect(requests, hasLength(1));
     expect(requests.single.url.toString(), kModelCatalogRemoteUri.toString());
+
+    SharedPreferences.setMockInitialValues({
+      kModelCatalogUpdateModePrefsKey: 'startup',
+    });
+    final reopened = _service(requests);
+    await reopened.ensureLoaded();
+    expect(reopened.updateMode, ModelCatalogUpdateMode.startupDaily);
+  });
+
+  test('当天已成功更新过时，启动检查不再联网', () async {
+    final now = DateTime.utc(2026, 1, 1);
+    final localToday = now.toLocal();
+    final cacheDirectory = await Directory.systemTemp.createTemp(
+      'catalog_mode_today_',
+    );
+    addTearDown(() => cacheDirectory.delete(recursive: true));
+    await File(
+      '${cacheDirectory.path}/$kModelCatalogCacheFileName',
+    ).writeAsString(
+      jsonEncode({
+        'schemaVersion': 1,
+        'generatedAt': DateTime(
+          localToday.year,
+          localToday.month,
+          localToday.day,
+          9,
+        ).toUtc().toIso8601String(),
+        'providers': <String, dynamic>{},
+      }),
+    );
+    SharedPreferences.setMockInitialValues({
+      kModelCatalogUpdateModePrefsKey: 'startupDaily',
+    });
+    final requests = <http.Request>[];
+    final service = _service(
+      requests,
+      cacheDirectory: cacheDirectory,
+      now: now,
+    );
+
+    await service.maybeAutoRefresh();
+
+    expect(requests, isEmpty);
+  });
+
+  test('缓存是昨天的，启动检查仍会联网', () async {
+    final now = DateTime.utc(2026, 1, 1);
+    final localToday = now.toLocal();
+    final yesterday = DateTime(
+      localToday.year,
+      localToday.month,
+      localToday.day,
+    ).subtract(const Duration(days: 1));
+    final cacheDirectory = await Directory.systemTemp.createTemp(
+      'catalog_mode_yesterday_',
+    );
+    addTearDown(() => cacheDirectory.delete(recursive: true));
+    await File(
+      '${cacheDirectory.path}/$kModelCatalogCacheFileName',
+    ).writeAsString(
+      jsonEncode({
+        'schemaVersion': 1,
+        'generatedAt': yesterday.toUtc().toIso8601String(),
+        'providers': <String, dynamic>{},
+      }),
+    );
+    SharedPreferences.setMockInitialValues({
+      kModelCatalogUpdateModePrefsKey: 'startupDaily',
+    });
+    final requests = <http.Request>[];
+    final service = _service(
+      requests,
+      cacheDirectory: cacheDirectory,
+      now: now,
+    );
+
+    await service.maybeAutoRefresh();
+
+    expect(requests, hasLength(1));
   });
 
   test('切回手动后不再自动联网', () async {
@@ -155,9 +238,11 @@ void main() {
     await tester.pump();
 
     final manualRow = find.byKey(const ValueKey('model-catalog-update-manual'));
-    final dailyRow = find.byKey(const ValueKey('model-catalog-update-daily'));
+    final startupRow = find.byKey(
+      const ValueKey('model-catalog-update-startup-daily'),
+    );
     expect(manualRow, findsOneWidget);
-    expect(dailyRow, findsOneWidget);
+    expect(startupRow, findsOneWidget);
     expect(find.byKey(const ValueKey('model-catalog-refresh')), findsOneWidget);
 
     // 未选中的那行只有占位，没有勾。
@@ -169,13 +254,13 @@ void main() {
 
     // 默认手动：只有手动那行带勾。
     expect(checkIconIn(manualRow), Lucide.Check);
-    expect(checkIconIn(dailyRow), isNull);
+    expect(checkIconIn(startupRow), isNull);
 
-    await tester.tap(dailyRow);
+    await tester.tap(startupRow);
     await tester.pump();
 
-    expect(catalog.updateMode, ModelCatalogUpdateMode.daily);
-    expect(checkIconIn(dailyRow), Lucide.Check);
+    expect(catalog.updateMode, ModelCatalogUpdateMode.startupDaily);
+    expect(checkIconIn(startupRow), Lucide.Check);
     expect(checkIconIn(manualRow), isNull);
   });
 }

@@ -495,12 +495,32 @@ class ComposerDraftStore extends ChangeNotifier {
     }
   }
 
-  Future<DraftSubmission> beginSubmission(String id, ComposerDraftInput input) {
+  Future<DraftSubmission> beginSubmission(
+    String id,
+    ComposerDraftInput input,
+  ) async {
     final draft = _drafts[id];
     if (draft == null || suspended || _deleted.contains(id)) {
       throw StateError('composer_owner_deleted');
     }
-    if (draft.pending != null) throw StateError('composer_submission_pending');
+    if (draft.pending != null) {
+      final pendingSubmissionId = draft.submissionId;
+      final committed =
+          pendingSubmissionId != null &&
+          await wasSubmitted(pendingSubmissionId);
+      if (!committed && submitting.contains(id)) {
+        throw StateError('composer_submission_pending');
+      }
+      if (committed) {
+        await _removeCommittedSubmission(draft);
+      } else {
+        // 上次运行留下的排队提交：消息没有落库，进程重启后也不会再发。
+        // 不清掉它，这个会话的发送会永久被 composer_submission_pending 卡住。
+        draft.pending = null;
+        draft.submissionId = null;
+        draft.submissionEditId = null;
+      }
+    }
     invalidateInputOperations(id, editMessageId: draft.editMessageId);
     submitting.add(id);
     final submission = DraftSubmission(
@@ -517,17 +537,33 @@ class ComposerDraftStore extends ChangeNotifier {
       draft.compose = const ComposerDraftInput();
     }
     _changed(draft);
-    return flush().then(
-      (_) => submission,
-      onError: (Object error, StackTrace stack) {
-        submissionIdle(id);
-        Error.throwWithStackTrace(error, stack);
-      },
-    );
+    try {
+      await flush();
+      return submission;
+    } catch (error, stack) {
+      submissionIdle(id);
+      Error.throwWithStackTrace(error, stack);
+    }
   }
 
   void submissionIdle(String id) {
     submitting.remove(id);
+    if (!_disposed) notifyListeners();
+  }
+
+  /// 撤销一条已登记但最终没有发送的提交。
+  ///
+  /// 排队消息被取消时走这里：消息从未落库，继续保留 pending 会让下一次
+  /// beginSubmission 抛出 composer_submission_pending，发送按钮看似失效。
+  void cancelSubmission(DraftSubmission submission) {
+    final draft = _drafts[submission.conversationId];
+    if (draft != null && draft.submissionId == submission.id) {
+      draft.pending = null;
+      draft.submissionId = null;
+      draft.submissionEditId = null;
+      _changed(draft);
+    }
+    submitting.remove(submission.conversationId);
     if (!_disposed) notifyListeners();
   }
 

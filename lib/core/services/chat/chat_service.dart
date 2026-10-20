@@ -17,6 +17,7 @@ import '../../database/chat_database_repository.dart';
 import '../../database/composer_draft_store.dart';
 import '../../database/generation_run.dart';
 import '../../models/chat_message.dart';
+import '../../models/assistant.dart';
 import '../../models/composer_draft.dart';
 import '../../models/message_part.dart';
 import '../../models/conversation.dart';
@@ -1789,6 +1790,10 @@ class ChatService extends ChangeNotifier {
     bool reuseNewEntry = false,
   }) async {
     if (!_initialized) await init();
+    // “未指定助手”只接收失去归属的会话，任何路径都不允许以它新建。
+    if (assistantId == Assistant.unassignedId) {
+      throw StateError('unassigned_assistant_new_conversation');
+    }
     _discardTemporaryConversation(_currentConversationId);
     // 新会话草稿按助手挂靠：同一个助手再次新建时，回到上次那个未发送的会话。
     final existing = temporary || !reuseNewEntry
@@ -5338,6 +5343,50 @@ class ChatService extends ChangeNotifier {
     } catch (_) {
       return const UploadStats(fileCount: 0, totalBytes: 0);
     }
+  }
+
+  /// 把某个助手名下的全部会话（含草稿）转给另一个助手。
+  ///
+  /// 用于删除助手但保留会话：把它们交给“未指定助手”。
+  /// 该助手下是否已经有实际会话。用于决定“未指定助手”是否显示。
+  ///
+  /// 空的新建草稿不算：删光会话后应用可能还留着一条空的草稿条目，
+  /// 它不应把占位助手继续撑在列表里。
+  bool hasConversationsForAssistant(String assistantId) {
+    if (_conversationsCache.values.any(
+      (conversation) => conversation.assistantId == assistantId,
+    )) {
+      return true;
+    }
+    for (final draft in _draftConversations.values) {
+      if (draft.assistantId != assistantId) continue;
+      if ((_messagesCache[draft.id] ?? const []).isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  Future<int> moveAllConversationsFromAssistant({
+    required String fromAssistantId,
+    required String toAssistantId,
+  }) async {
+    if (!_initialized) await init();
+    final ids = <String>{
+      for (final c in _conversationsCache.values)
+        if (c.assistantId == fromAssistantId) c.id,
+      for (final c in _draftConversations.values)
+        if (c.assistantId == fromAssistantId) c.id,
+    };
+    // 该助手的“新建会话”草稿没有可迁移内容，直接清掉。
+    for (final id in _repo.composerDrafts.newEntriesForAssistant(
+      fromAssistantId,
+    )) {
+      if (!ids.contains(id)) await _repo.composerDrafts.delete(id);
+    }
+    final result = await moveConversationsToAssistant(
+      conversationIds: ids,
+      assistantId: toAssistantId,
+    );
+    return result.moved;
   }
 
   // 将现有会话移动到不同的助手。

@@ -130,7 +130,13 @@ void main() {
           hasLength(1),
         );
 
-        expect(await provider.deleteAssistant('assistant-delete'), isTrue);
+        expect(
+          await provider.deleteAssistant(
+            'assistant-delete',
+            deleteConversations: true,
+          ),
+          isTrue,
+        );
 
         expect(chatService.getConversation(deletedConversation.id), isNull);
         expect(chatService.getMessages(deletedConversation.id), isEmpty);
@@ -172,7 +178,13 @@ void main() {
 
         expect(chatService.getConversation(draft.id), isNotNull);
 
-        expect(await provider.deleteAssistant('assistant-delete'), isTrue);
+        expect(
+          await provider.deleteAssistant(
+            'assistant-delete',
+            deleteConversations: true,
+          ),
+          isTrue,
+        );
 
         expect(chatService.getConversation(draft.id), isNull);
         expect(chatService.getConversation(keptDraft.id), isNotNull);

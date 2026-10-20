@@ -24,9 +24,14 @@ Future<String?> showAssistantMoveSelector(
       defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.linux;
   final ap = context.read<AssistantProvider>();
-  final List<Assistant> assistants = excludeAssistantId == null
-      ? List.of(ap.assistants)
-      : ap.assistants.where((a) => a.id != excludeAssistantId).toList();
+  // 普通会话不允许迁移到“未指定助手”：它是删除助手后的存放点，不是目标。
+  final List<Assistant> assistants = ap.assistants
+      .where(
+        (a) =>
+            a.id != AssistantProvider.unassignedAssistantId &&
+            a.id != excludeAssistantId,
+      )
+      .toList();
 
   if (!isDesktop) {
     final cs = Theme.of(context).colorScheme;

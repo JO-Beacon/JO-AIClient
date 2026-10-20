@@ -61,17 +61,15 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
-  testWidgets(
-    'adaptive refresh availability is gated to Android API 30+',
-    (tester) async {
-      addTearDown(() => AndroidRefreshRateService.debugSetSdkInt(null));
-      AndroidRefreshRateService.debugSetSdkInt(29);
-      expect(AndroidRefreshRateService.supportsAdaptiveRefreshRate, isFalse);
-      AndroidRefreshRateService.debugSetSdkInt(30);
-      expect(AndroidRefreshRateService.supportsAdaptiveRefreshRate, isTrue);
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+  testWidgets('adaptive refresh availability is gated to Android API 30+', (
+    tester,
+  ) async {
+    addTearDown(() => AndroidRefreshRateService.debugSetSdkInt(null));
+    AndroidRefreshRateService.debugSetSdkInt(29);
+    expect(AndroidRefreshRateService.supportsAdaptiveRefreshRate, isFalse);
+    AndroidRefreshRateService.debugSetSdkInt(30);
+    expect(AndroidRefreshRateService.supportsAdaptiveRefreshRate, isTrue);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets(
     'other platforms ignore the adaptive refresh preference',

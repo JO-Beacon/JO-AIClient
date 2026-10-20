@@ -1466,7 +1466,29 @@ class HomePageController extends ChangeNotifier {
         );
   }
 
+  /// 会话的归属是否落在“未指定助手”上（含原助手已删除的情况）。
+  bool _usesUnassignedAssistant(Conversation? conversation) {
+    if (conversation == null) return false;
+    final assistant = _context
+        .read<AssistantProvider>()
+        .resolveConversationAssistant(conversation.assistantId);
+    return assistant?.id == AssistantProvider.unassignedAssistantId;
+  }
+
+  void _warnUnassignedSend() {
+    if (!_context.mounted) return;
+    showAppSnackBar(
+      _context,
+      message: AppLocalizations.of(_context)!.unassignedAssistantCannotSend,
+      type: NotificationType.warning,
+    );
+  }
+
   Future<ChatInputSubmissionResult> sendMessage(ChatInputData input) async {
+    if (_usesUnassignedAssistant(currentConversation)) {
+      _warnUnassignedSend();
+      return ChatInputSubmissionResult.rejected;
+    }
     final submission = input.draftSubmission;
     final drafts = _composerDrafts;
     if (submission == null || drafts == null) {
@@ -1608,6 +1630,12 @@ class HomePageController extends ChangeNotifier {
       composing: TextRange.empty,
     );
     _mediaController.restoreInput(restored);
+    // 排队消息从未真正发送：把它登记的待确认提交一起撤销。
+    // 不撤销的话，下次发送会撞上 composer_submission_pending 而被静默拒绝。
+    final submission = restored.draftSubmission;
+    if (submission != null) {
+      _composerDrafts?.cancelSubmission(submission);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_context.mounted) return;
       _inputFocus.requestFocus();
@@ -1621,6 +1649,10 @@ class HomePageController extends ChangeNotifier {
     String? existingBranchId,
   }) async {
     if (currentConversation == null) return;
+    if (_usesUnassignedAssistant(currentConversation)) {
+      _warnUnassignedSend();
+      return;
+    }
     _warmupSerial++;
 
     final success = await _viewModel.regenerateAtMessage(
@@ -1837,6 +1869,19 @@ class HomePageController extends ChangeNotifier {
     return conversation;
   }
 
+  /// 删除未指定助手的最后一个会话后回到空状态：
+  /// 清空消息区、取消当前会话与助手选择，不触发新建。
+  Future<void> clearToEmptyState() async {
+    _switchSerial++;
+    _chatService.setCurrentConversation(null);
+    _chatController.updateCurrentConversation(null);
+    _chatController.invalidateCache();
+    _streamController.clearAllState();
+    await _context.read<AssistantProvider>().clearCurrentAssistant();
+    if (!_context.mounted) return;
+    notifyListeners();
+  }
+
   /// 删除当前会话并切换到最近的剩余会话；没有剩余会话时创建新会话。
   Future<void> deleteCurrentConversation() async {
     final currentId = currentConversation?.id;
@@ -1862,6 +1907,18 @@ class HomePageController extends ChangeNotifier {
     bool preserveDraft = false,
     String? assistantId,
   }) async {
+    final targetAssistantId =
+        assistantId ?? _context.read<AssistantProvider>().currentAssistantId;
+    if (targetAssistantId == AssistantProvider.unassignedAssistantId) {
+      showAppSnackBar(
+        _context,
+        message: AppLocalizations.of(
+          _context,
+        )!.unassignedAssistantCannotCreateConversation,
+        type: NotificationType.warning,
+      );
+      return null;
+    }
     unawaited(_flushReadPosition());
     _translations.clear();
     final previousId = currentConversation?.id;

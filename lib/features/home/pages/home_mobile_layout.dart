@@ -39,6 +39,7 @@ class HomeMobileScaffold extends StatelessWidget {
     required this.onDismissKeyboard,
     required this.onSelectConversation,
     required this.onNewConversation,
+    this.onClearConversation,
     required this.onOpenMiniMap,
     required this.onCreateNewConversation,
     required this.onToggleTemporaryConversation,
@@ -65,6 +66,7 @@ class HomeMobileScaffold extends StatelessWidget {
   final VoidCallback onDismissKeyboard;
   final void Function(String id) onSelectConversation;
   final VoidCallback onNewConversation;
+  final Future<void> Function()? onClearConversation;
   final VoidCallback onOpenMiniMap;
   final Future<void> Function() onCreateNewConversation;
   final Future<void> Function() onToggleTemporaryConversation;
@@ -121,6 +123,7 @@ class HomeMobileScaffold extends StatelessWidget {
           await onCreateNewConversation();
           if (closeDrawer) drawerController.close();
         },
+        onClearConversation: onClearConversation,
       ),
       child: ChatFrostedBackdrop(
         backdrop: const MobileBackgroundLayer(),

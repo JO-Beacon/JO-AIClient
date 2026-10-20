@@ -613,6 +613,7 @@ class ChatInputBar extends StatefulWidget {
         SettingsProvider.defaultChatInputBackgroundOpacityLight,
     this.inputBackgroundOpacityDark =
         SettingsProvider.defaultChatInputBackgroundOpacityDark,
+    this.hintForUnassignedAssistant = false,
   });
 
   final Future<ChatInputSubmissionResult> Function(ChatInputData)? onSend;
@@ -677,6 +678,9 @@ class ChatInputBar extends StatefulWidget {
   final bool backgroundImageActive;
   final double inputBackgroundOpacityLight;
   final double inputBackgroundOpacityDark;
+
+  /// 会话归属落在“未指定助手”时，提示语说明为什么不能发送。
+  final bool hintForUnassignedAssistant;
 
   @override
   State<ChatInputBar> createState() => _ChatInputBarState();
@@ -1314,7 +1318,9 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   String _hint(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return l10n.chatInputBarHint;
+    return widget.hintForUnassignedAssistant
+        ? l10n.chatInputBarHintUnassigned
+        : l10n.chatInputBarHint;
   }
 
   // ---------------------------------------------------------------------------

@@ -6,7 +6,9 @@
   Windows FFI 插件），复制自本机 pub 缓存
   `AppData\Local\Pub\Cache\hosted\pub.dev\sherpa_onnx_windows-1.12.20`。
 - Dart 代码（`lib/`）、`pubspec.yaml`、`CHANGELOG.md`、`LICENSE` 与上游**逐字节一致**，
-  未做任何修改。本 fork 只改了两处：`windows/CMakeLists.txt` 与本说明文件。
+  未做任何修改。本 fork 只改了三处：`windows/CMakeLists.txt`、`analysis_options.yaml` 与本说明文件。
+  其中 `analysis_options.yaml` 删掉了上游自带但无法解析的 `include: package:flutter_lints/flutter.yaml`
+  （上游 pubspec 没有声明这个开发依赖，作为根仓库的路径依赖被一起分析时会报错）。
 
 ## 为什么接管
 

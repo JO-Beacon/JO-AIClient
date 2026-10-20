@@ -878,6 +878,7 @@ class _ToggleRowLongMessageEditor extends StatelessWidget {
     final sp = context.watch<SettingsProvider>();
     return _ToggleRow(
       label: l10n.displaySettingsPageLongMessageEditorTitle,
+      tip: l10n.displaySettingsPageLongMessageEditorSubtitle,
       value: sp.useLongMessageEditor,
       onChanged: (v) =>
           context.read<SettingsProvider>().setUseLongMessageEditor(v),

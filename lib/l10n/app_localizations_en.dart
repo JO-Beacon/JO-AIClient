@@ -585,6 +585,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get assistantProviderDefaultAssistantName => 'Default Assistant';
 
   @override
+  String get assistantProviderUnassignedAssistantName => 'Unassigned assistant';
+
+  @override
   String get assistantProviderSampleAssistantName => 'Sample Assistant';
 
   @override
@@ -1782,6 +1785,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Are you sure you want to delete this assistant? This action cannot be undone.';
 
   @override
+  String get assistantDeleteConversationsOption =>
+      'Also delete all conversations from this assistant (cannot be undone)';
+
+  @override
   String get assistantSettingsDeleteDialogCancel => 'Cancel';
 
   @override
@@ -1790,6 +1797,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get assistantSettingsAtLeastOneAssistantRequired =>
       'At least one assistant is required';
+
+  @override
+  String get unassignedAssistantCannotCreateConversation =>
+      'The unassigned assistant cannot start a new chat. Select another assistant first.';
+
+  @override
+  String get unassignedAssistantCannotSend =>
+      'The unassigned assistant cannot send messages. Move this conversation to another assistant first.';
 
   @override
   String get mcpAssistantSheetTitle => 'MCP Servers';
@@ -3300,6 +3315,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInputBarHint => 'Type a message for AI';
+
+  @override
+  String get chatInputBarHintUnassigned =>
+      'This chat\'s assistant was deleted. Move it to another assistant first.';
 
   @override
   String get chatInputBarSelectModelTooltip => 'Select Model';
@@ -5287,6 +5306,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get displaySettingsPageLongMessageEditorTitle =>
       'Line editor for long text';
+
+  @override
+  String get displaySettingsPageLongMessageEditorSubtitle =>
+      'Only text longer than 2,048 characters, and without bidirectional text or unusual line breaks, switches to the line editor. Short text keeps the system input field.';
+
+  @override
+  String get longMessageEditorActiveIndicator => 'Line editor active';
 
   @override
   String get displaySettingsPageThemeSettingsTitle => 'Theme Settings';
@@ -13909,7 +13935,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get modelCatalogAutoUpdate => 'Auto-update every 24 hours';
+  String get modelCatalogAutoUpdate =>
+      'Check for updates on startup, skip if already updated today';
 
   @override
   String get modelCatalogUpdateManual => 'Manual only';

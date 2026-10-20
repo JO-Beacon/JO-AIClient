@@ -6,8 +6,10 @@ import 'package:Kelivo/theme/app_semantic_colors.dart';
 import '../../../core/models/memory_entry.dart';
 import '../../../core/models/user_profile_field.dart';
 import '../../../core/providers/memory_provider_v2.dart';
+import '../../../core/providers/settings_provider.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/long_message_editor.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
@@ -350,6 +352,18 @@ class _ProfileFieldFormState extends State<_ProfileFieldForm> {
           inlineLabel: false,
           autofocus: true,
           textAlign: TextAlign.start,
+          editorBuilder: context.watch<SettingsProvider>().useLongMessageEditor
+              ? (ctx) => LongMessageEditor(
+                  controller: _value,
+                  minLines: 1,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isCollapsed: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                )
+              : null,
         ),
       ],
     );

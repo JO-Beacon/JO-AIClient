@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:async';
 import '../text_input/message_editing_controller.dart';
+import '../../icons/lucide_adapter.dart';
+import '../../l10n/app_localizations.dart';
 
 typedef LongMessageContextMenuBuilder =
     Widget Function(
@@ -103,7 +105,11 @@ class LongMessageEditorState extends State<LongMessageEditor>
   List<int>? _lineStarts;
   CodeLines? _lastLines;
   bool _long = false;
+  bool _composingActive = false;
   bool? _renderingLines;
+  // 切换渲染器时保存输入状态，避免新编辑器重新挂载时丢掉焦点和光标。
+  bool _modeSwitchHadFocus = false;
+  TextSelection? _modeSwitchSelection;
   bool _drainingInput = false;
   bool _inputModeExitReady = false;
   bool _inputModeExitFailed = false;
@@ -472,9 +478,24 @@ class LongMessageEditorState extends State<LongMessageEditor>
     final value = widget.controller.value;
     final textChanged = !identical(_text, value.text);
     _replaceText(value.text);
-    final nextLong = textChanged ? _supportsLineEditing(value.text) : _long;
+    // 输入法正在组合的中间产物不能参与 2048 判断，也不能在组合期间切换
+    // 编辑器，否则拼音、假名等尚未上屏的内容会被切换打断。
+    final composing = value.composing;
+    final composingActive = composing.isValid && !composing.isCollapsed;
+    final composingChanged = composingActive != _composingActive;
+    _composingActive = composingActive;
+    final committedText = composingActive
+        ? value.text.replaceRange(composing.start, composing.end, '')
+        : value.text;
+    final nextLong = (textChanged || composingChanged)
+        ? (composingActive ? _long : _supportsLineEditing(committedText))
+        : _long;
     final changedMode = _long != nextLong;
     _long = nextLong;
+    if (changedMode && _focus.hasFocus) {
+      _modeSwitchHadFocus = true;
+      _modeSwitchSelection = value.selection;
+    }
     if (_lineController == null) {
       if (changedMode && mounted) setState(() {});
       return;
@@ -785,12 +806,59 @@ class LongMessageEditorState extends State<LongMessageEditor>
     WidgetsBinding.instance.addPostFrameCallback((_) => retired?.dispose());
   }
 
+  /// 新挂载的原生输入框不会收到焦点变化，光标闪烁计时器没有启动，
+  /// 光标颜色透明度会一直停在 0。这里用一次不改变位置的选区更新唤醒它。
+  void _wakeNativeCaret() {
+    final selection = widget.controller.selection;
+    if (!selection.isValid) return;
+    final toggled = selection.copyWith(
+      affinity: selection.affinity == TextAffinity.downstream
+          ? TextAffinity.upstream
+          : TextAffinity.downstream,
+    );
+    widget.controller.selection = toggled;
+    widget.controller.selection = selection;
+  }
+
+  /// 让新挂载的编辑器显式打开文字输入连接。
+  ///
+  /// 新旧编辑器共用同一个 FocusNode。新编辑器初始化时焦点已经存在，
+  /// EditableText 不会再收到焦点变化通知，于是可能只有按键事件、没有输入法连接：
+  /// 退格能删，却打不出字。这里找到它并主动请求键盘。
+  void _requestActiveEditorKeyboard() {
+    EditableTextState? target;
+    void visit(Element element) {
+      if (target != null) return;
+      if (element is StatefulElement) {
+        final state = element.state;
+        if (state is EditableTextState) {
+          target = state;
+          return;
+        }
+      }
+      element.visitChildElements(visit);
+    }
+
+    context.visitChildElements(visit);
+    final editable = target;
+    if (editable == null) return;
+    editable.requestKeyboard();
+    if (_renderingLines != true) {
+      // 新挂载的原生输入框滚动位置默认在顶部。把光标所在位置重新带入视口，
+      // 否则从按行编辑器删回阈值以下时画面会跳回开头。
+      final selection = widget.controller.selection;
+      if (selection.isValid) {
+        editable.bringIntoView(TextPosition(offset: selection.extentOffset));
+      }
+    }
+  }
+
   Widget _buildEditor(BuildContext context) {
-    var renderingLines =
+    final lineEditorPermitted =
         widget.enabled &&
-        _long &&
         !MediaQuery.accessibleNavigationOf(context) &&
         Directionality.of(context) != TextDirection.rtl;
+    var renderingLines = lineEditorPermitted && _long;
     if (!renderingLines &&
         _renderingLines == true &&
         _modeExit != null &&
@@ -800,12 +868,20 @@ class LongMessageEditorState extends State<LongMessageEditor>
     } else {
       _inputModeExitReady = false;
     }
-    if (_renderingLines != null &&
-        ((_renderingLines != renderingLines && _focus.hasFocus) ||
-            (_refocusAfterModeExit && !_drainingInput))) {
+    final switching =
+        _renderingLines != null && _renderingLines != renderingLines;
+    final restoreFocusAfterSwitch =
+        switching && (_focus.hasFocus || _modeSwitchHadFocus);
+    if (restoreFocusAfterSwitch || (_refocusAfterModeExit && !_drainingInput)) {
       _refocusAfterModeExit = false;
       final controller = widget.controller;
       final focus = _focus;
+      final selection = _modeSwitchSelection;
+      // 原生输入交接的选区以交接后的文档为准，不能拿切换前的旧位置覆盖。
+      final allowNativeSelectionRestore =
+          _inputFactory == null && !_drainingInput;
+      _modeSwitchHadFocus = false;
+      _modeSwitchSelection = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             _inputPaused ||
@@ -816,7 +892,30 @@ class LongMessageEditorState extends State<LongMessageEditor>
         final primary = FocusManager.instance.primaryFocus;
         if (_focus.hasFocus || primary == null || primary is FocusScopeNode) {
           _focus.requestFocus();
-          if (_renderingLines == true) _lineController?.makeCursorVisible();
+          if (_renderingLines == true) {
+            final lines = _lineController;
+            if (lines != null && selection != null && selection.isValid) {
+              final base = _linePosition(selection.baseOffset);
+              final extent = _linePosition(selection.extentOffset);
+              lines.selection = CodeLineSelection(
+                baseIndex: base.index,
+                baseOffset: base.offset,
+                extentIndex: extent.index,
+                extentOffset: extent.offset,
+                baseAffinity: selection.affinity,
+                extentAffinity: selection.affinity,
+              );
+            }
+            _lineController?.makeCursorVisible();
+          } else if (allowNativeSelectionRestore &&
+              selection != null &&
+              selection.isValid) {
+            controller.selection = selection;
+          }
+          _requestActiveEditorKeyboard();
+          if (_renderingLines != true && _focus.hasFocus) {
+            _wakeNativeCaret();
+          }
         }
       });
     }
@@ -925,6 +1024,34 @@ class LongMessageEditorState extends State<LongMessageEditor>
         ),
       ),
     );
+    // 常驻标记：只在按行编辑真正接管时出现，低透明度、不可点击，
+    // 让用户知道当前用的是哪套编辑器，又不遮挡操作。
+    Widget content = editor;
+    if (_renderingLines == true) {
+      final indicatorLabel = AppLocalizations.of(
+        context,
+      )?.longMessageEditorActiveIndicator;
+      content = Stack(
+        children: [
+          editor,
+          Positioned(
+            top: 6,
+            right: 8,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.4,
+                child: Icon(
+                  Lucide.Type,
+                  size: 14,
+                  color: theme.colorScheme.onSurface,
+                  semanticLabel: indicatorLabel,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     // Keep the editor mounted when the composer expands or collapses, retaining
     // its native input connection, selection and render-controller bindings.
     return IgnorePointer(
@@ -936,7 +1063,7 @@ class LongMessageEditorState extends State<LongMessageEditor>
               : preferredLineHeight * widget.maxLines! +
                     (widget.decoration.contentPadding?.vertical ?? 0),
         ),
-        child: editor,
+        child: content,
       ),
     );
   }
