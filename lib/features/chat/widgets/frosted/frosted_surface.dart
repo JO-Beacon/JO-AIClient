@@ -30,57 +30,54 @@ class FrostedSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = ChatFrostedBackdropScope.maybeOf(context);
-    final sigma = style.blurSigma;
-    final Widget painted;
-    if (debugFrostedForceLiveBackdropFilter && sigma > 0) {
-      painted = _liveBackdrop(child);
-    } else if (scope == null) {
-      // Standalone previews and legacy callers have no backdrop owner. Keep
-      // their established live-filter behavior; the app shell supplies a
-      // scope and takes the lifecycle-managed path below.
-      painted = _liveBackdrop(child);
-    } else if (sigma <= 0) {
-      painted = _tint(child);
-    } else {
-      painted = ListenableBuilder(
-        listenable: scope.controller,
-        builder: (context, _) {
-          final mode = scope.controller.mode;
-          if (mode == FrostedRenderMode.uniform) {
-            return _tint(child);
-          }
-          if (mode == FrostedRenderMode.liveBackdropFilter) {
-            return Stack(
-              children: [
-                _FrostedSnapshotLease(
-                  controller: scope.controller,
-                  sigma: sigma,
-                ),
-                _liveBackdrop(child),
-              ],
-            );
-          }
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: _FrostedBackdropCrop(
-                    controller: scope.controller,
-                    sigma: sigma,
-                  ),
-                ),
-              ),
-              _tint(child),
-            ],
-          );
-        },
-      );
-    }
+    final controller = scope?.controller;
     return ClipRRect(
       borderRadius: borderRadius,
       clipBehavior: Clip.antiAlias,
-      child: painted,
+      child: ListenableBuilder(
+        listenable: controller ?? const AlwaysStoppedAnimation(0),
+        child: _tint(child),
+        builder: (context, content) {
+          final sigma = style.blurSigma;
+          final live =
+              sigma > 0 &&
+              (debugFrostedForceLiveBackdropFilter ||
+                  scope == null ||
+                  controller?.mode == FrostedRenderMode.liveBackdropFilter);
+          return BackdropFilter.grouped(
+            enabled: live,
+            filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+            child: Stack(
+              // Keep the filter, tint and content at the same element paths.
+              // Disabled filters create no BackdropFilterLayer; live filters
+              // retain the original compositing order around the foreground.
+              fit: StackFit.passthrough,
+              children: [
+                Positioned.fill(
+                  child: IgnorePointer(child: _backdrop(controller)),
+                ),
+                content!,
+              ],
+            ),
+          );
+        },
+      ),
     );
+  }
+
+  Widget _backdrop(ChatFrostedBackdropController? controller) {
+    final sigma = style.blurSigma;
+    if (sigma <= 0) return const SizedBox.shrink();
+    if (debugFrostedForceLiveBackdropFilter || controller == null) {
+      return const SizedBox.shrink();
+    }
+    if (controller.mode == FrostedRenderMode.liveBackdropFilter) {
+      return _FrostedSnapshotLease(controller: controller, sigma: sigma);
+    }
+    if (controller.mode == FrostedRenderMode.cached) {
+      return _FrostedBackdropCrop(controller: controller, sigma: sigma);
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _tint(Widget child) {
@@ -91,23 +88,6 @@ class FrostedSurface extends StatelessWidget {
         border: Border.all(color: style.border, width: style.borderWidth),
       ),
       child: child,
-    );
-  }
-
-  Widget _liveBackdrop(Widget child) {
-    return BackdropFilter.grouped(
-      filter: ui.ImageFilter.blur(
-        sigmaX: style.blurSigma,
-        sigmaY: style.blurSigma,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: style.background,
-          borderRadius: borderRadius,
-          border: Border.all(color: style.border, width: style.borderWidth),
-        ),
-        child: child,
-      ),
     );
   }
 }
