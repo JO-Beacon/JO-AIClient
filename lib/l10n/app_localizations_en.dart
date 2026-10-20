@@ -14165,4 +14165,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupScopeSettings => 'Settings';
+
+  @override
+  String get markdownCautionLabel => 'Caution';
+
+  @override
+  String get markdownCodeLabel => 'Code';
+
+  @override
+  String get markdownCopyCsvAction => 'Copy CSV';
+
+  @override
+  String get markdownCopyImageAction => 'Copy image';
+
+  @override
+  String get markdownCopyMarkdownAction => 'Copy Markdown';
+
+  @override
+  String get markdownDangerLabel => 'Danger';
+
+  @override
+  String get markdownDetailsLabel => 'Details';
+
+  @override
+  String get markdownImportantLabel => 'Important';
+
+  @override
+  String markdownMoreRows(int count) {
+    return 'Show $count more rows';
+  }
+
+  @override
+  String get markdownNoteLabel => 'Note';
+
+  @override
+  String get markdownTipLabel => 'Tip';
+
+  @override
+  String get markdownWarningLabel => 'Warning';
+
+  @override
+  String get markdownCopySelectionFailed => 'Could not copy the selected text.';
+
+  @override
+  String get markdownCopyRichTextAction => 'Copy rich text';
 }

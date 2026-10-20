@@ -6237,5 +6237,26 @@
   "backupScopeWorkspaces": "工作區",
   "backupScopeSearchServices": "搜尋服務",
   "backupScopeSpeechServices": "語音服務",
-  "backupScopeSettings": "設定"
+  "backupScopeSettings": "設定",
+  "markdownCautionLabel": "注意",
+  "markdownCodeLabel": "程式碼",
+  "markdownCopyCsvAction": "複製 CSV",
+  "markdownCopyImageAction": "複製圖片",
+  "markdownCopyMarkdownAction": "複製為 Markdown",
+  "markdownDangerLabel": "危險",
+  "markdownDetailsLabel": "詳情",
+  "markdownImportantLabel": "重要",
+  "markdownMoreRows": "再顯示 {count} 行",
+  "@markdownMoreRows": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "markdownNoteLabel": "備註",
+  "markdownTipLabel": "提示",
+  "markdownWarningLabel": "警告",
+  "markdownCopySelectionFailed": "複製所選內容失敗。",
+  "markdownCopyRichTextAction": "複製富文字"
 }

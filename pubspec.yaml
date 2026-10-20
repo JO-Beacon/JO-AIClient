@@ -71,6 +71,8 @@ dependencies:
   device_info_plus: ^11.5.0
   gpt_markdown: #^1.1.7
     path: ./dependencies/gpt_markdown
+  markstream:
+    path: ./dependencies/markstream
   uuid: ^4.5.0
   intl: ^0.20.2
   path: ^1.9.1

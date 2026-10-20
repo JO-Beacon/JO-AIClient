@@ -6237,5 +6237,26 @@
   "backupScopeWorkspaces": "工作区",
   "backupScopeSearchServices": "搜索服务",
   "backupScopeSpeechServices": "语音服务",
-  "backupScopeSettings": "设置"
+  "backupScopeSettings": "设置",
+  "markdownCautionLabel": "注意",
+  "markdownCodeLabel": "代码",
+  "markdownCopyCsvAction": "复制 CSV",
+  "markdownCopyImageAction": "复制图片",
+  "markdownCopyMarkdownAction": "复制为 Markdown",
+  "markdownDangerLabel": "危险",
+  "markdownDetailsLabel": "详情",
+  "markdownImportantLabel": "重要",
+  "markdownMoreRows": "再显示 {count} 行",
+  "@markdownMoreRows": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "markdownNoteLabel": "备注",
+  "markdownTipLabel": "提示",
+  "markdownWarningLabel": "警告",
+  "markdownCopySelectionFailed": "复制所选内容失败。",
+  "markdownCopyRichTextAction": "复制富文本"
 }

@@ -26,7 +26,7 @@ import '../../../core/providers/assistant_provider.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../utils/sandbox_path_resolver.dart';
-import '../../../shared/widgets/markdown_with_highlight.dart';
+import '../../../shared/markdown/markdown_with_code_highlight.dart';
 import '../../../shared/widgets/export_capture_scope.dart';
 import '../../../shared/widgets/diagram_exporter.dart';
 import '../../../shared/widgets/snackbar.dart';

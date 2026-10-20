@@ -6279,5 +6279,26 @@
   "backupScopeWorkspaces": "Workspaces",
   "backupScopeSearchServices": "Search services",
   "backupScopeSpeechServices": "Speech services",
-  "backupScopeSettings": "Settings"
+  "backupScopeSettings": "Settings",
+  "markdownCautionLabel": "Caution",
+  "markdownCodeLabel": "Code",
+  "markdownCopyCsvAction": "Copy CSV",
+  "markdownCopyImageAction": "Copy image",
+  "markdownCopyMarkdownAction": "Copy Markdown",
+  "markdownDangerLabel": "Danger",
+  "markdownDetailsLabel": "Details",
+  "markdownImportantLabel": "Important",
+  "markdownMoreRows": "Show {count} more rows",
+  "@markdownMoreRows": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "markdownNoteLabel": "Note",
+  "markdownTipLabel": "Tip",
+  "markdownWarningLabel": "Warning",
+  "markdownCopySelectionFailed": "Could not copy the selected text.",
+  "markdownCopyRichTextAction": "Copy rich text"
 }

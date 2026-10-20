@@ -13505,6 +13505,50 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backupScopeSettings => '设置';
+
+  @override
+  String get markdownCautionLabel => '注意';
+
+  @override
+  String get markdownCodeLabel => '代码';
+
+  @override
+  String get markdownCopyCsvAction => '复制 CSV';
+
+  @override
+  String get markdownCopyImageAction => '复制图片';
+
+  @override
+  String get markdownCopyMarkdownAction => '复制为 Markdown';
+
+  @override
+  String get markdownDangerLabel => '危险';
+
+  @override
+  String get markdownDetailsLabel => '详情';
+
+  @override
+  String get markdownImportantLabel => '重要';
+
+  @override
+  String markdownMoreRows(int count) {
+    return '再显示 $count 行';
+  }
+
+  @override
+  String get markdownNoteLabel => '备注';
+
+  @override
+  String get markdownTipLabel => '提示';
+
+  @override
+  String get markdownWarningLabel => '警告';
+
+  @override
+  String get markdownCopySelectionFailed => '复制所选内容失败。';
+
+  @override
+  String get markdownCopyRichTextAction => '复制富文本';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -27008,6 +27052,50 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get backupScopeSettings => '设置';
+
+  @override
+  String get markdownCautionLabel => '注意';
+
+  @override
+  String get markdownCodeLabel => '代码';
+
+  @override
+  String get markdownCopyCsvAction => '复制 CSV';
+
+  @override
+  String get markdownCopyImageAction => '复制图片';
+
+  @override
+  String get markdownCopyMarkdownAction => '复制为 Markdown';
+
+  @override
+  String get markdownDangerLabel => '危险';
+
+  @override
+  String get markdownDetailsLabel => '详情';
+
+  @override
+  String get markdownImportantLabel => '重要';
+
+  @override
+  String markdownMoreRows(int count) {
+    return '再显示 $count 行';
+  }
+
+  @override
+  String get markdownNoteLabel => '备注';
+
+  @override
+  String get markdownTipLabel => '提示';
+
+  @override
+  String get markdownWarningLabel => '警告';
+
+  @override
+  String get markdownCopySelectionFailed => '复制所选内容失败。';
+
+  @override
+  String get markdownCopyRichTextAction => '复制富文本';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -40517,4 +40605,48 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get backupScopeSettings => '設定';
+
+  @override
+  String get markdownCautionLabel => '注意';
+
+  @override
+  String get markdownCodeLabel => '程式碼';
+
+  @override
+  String get markdownCopyCsvAction => '複製 CSV';
+
+  @override
+  String get markdownCopyImageAction => '複製圖片';
+
+  @override
+  String get markdownCopyMarkdownAction => '複製為 Markdown';
+
+  @override
+  String get markdownDangerLabel => '危險';
+
+  @override
+  String get markdownDetailsLabel => '詳情';
+
+  @override
+  String get markdownImportantLabel => '重要';
+
+  @override
+  String markdownMoreRows(int count) {
+    return '再顯示 $count 行';
+  }
+
+  @override
+  String get markdownNoteLabel => '備註';
+
+  @override
+  String get markdownTipLabel => '提示';
+
+  @override
+  String get markdownWarningLabel => '警告';
+
+  @override
+  String get markdownCopySelectionFailed => '複製所選內容失敗。';
+
+  @override
+  String get markdownCopyRichTextAction => '複製富文字';
 }
