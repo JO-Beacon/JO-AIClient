@@ -13549,6 +13549,53 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get markdownCopyRichTextAction => '复制富文本';
+
+  @override
+  String get markdownPlaygroundTitle => 'Markdown Playground';
+
+  @override
+  String get markdownPlaygroundSource => 'Markdown 源码';
+
+  @override
+  String get markdownPlaygroundPreview => '渲染预览';
+
+  @override
+  String get markdownPlaygroundAst => 'AST 语法树';
+
+  @override
+  String get markdownPlaygroundPlay => '逐字输入';
+
+  @override
+  String get markdownPlaygroundPause => '暂停';
+
+  @override
+  String get markdownPlaygroundResume => '继续';
+
+  @override
+  String get markdownPlaygroundShowAll => '显示全文';
+
+  @override
+  String get markdownPlaygroundWidth => '预览宽度';
+
+  @override
+  String get markdownPlaygroundTheme => '预览主题';
+
+  @override
+  String get markdownPlaygroundPlain => '选区纯文本';
+
+  @override
+  String get markdownPlaygroundMarkdown => '选区 Markdown';
+
+  @override
+  String get markdownPlaygroundSelectionHint => '在预览中选择文本，查看复制结果。';
+
+  @override
+  String get markdownPlaygroundEmpty => '输入 Markdown 开始预览。';
+
+  @override
+  String markdownPlaygroundProgress(int shown, int total) {
+    return '已输入 $shown / $total';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -27096,6 +27143,53 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get markdownCopyRichTextAction => '复制富文本';
+
+  @override
+  String get markdownPlaygroundTitle => 'Markdown Playground';
+
+  @override
+  String get markdownPlaygroundSource => 'Markdown 源码';
+
+  @override
+  String get markdownPlaygroundPreview => '渲染预览';
+
+  @override
+  String get markdownPlaygroundAst => 'AST 语法树';
+
+  @override
+  String get markdownPlaygroundPlay => '逐字输入';
+
+  @override
+  String get markdownPlaygroundPause => '暂停';
+
+  @override
+  String get markdownPlaygroundResume => '继续';
+
+  @override
+  String get markdownPlaygroundShowAll => '显示全文';
+
+  @override
+  String get markdownPlaygroundWidth => '预览宽度';
+
+  @override
+  String get markdownPlaygroundTheme => '预览主题';
+
+  @override
+  String get markdownPlaygroundPlain => '选区纯文本';
+
+  @override
+  String get markdownPlaygroundMarkdown => '选区 Markdown';
+
+  @override
+  String get markdownPlaygroundSelectionHint => '在预览中选择文本，查看复制结果。';
+
+  @override
+  String get markdownPlaygroundEmpty => '输入 Markdown 开始预览。';
+
+  @override
+  String markdownPlaygroundProgress(int shown, int total) {
+    return '已输入 $shown / $total';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -40649,4 +40743,51 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get markdownCopyRichTextAction => '複製富文字';
+
+  @override
+  String get markdownPlaygroundTitle => 'Markdown Playground';
+
+  @override
+  String get markdownPlaygroundSource => 'Markdown 原始碼';
+
+  @override
+  String get markdownPlaygroundPreview => '渲染預覽';
+
+  @override
+  String get markdownPlaygroundAst => 'AST 語法樹';
+
+  @override
+  String get markdownPlaygroundPlay => '逐字輸入';
+
+  @override
+  String get markdownPlaygroundPause => '暫停';
+
+  @override
+  String get markdownPlaygroundResume => '繼續';
+
+  @override
+  String get markdownPlaygroundShowAll => '顯示全文';
+
+  @override
+  String get markdownPlaygroundWidth => '預覽寬度';
+
+  @override
+  String get markdownPlaygroundTheme => '預覽主題';
+
+  @override
+  String get markdownPlaygroundPlain => '選取範圍純文字';
+
+  @override
+  String get markdownPlaygroundMarkdown => '選取範圍 Markdown';
+
+  @override
+  String get markdownPlaygroundSelectionHint => '在預覽中選取文字，檢視複製結果。';
+
+  @override
+  String get markdownPlaygroundEmpty => '輸入 Markdown 開始預覽。';
+
+  @override
+  String markdownPlaygroundProgress(int shown, int total) {
+    return '已輸入 $shown / $total';
+  }
 }

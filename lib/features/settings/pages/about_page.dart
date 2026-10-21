@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:Kelivo/theme/app_font_weights.dart';
 
 import 'open_source_licenses_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,6 +17,7 @@ import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/update_release_notes_card.dart';
 import '../../../shared/widgets/update_status_label.dart';
 import '../../../core/services/haptics.dart';
+import '../../dev/pages/markdown_playground_page.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
 class AboutPage extends StatefulWidget {
@@ -216,6 +218,19 @@ class _AboutPageState extends State<AboutPage> {
           // iOS 风格列表卡片
           _iosSectionCard(
             children: [
+              if (kDebugMode || kProfileMode) ...[
+                _iosNavRow(
+                  context,
+                  icon: Lucide.Code,
+                  label: l10n.markdownPlaygroundTitle,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const MarkdownPlaygroundPage(),
+                    ),
+                  ),
+                ),
+                _iosDivider(context),
+              ],
               // 版本：只展示信息，不再承载隐藏入口
               _iosNavRow(
                 context,

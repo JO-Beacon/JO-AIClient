@@ -1,4 +1,4 @@
-import '../../../shared/widgets/markdown_line_lexer.dart';
+import 'package:markstream/markstream_core.dart';
 
 /// 按空行把助手 Markdown 拆成视觉段落，同时保持结构块完整。
 ///
@@ -10,8 +10,7 @@ List<String> splitAssistantParagraphs(String text) {
   final lines = text.split('\n');
   final chunks = <String>[];
   final current = <String>[];
-  final lexer = MarkdownLineLexer();
-  final math = markdownScanDisplayMath(text);
+  final structure = MarkdownStructure(text);
   var offset = 0;
 
   void flush() {
@@ -24,12 +23,10 @@ List<String> splitAssistantParagraphs(String text) {
     final line = lines[i];
     final lineStart = offset;
     offset += line.length + 1;
-    lexer.consumePhysicalLine(line);
 
     final breaksParagraph =
         line.trim().isEmpty &&
-        !lexer.protected &&
-        !math.covers(lineStart) &&
+        !structure.protects(lineStart) &&
         !_continuesBlock(lines, i + 1);
     if (breaksParagraph) {
       flush();

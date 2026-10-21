@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../features/settings/pages/open_source_licenses_page.dart';
+import '../../features/dev/pages/markdown_playground_page.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -213,6 +215,18 @@ class _DesktopAboutPaneState extends State<DesktopAboutPane> {
               _DeskCard(
                 title: l10n.settingsPageAbout,
                 children: [
+                  if (kDebugMode || kProfileMode) ...[
+                    _DeskNavRow(
+                      icon: lucide.Lucide.Code,
+                      label: l10n.markdownPlaygroundTitle,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const MarkdownPlaygroundPage(),
+                        ),
+                      ),
+                    ),
+                    const _DeskRowDivider(),
+                  ],
                   _DeskInfoRow(
                     icon: lucide.Lucide.Code,
                     label: l10n.aboutPageVersion,

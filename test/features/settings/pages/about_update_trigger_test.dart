@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/providers/update_provider.dart';
 import 'package:Kelivo/desktop/setting/about_pane.dart';
 import 'package:Kelivo/features/settings/pages/about_page.dart';
@@ -11,6 +12,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+
+import '../../../support/business_test_harness.dart';
+import '../../../support/markdown_render_helpers.dart';
 
 void main() {
   setUpAll(() {
@@ -107,7 +111,10 @@ void main() {
     final notes = find.byKey(const ValueKey('about-update-release-notes'));
     expect(notes, findsOneWidget);
     expect(find.text('Update: 0.1.7+7'), findsOneWidget);
-    expect(find.text('Build-aware updates'), findsOneWidget);
+    expect(
+      renderedParagraphsWith('Build-aware updates', exact: false),
+      hasLength(1),
+    );
     expect(
       tester.getTopLeft(notes).dy,
       greaterThan(tester.getBottomLeft(find.text('JO-AIClient')).dy),
@@ -132,7 +139,10 @@ void main() {
     final notes = find.byKey(const ValueKey('about-update-release-notes'));
     expect(notes, findsOneWidget);
     expect(find.text('Update: 0.1.7+7'), findsOneWidget);
-    expect(find.text('Build-aware updates'), findsOneWidget);
+    expect(
+      renderedParagraphsWith('Build-aware updates', exact: false),
+      hasLength(1),
+    );
     expect(
       tester.getTopLeft(notes).dy,
       greaterThan(tester.getBottomLeft(find.text('JO-AIClient')).dy),
@@ -175,8 +185,13 @@ Future<void> _pumpAboutSurface(
   Widget child,
 ) async {
   await tester.pumpWidget(
-    ChangeNotifierProvider<UpdateProvider>.value(
-      value: provider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<UpdateProvider>.value(value: provider),
+        ChangeNotifierProvider(
+          create: (_) => SettingsProvider(createBusinessTestPreferences()),
+        ),
+      ],
       child: MaterialApp(
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

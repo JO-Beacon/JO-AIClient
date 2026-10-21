@@ -2,16 +2,40 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:Kelivo/features/chat/utils/assistant_paragraph_splitter.dart';
 
 void main() {
-  test('splits on blank lines and collapses repeated separators', () {
-    expect(splitAssistantParagraphs('one\n\n\n\ntwo\n\nthree'), [
+  test(
+    'nested containers use the same protected source ranges as rendering',
+    () {
+      const text = 'intro\n\n- ```dart\n  first\n\n  second\n  ```\n\nend';
+      expect(splitAssistantParagraphs(text), [
+        'intro',
+        '- ```dart\n  first\n\n  second\n  ```',
+        'end',
+      ]);
+    },
+  );
+  test('display math starting after prose keeps its blank body lines', () {
+    for (final body in ['Before \$\$x\n\ny\$\$', 'Before \\[x\n\ny\\]']) {
+      expect(splitAssistantParagraphs('intro\n\n$body\n\nend'), [
+        'intro',
+        body,
+        'end',
+      ]);
+    }
+  });
+
+  test('splits on blank lines', () {
+    expect(splitAssistantParagraphs('one\n\ntwo\n\nthree'), [
       'one',
       'two',
       'three',
     ]);
   });
 
-  test('keeps text unchanged when there is nothing to split', () {
+  test('keeps single-newline text in one bubble', () {
     expect(splitAssistantParagraphs('one\ntwo'), ['one\ntwo']);
+  });
+
+  test('returns text unchanged when there is nothing to split', () {
     expect(splitAssistantParagraphs('  hi  '), ['  hi  ']);
     expect(splitAssistantParagraphs(''), ['']);
   });
@@ -25,7 +49,7 @@ void main() {
     ]);
   });
 
-  test('keeps unterminated streaming fences intact', () {
+  test('leaves an unterminated streaming fence intact', () {
     const text = 'intro\n\n```dart\nvoid a() {}\n\nvoid b';
     expect(splitAssistantParagraphs(text), [
       'intro',
@@ -42,7 +66,7 @@ void main() {
     ]);
   });
 
-  test('keeps list items in one bubble', () {
+  test('keeps a loose ordered list in one bubble', () {
     const text = 'Steps:\n\n1. first\n\n2. second\n\n3. third';
     expect(splitAssistantParagraphs(text), [
       'Steps:',
@@ -57,19 +81,52 @@ void main() {
     ]);
   });
 
-  test('keeps indented continuations and details blocks intact', () {
-    const indented = 'code:\n\n    line a\n\n    line b\n\nend';
-    expect(splitAssistantParagraphs(indented), [
+  test('keeps indented continuations attached', () {
+    const text = 'code:\n\n    line a\n\n    line b\n\nend';
+    expect(splitAssistantParagraphs(text), [
       'code:\n\n    line a\n\n    line b',
       'end',
     ]);
+  });
 
-    const details =
+  test('collapses runs of blank lines', () {
+    expect(splitAssistantParagraphs('a\n\n\n\nb'), ['a', 'b']);
+  });
+
+  test('keeps blank lines inside bracket display math', () {
+    const text = 'before\n\n\\[\na = b\n\nc = d\n\\]\n\nafter';
+    expect(splitAssistantParagraphs(text), [
+      'before',
+      '\\[\na = b\n\nc = d\n\\]',
+      'after',
+    ]);
+  });
+
+  test('keeps a details block whole', () {
+    const text =
         'intro\n\n<details>\n<summary>more</summary>\n\nbody one\n\nbody two\n'
         '</details>\n\nend';
-    expect(splitAssistantParagraphs(details), [
+    expect(splitAssistantParagraphs(text), [
       'intro',
       '<details>\n<summary>more</summary>\n\nbody one\n\nbody two\n</details>',
+      'end',
+    ]);
+  });
+
+  test('does not treat an info-string line inside a fence as a closer', () {
+    const text = 'intro\n\n```\n```not-a-close\n\nstill code\n```\n\nend';
+    expect(splitAssistantParagraphs(text), [
+      'intro',
+      '```\n```not-a-close\n\nstill code\n```',
+      'end',
+    ]);
+  });
+
+  test('closes a fence only on a matching marker of at least equal length', () {
+    const text = 'intro\n\n````\n```\n\ninner\n````\n\nend';
+    expect(splitAssistantParagraphs(text), [
+      'intro',
+      '````\n```\n\ninner\n````',
       'end',
     ]);
   });
