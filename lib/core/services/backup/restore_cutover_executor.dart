@@ -56,6 +56,7 @@ final class RestoreCutoverExecutor {
     bool archived = false,
     ValidatedRestoreCandidate? validatedCandidate,
     RestoreStartupStageSink? onStage,
+    RestoreStartupDiagnostics? diagnostics,
   }) {
     final resolvedDurability = durability ?? RestorePlatformDurability();
     return RestoreCutoverExecutor._(
@@ -66,6 +67,7 @@ final class RestoreCutoverExecutor {
       archived: archived,
       validatedCandidate: validatedCandidate,
       onStage: onStage,
+      diagnostics: diagnostics,
     );
   }
 
@@ -77,6 +79,7 @@ final class RestoreCutoverExecutor {
     required bool archived,
     required ValidatedRestoreCandidate? validatedCandidate,
     required this.onStage,
+    required this.diagnostics,
   }) : _provenCandidate = validatedCandidate,
        _proofHold = validatedCandidate == null
            ? null
@@ -104,6 +107,7 @@ final class RestoreCutoverExecutor {
   final RestoreWorkspaceLock workspaceLock;
   final RestoreDurability durability;
   final RestoreStartupStageSink? onStage;
+  final RestoreStartupDiagnostics? diagnostics;
   final RestoreReceiptStore receiptStore;
   late final RestorePreviousStore previousStore;
   late final RestoreBundleMover mover;
@@ -132,6 +136,7 @@ final class RestoreCutoverExecutor {
       throw StateError('restore_cutover_receipt_history');
     }
     final preparedReceipt = history.first;
+    diagnostics?.recordReceipt(history.last);
     _dropProofsFromEarlierHolds();
     await workspaceLock.claimCutoverRunWhileWorkspaceLocked(
       runId: runId,
@@ -145,6 +150,7 @@ final class RestoreCutoverExecutor {
         throw StateError('restore_cutover_receipt_history');
       }
       final latest = history.last;
+      diagnostics?.recordReceipt(latest);
       switch (latest.state) {
         case RestoreReceiptState.prepared:
           var candidate = _memoizedCandidate(preparedReceipt);
@@ -222,6 +228,7 @@ final class RestoreCutoverExecutor {
           }
           final committed = latest.advance(RestoreReceiptState.committed);
           await receiptStore.publishWhileWorkspaceLocked(committed);
+          diagnostics?.recordReceipt(committed);
           return committed;
         case RestoreReceiptState.committed:
           return revalidateTerminalWhileWorkspaceLocked(latest);
@@ -252,6 +259,7 @@ final class RestoreCutoverExecutor {
       throw StateError('restore_cutover_terminal_history');
     }
     final preparedReceipt = history.first;
+    diagnostics?.recordReceipt(history.last);
     switch (terminalReceipt.state) {
       case RestoreReceiptState.committed:
         await _requireInstalled(
@@ -294,6 +302,7 @@ final class RestoreCutoverExecutor {
     );
     final rollingBack = latest.advance(RestoreReceiptState.rollingBack);
     await receiptStore.publishWhileWorkspaceLocked(rollingBack);
+    diagnostics?.recordReceipt(rollingBack);
     return _completeRollback(
       rollingBack: rollingBack,
       preparedReceipt: preparedReceipt,
@@ -357,6 +366,7 @@ final class RestoreCutoverExecutor {
     );
     final rolledBack = rollingBack.advance(RestoreReceiptState.rolledBack);
     await receiptStore.publishWhileWorkspaceLocked(rolledBack);
+    diagnostics?.recordReceipt(rolledBack);
     return rolledBack;
   }
 

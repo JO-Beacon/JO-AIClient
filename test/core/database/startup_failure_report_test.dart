@@ -4,6 +4,8 @@ import 'package:Kelivo/core/database/app_database.dart';
 import 'package:Kelivo/core/database/chat_database_repository.dart';
 import 'package:Kelivo/core/database/startup_failure_report.dart';
 import 'package:Kelivo/core/database/startup_recovery_service.dart';
+import 'package:Kelivo/core/services/backup/restore_cutover_executor.dart';
+import 'package:Kelivo/core/services/backup/restore_diagnostic_exception.dart';
 import 'package:drift/isolate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -74,11 +76,9 @@ void main() {
     test(
       'unwraps a failure raised on drift\'s worker isolate',
       () async {
-        // 上游这个用例用的是"未发布的 schema"（它只认 {1,2,3}）。本仓库的受理
-        // 契约不同：1..8 都接受，只拒绝比 currentSchemaVersion 更新的版本
-        // （见 AppDatabase._openExecutor）。所以这里用 9——同样会让实时执行器的
-        // setup 在 drift 的 worker isolate 上抛错，调用方同样只看到
-        // DriftRemoteException，而被夹带出来的诊断码变成 database_schema_too_new。
+        // The exact shape of the TestFlight report: an unpublished schema makes
+        // the live executor's setup throw on drift's worker isolate, so the
+        // caller only ever sees DriftRemoteException.
         await createDatabaseAtVersion(directory, 10);
         final database = AppDatabase.open(file: databaseFile(directory));
         Object? caught;
@@ -118,6 +118,72 @@ void main() {
   });
 
   group('environment snapshot', () {
+    test(
+      'keeps captured restore context when adding the environment',
+      () async {
+        final context = {
+          'run id': 'run-one',
+          'last observed receipt state': 'prepared',
+        };
+        final report = StartupFailureReport.capture(
+          stage: StartupFailureStage.restoreGate,
+          error: RestoreFormatException('restore_staging_candidate_directory', {
+            'unexpected directory': 'upload/extra',
+          }),
+          capturedAt: DateTime.utc(2026, 10, 21, 0, 33),
+          restoreDetails: context,
+        );
+        context['run id'] = 'run-two';
+        final enriched = report.withEnvironment(
+          await StartupFailureEnvironment.collect(appDataDirectory: directory),
+        );
+        final text = enriched.toText();
+        expect(text, contains('captured UTC: 2026-10-21T00:33:00.000Z'));
+        expect(text, contains('run id: run-one'));
+        expect(text, isNot(contains('run-two')));
+        expect(text, contains('last observed receipt state: prepared'));
+        expect(text, contains('unexpected directory: upload/extra'));
+        expect(enriched.diagnosticCode, 'restore_staging_candidate_directory');
+      },
+    );
+
+    test('keeps Windows move evidence through a failed rollback', () {
+      const source = r'C:\data\workspaces';
+      const target =
+          r'C:\data\.kelivo_restore\run_test\previous.pending\workspaces';
+      final move = RestoreFileSystemException(
+        const FileSystemException(
+          'restore_durability_rename:32:$target',
+          source,
+        ),
+        const {
+          'operation': 'MoveFileExW',
+          'Windows error code': '32',
+          'source path': source,
+          'target path': target,
+        },
+      );
+      expect(restoreFailureDiagnosticCode(move), 'filesystem');
+      final report = StartupFailureReport.capture(
+        stage: StartupFailureStage.restoreGate,
+        error: RestoreCutoverRollbackException(
+          cutoverError: move,
+          cutoverStackTrace: StackTrace.fromString('original move stack'),
+          rollbackError: StateError('restore_mover_asset_position:workspaces'),
+          rollbackStackTrace: StackTrace.fromString('rollback stack'),
+        ),
+      );
+      expect(report.diagnosticCode, 'restore_cutover_rollback');
+      final text = report.toText();
+      expect(text, contains('operation: MoveFileExW'));
+      expect(text, contains('Windows error code: 32'));
+      expect(text, contains('source path: $source'));
+      expect(text, contains('target path: $target'));
+      expect(text, contains('original move stack'));
+      expect(text, contains('rollback stack'));
+      expect(report.causes, hasLength(3));
+    });
+
     test('reports an installed schema that is behind this build', () async {
       await createDatabaseAtVersion(directory, 1);
 

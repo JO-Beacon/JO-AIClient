@@ -246,6 +246,7 @@ Future<void> main(List<String> arguments) async {
             await AssociatedBackupPathEvents.readPendingPath(appDataDirectory);
       }
       final RestoreReceipt? restoreOutcome;
+      final restoreDiagnostics = RestoreStartupDiagnostics();
       RestoreBusinessLease? businessLease;
       // 大备份恢复可能耗时数秒，若期间一帧不画，用户无法区分这与应用
       // 卡死有何区别。仅当确有待处理工作时才绘制进度屏：普通启动不应
@@ -282,6 +283,7 @@ Future<void> main(List<String> arguments) async {
             await RestoreStartupGate.recoverAndRequireBusinessReady(
               appDataDirectory: appDataDirectory,
               businessLease: businessLease,
+              diagnostics: restoreDiagnostics,
               onStage: restoreStage == null
                   ? null
                   : (stage) {
@@ -302,6 +304,7 @@ Future<void> main(List<String> arguments) async {
               error: error,
               step: 'recover_and_require_business_ready',
               stackTrace: stackTrace,
+              restoreDetails: restoreDiagnostics.details,
             ),
             appDataDirectory: appDataDirectory,
             businessLease: businessLease,

@@ -5,6 +5,8 @@ import 'package:drift/isolate.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
+import '../services/backup/restore_cutover_executor.dart';
+import '../services/backup/restore_diagnostic_exception.dart';
 import '../../shared/utils/format_bytes.dart';
 import 'app_database.dart';
 import 'database_installation_gate.dart';
@@ -276,6 +278,7 @@ final class StartupFailureReport {
     this.step,
     this.stackTrace,
     this.environment,
+    this.restoreDetails = const {},
   });
 
   /// Builds a report from a caught error. Cheap and synchronous, so it can run
@@ -286,6 +289,7 @@ final class StartupFailureReport {
     String? step,
     StackTrace? stackTrace,
     DateTime? capturedAt,
+    Map<String, String> restoreDetails = const {},
   }) {
     return StartupFailureReport(
       stage: stage,
@@ -294,6 +298,7 @@ final class StartupFailureReport {
       capturedAt: capturedAt ?? DateTime.now(),
       step: step,
       stackTrace: stackTrace,
+      restoreDetails: Map.unmodifiable(restoreDetails),
     );
   }
 
@@ -312,6 +317,7 @@ final class StartupFailureReport {
   final String? step;
   final StackTrace? stackTrace;
   final StartupFailureEnvironment? environment;
+  final Map<String, String> restoreDetails;
 
   StartupFailureReport withEnvironment(StartupFailureEnvironment value) =>
       StartupFailureReport(
@@ -322,6 +328,7 @@ final class StartupFailureReport {
         step: step,
         stackTrace: stackTrace,
         environment: value,
+        restoreDetails: restoreDetails,
       );
 
   /// The one line worth showing without expanding anything: the root cause.
@@ -338,19 +345,19 @@ final class StartupFailureReport {
     StackTrace? stackTrace,
   ]) {
     final causes = <StartupFailureCause>[];
-    Object? current = error;
-    StackTrace? currentStack = stackTrace;
     final seen = <Object>{};
-    while (current != null) {
-      if (!seen.add(current)) break;
+    void visit(Object current, StackTrace? currentStack) {
+      if (!seen.add(current)) return;
       causes.add(_describeCause(current, currentStack));
       if (current is DriftRemoteException) {
-        currentStack = current.remoteStackTrace;
-        current = current.remoteCause;
-        continue;
+        visit(current.remoteCause, current.remoteStackTrace);
+      } else if (current is RestoreCutoverRollbackException) {
+        visit(current.cutoverError, current.cutoverStackTrace);
+        visit(current.rollbackError, current.rollbackStackTrace);
       }
-      break;
     }
+
+    visit(error, stackTrace);
     return List.unmodifiable(causes);
   }
 
@@ -390,6 +397,7 @@ final class StartupFailureReport {
           if (error.path case final path? when path.isNotEmpty) 'path': path,
           if (error.osError case final osError?)
             'os error': '${osError.message} (${osError.errorCode})',
+          if (error is RestoreFileSystemException) ...error.details,
         },
         stackTrace: stack,
       );
@@ -405,6 +413,7 @@ final class StartupFailureReport {
       return StartupFailureCause(
         type: 'FormatException',
         message: error.message,
+        details: error is RestoreFormatException ? error.details : const {},
         stackTrace: stack,
       );
     }
@@ -421,10 +430,17 @@ final class StartupFailureReport {
     final buffer = StringBuffer()
       ..writeln('Kelivo startup failure report')
       ..writeln('captured: ${capturedAt.toIso8601String()}')
+      ..writeln('captured UTC: ${capturedAt.toUtc().toIso8601String()}')
       ..writeln('stage: ${stage.code}')
       ..writeln('step: ${step ?? 'unknown'}')
       ..writeln('diagnostic code: $diagnosticCode')
       ..writeln();
+
+    if (restoreDetails.isNotEmpty) {
+      buffer.writeln('== restore context ==');
+      restoreDetails.forEach((key, value) => buffer.writeln('$key: $value'));
+      buffer.writeln();
+    }
 
     buffer.writeln('== error ==');
     for (var index = 0; index < causes.length; index++) {

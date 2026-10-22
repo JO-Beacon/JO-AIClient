@@ -6,6 +6,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/services/chat/chat_service.dart';
+import '../../../desktop/macos_window_drag_area.dart';
 import '../../../core/services/haptics.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../core/services/storage/storage_usage_service.dart';
@@ -859,7 +860,7 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          topBar,
+          MacosWindowDragArea(child: topBar),
           Expanded(child: content),
         ],
       );
