@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image_lib;
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
@@ -15,18 +13,23 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'image_preview_sheet.dart';
+import 'export_image_capture.dart';
+import '../utils/export_image_processor.dart';
 
 import '../../../icons/lucide_adapter.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/models/message_part.dart';
 import '../../../core/models/conversation.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../core/services/model_spec/model_spec_resolver.dart';
 import '../../../core/providers/user_provider.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../utils/mcp_structured_image.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import '../../../shared/markdown/markdown_with_code_highlight.dart';
+import 'package:Kelivo/shared/widgets/app_selection_area.dart';
 import '../../../shared/widgets/export_capture_scope.dart';
 import '../../../shared/widgets/diagram_exporter.dart';
 import '../../../shared/widgets/snackbar.dart';
@@ -36,10 +39,11 @@ import '../../../l10n/app_localizations.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../home/widgets/model_icon.dart';
 import '../utils/thinking_tag_parser.dart';
+import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'chat_message_widget.dart'
     show ChatMessageWidget, ToolUIPart, ReasoningSegment;
 
-// 共享辅助函数
+// Shared helpers
 String _guessImageMime(String path) {
   final lower = path.toLowerCase();
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
@@ -55,32 +59,17 @@ String? _modelDisplayNameFromSettings(
   if (msg.role != 'assistant') return null;
   final modelId = msg.modelId;
   if (modelId == null || modelId.isEmpty) return null;
-  String? name;
-  String baseId = modelId;
   final providerId = msg.providerId;
   if (providerId != null && providerId.isNotEmpty) {
     try {
       final cfg = settings.getProviderConfig(providerId);
-      final ov = cfg.modelOverrides[modelId] as Map?;
-      if (ov != null) {
-        final overrideName = (ov['name'] as String?)?.trim();
-        if (overrideName != null && overrideName.isNotEmpty) {
-          name = overrideName;
-        }
-        final apiId = (ov['apiModelId'] ?? ov['api_model_id'])
-            ?.toString()
-            .trim();
-        if (apiId != null && apiId.isNotEmpty) {
-          baseId = apiId;
-        }
-      }
+      final resolved = ModelSpecResolver.instance.resolve(cfg, modelId);
+      return resolved.override.displayName ?? resolved.spec.upstreamId;
     } catch (_) {
-      // 忽略查找异常；回退到下方推断。
+      // ignore lookup issues; fall back to the logical model id.
     }
   }
-
-  final fallback = baseId.trim();
-  return name ?? (fallback.isNotEmpty ? fallback : baseId);
+  return modelId;
 }
 
 String _getRoleNameFromDependencies({
@@ -108,11 +97,11 @@ String _getRoleNameFromDependencies({
   return msg.role;
 }
 
-/// 从结构化 [MessagePart] 构建导出载荷。
+/// Build export payload from structured [MessagePart]s.
 ///
-/// 文本取自 [textOverride]（例如去除 thinking 的助手正文）或
-/// [ChatMessage.content]（TextPart 拼接）。附件取自 ImagePart /
-/// FilePart——绝不还原为旧版标记字符串。
+/// Text comes from [textOverride] (e.g. thinking-stripped assistant body) or
+/// [ChatMessage.content] (TextPart join). Attachments are taken from ImagePart /
+/// FilePart only — never reconstructed as legacy marker strings.
 _Parsed _exportPartsFromMessage(ChatMessage message, {String? textOverride}) {
   final images = <String>[];
   final docs = <_DocRef>[];
@@ -134,8 +123,129 @@ _Parsed _exportPartsFromMessage(ChatMessage message, {String? textOverride}) {
   return _Parsed(text, images, docs);
 }
 
+Future<void> _writeExportBlocks(
+  StringBuffer buf,
+  ChatMessage message, {
+  required bool includeThinking,
+  required bool includeTools,
+  required String thinkingLabel,
+  required bool markdown,
+  required Future<void> Function(String uri) writeImage,
+}) async {
+  var wroteReasoningPart = false;
+  final hasReasoningPart = message.parts.any((part) => part is ReasoningPart);
+  final stripThink = message.role == 'assistant' && !hasReasoningPart;
+  final joinedText = stripThink ? message.content : '';
+  final thinkRanges = stripThink
+      ? ThinkingTagParser.parseWithRanges(joinedText)
+      : null;
+  var textOffset = 0;
+  for (final part in message.parts) {
+    switch (part) {
+      case TextPart(:final text):
+        final start = textOffset;
+        final end = textOffset + text.length;
+        textOffset = end;
+        final body = thinkRanges == null || thinkRanges.hiddenRanges.isEmpty
+            ? text
+            : ThinkingTagParser.visibleSlice(
+                joinedText,
+                start: start,
+                end: end,
+                hiddenRanges: thinkRanges.hiddenRanges,
+              );
+        if (body.isEmpty) continue;
+        buf.writeln(body);
+        buf.writeln('');
+      case ImagePart(:final uri):
+        final trimmed = uri.trim();
+        if (trimmed.isEmpty) continue;
+        await writeImage(trimmed);
+      case FilePart(:final name, :final mime):
+        if (markdown) {
+          buf.writeln('- $name  `(${mime ?? 'application/octet-stream'})`');
+        } else {
+          buf.writeln('- $name (${mime ?? 'application/octet-stream'})');
+        }
+      case ReasoningPart(:final text):
+        if (!includeThinking || text.trim().isEmpty) continue;
+        wroteReasoningPart = true;
+        buf.writeln('');
+        buf.writeln(markdown ? '**$thinkingLabel**' : '[$thinkingLabel]');
+        buf.writeln('');
+        if (markdown) {
+          buf.writeln('```text');
+          buf.writeln(text.trim());
+          buf.writeln('```');
+        } else {
+          buf.writeln(text.trim());
+        }
+        buf.writeln('');
+      case ToolCallPart(:final payloadJson):
+        if (!includeTools) continue;
+        try {
+          final decoded = jsonDecode(payloadJson);
+          if (decoded is! Map) continue;
+          final name = (decoded['name'] ?? '').toString();
+          final content = toolResultContentForModel(
+            decoded['content']?.toString(),
+          );
+          buf.writeln(name.isEmpty ? '[tool]' : '[$name]');
+          if (content.trim().isNotEmpty) {
+            buf.writeln(content);
+          }
+          buf.writeln('');
+        } catch (_) {}
+      default:
+        break;
+    }
+  }
+  if (includeThinking && !wroteReasoningPart) {
+    final thinkingTexts = thinkRanges != null && thinkRanges.hasThinking
+        ? thinkRanges.thinkingTexts
+        : _thinkingExportDataForMessage(message).thinkingTexts;
+    if (thinkingTexts.isNotEmpty) {
+      final t = thinkingTexts.join('\n\n');
+      if (t.isNotEmpty) {
+        buf.writeln('');
+        buf.writeln(markdown ? '**$thinkingLabel**' : '[$thinkingLabel]');
+        buf.writeln('');
+        if (markdown) {
+          buf.writeln('```text');
+          buf.writeln(t);
+          buf.writeln('```');
+        } else {
+          buf.writeln(t);
+        }
+        buf.writeln('');
+      }
+    }
+  }
+}
+
+@visibleForTesting
+Future<String> exportMessageBlocksForTesting(
+  ChatMessage message, {
+  required bool showThinkingAndToolCards,
+}) async {
+  final buf = StringBuffer();
+  await _writeExportBlocks(
+    buf,
+    message,
+    includeThinking: showThinkingAndToolCards,
+    includeTools: showThinkingAndToolCards,
+    thinkingLabel: 'Thinking',
+    markdown: false,
+    writeImage: (uri) async {
+      buf.writeln('![image]($uri)');
+      buf.writeln('');
+    },
+  );
+  return buf.toString();
+}
+
 String _softBreakMd(String input) {
-  // 在围栏代码块之外的超长 token 中插入零宽断行符。
+  // Insert zero-width break in very long tokens outside fenced code blocks.
   final lines = input.split('\n');
   final out = StringBuffer();
   bool inFence = false;
@@ -143,7 +253,7 @@ String _softBreakMd(String input) {
     String l = line;
     final trimmed = l.trimLeft();
     if (trimmed.startsWith('```')) {
-      inFence = !inFence; // 围栏行上切换
+      inFence = !inFence; // toggle on fence lines
       out.writeln(l);
       continue;
     }
@@ -174,10 +284,22 @@ class _ThinkingExportData {
 }
 
 _ThinkingExportData _thinkingExportDataForMessage(ChatMessage message) {
+  final structuredReasoning = [
+    for (final part in message.parts)
+      if (part is ReasoningPart && part.text.trim().isNotEmpty)
+        part.text.trim(),
+  ];
+  if (structuredReasoning.isNotEmpty) {
+    return _ThinkingExportData(
+      cleanedContent: message.content.trim(),
+      thinkingTexts: structuredReasoning,
+    );
+  }
+
   final thinkingTexts = <String>[];
   var cleanedContent = message.content.trim();
 
-  // 优先使用结构化推理段（可能含多个块）。
+  // Prefer structured reasoning segments (may include multiple blocks).
   final segJson = (message.reasoningSegmentsJson ?? '').trim();
   if (segJson.isNotEmpty) {
     try {
@@ -193,14 +315,14 @@ _ThinkingExportData _thinkingExportDataForMessage(ChatMessage message) {
     } catch (_) {}
   }
 
-  // 若段不可用，则回退到 <think> 标签。
+  // Fall back to <think> tags if segments are not available.
   if (thinkingTexts.isEmpty) {
-    final parsed = ThinkingTagParser.parseLegacyInlineBlocks(message.content);
+    final parsed = ThinkingTagParser.parseWithRanges(message.content);
     cleanedContent = parsed.visibleContent;
     thinkingTexts.addAll(parsed.thinkingTexts);
   }
 
-  // 回退到旧版 reasoningText 字段。
+  // Fall back to the legacy reasoningText field.
   if (thinkingTexts.isEmpty) {
     final rt = (message.reasoningText ?? '').trim();
     if (rt.isNotEmpty) thinkingTexts.add(rt);
@@ -210,6 +332,67 @@ _ThinkingExportData _thinkingExportDataForMessage(ChatMessage message) {
     cleanedContent: cleanedContent,
     thinkingTexts: thinkingTexts,
   );
+}
+
+/// Prepare a message for image export.
+///
+/// Inline `<think>` spans are sliced out of each [TextPart] so the widget
+/// body does not repeat text that [exportReasoningPayload] already renders
+/// as a thinking card. [ReasoningPart] / [ToolCallPart] stay when the
+/// toggle is on and are dropped when it is off.
+@visibleForTesting
+ChatMessage messageForThinkingExport(
+  ChatMessage message, {
+  required bool showThinkingAndToolCards,
+}) {
+  if (message.role != 'assistant') {
+    return message;
+  }
+  final hasReasoningPart = message.parts.any((part) => part is ReasoningPart);
+  final kept = [
+    for (final part in message.parts)
+      if (showThinkingAndToolCards ||
+          (part is! ReasoningPart && part is! ToolCallPart))
+        part,
+  ];
+  if (hasReasoningPart) {
+    return showThinkingAndToolCards ? message : message.copyWith(parts: kept);
+  }
+  final joined = message.content;
+  final ranges = ThinkingTagParser.parseWithRanges(joined);
+  if (ranges.hiddenRanges.isEmpty) {
+    return showThinkingAndToolCards ? message : message.copyWith(parts: kept);
+  }
+  return message.copyWith(
+    parts: _partsWithVisibleThinkSlices(
+      kept,
+      joined,
+      ranges,
+      insertReasoningParts: showThinkingAndToolCards,
+    ),
+  );
+}
+
+List<MessagePart> _partsWithVisibleThinkSlices(
+  List<MessagePart> parts,
+  String joined,
+  ThinkingTagParseRanges ranges, {
+  required bool insertReasoningParts,
+}) {
+  final next = <MessagePart>[];
+  ThinkingTagParser.walkSlices(
+    parts,
+    joined,
+    ranges,
+    onVisible: (text) => next.add(TextPart(text)),
+    onThinking: (_, text) {
+      if (insertReasoningParts && text.isNotEmpty) {
+        next.add(ReasoningPart(text));
+      }
+    },
+    onOther: next.add,
+  );
+  return next;
 }
 
 void _addReasoningSegmentTexts(List<String> output, List<dynamic> segments) {
@@ -241,7 +424,7 @@ List<ToolUIPart> _exportToolPartsForMessage(
 ) {
   try {
     final chatService = context.read<ChatService>();
-    final events = chatService.getToolEvents(message.id);
+    final events = chatService.getToolEventsForMessage(message);
     if (events.isEmpty) return const <ToolUIPart>[];
     return events
         .map(
@@ -271,7 +454,7 @@ _ExportReasoningPayload _exportReasoningPayloadForMessage(
   required bool expandThinkingContent,
 }) {
   final segJson = (message.reasoningSegmentsJson ?? '').trim();
-  final segments = <ReasoningSegment>[];
+  var segments = <ReasoningSegment>[];
   List<int>? offsets;
   List<int>? reasoningCounts;
   List<int>? toolCounts;
@@ -344,12 +527,157 @@ _ExportReasoningPayload _exportReasoningPayloadForMessage(
     }
   }
 
+  if (!message.parts.any((part) => part is ReasoningPart)) {
+    segments = _expandSegmentsByLegacyThinkFragments(
+      message,
+      segments,
+      expandThinkingContent: expandThinkingContent,
+    );
+  } else {
+    segments = _alignStructuredReasoningSegments(
+      message,
+      segments,
+      expandThinkingContent: expandThinkingContent,
+    );
+  }
+
   return _ExportReasoningPayload(
     segments: segments,
     contentSplitOffsets: offsets,
     reasoningCountAtSplit: reasoningCounts,
     toolCountAtSplit: toolCounts,
   );
+}
+
+List<ReasoningSegment> _alignStructuredReasoningSegments(
+  ChatMessage message,
+  List<ReasoningSegment> source, {
+  required bool expandThinkingContent,
+}) {
+  final texts = [
+    for (final part in message.parts)
+      if (part is ReasoningPart && part.text.isNotEmpty) part.text,
+  ];
+  if (texts.isEmpty) return source;
+  return [
+    for (var i = 0; i < texts.length; i++)
+      ReasoningSegment(
+        text: texts[i],
+        expanded: i < source.length
+            ? source[i].expanded
+            : expandThinkingContent,
+        loading: false,
+        startAt: i < source.length ? source[i].startAt : null,
+        finishedAt: i < source.length ? source[i].finishedAt : null,
+        toolStartIndex: i < source.length ? source[i].toolStartIndex : 0,
+      ),
+  ];
+}
+
+List<ReasoningSegment> _expandSegmentsByLegacyThinkFragments(
+  ChatMessage message,
+  List<ReasoningSegment> source, {
+  required bool expandThinkingContent,
+}) {
+  final ranges = ThinkingTagParser.parseWithRanges(message.content);
+  if (ranges.hiddenRanges.isEmpty) return source;
+
+  final fragments = <(int, String)>[];
+  ThinkingTagParser.walkSlices(
+    message.parts,
+    message.content,
+    ranges,
+    onVisible: (_) {},
+    onThinking: (rangeIndex, text) {
+      if (text.isNotEmpty) fragments.add((rangeIndex, text));
+    },
+    onOther: (_) {},
+  );
+  if (fragments.isEmpty) return source;
+
+  final byRange = <int, ReasoningSegment>{};
+  var sourceIndex = 0;
+  for (var i = 0; i < ranges.hiddenRanges.length; i++) {
+    final range = ranges.hiddenRanges[i];
+    if (range.bodyEnd <= range.bodyStart) continue;
+    if (sourceIndex < source.length) {
+      byRange[i] = source[sourceIndex++];
+    }
+  }
+
+  return [
+    for (final fragment in fragments)
+      _reasoningSegmentFromSource(
+        byRange[fragment.$1],
+        text: fragment.$2,
+        expandThinkingContent: expandThinkingContent,
+      ),
+  ];
+}
+
+ReasoningSegment _reasoningSegmentFromSource(
+  ReasoningSegment? source, {
+  required String text,
+  required bool expandThinkingContent,
+}) {
+  return ReasoningSegment(
+    text: text,
+    expanded: source?.expanded ?? expandThinkingContent,
+    loading: false,
+    startAt: source?.startAt,
+    finishedAt: source?.finishedAt,
+    toolStartIndex: source?.toolStartIndex ?? 0,
+  );
+}
+
+@visibleForTesting
+List<({bool expanded, DateTime? startAt, DateTime? finishedAt})>
+exportReasoningMetadataForTesting(
+  ChatMessage message, {
+  required bool expandThinkingContent,
+}) {
+  return [
+    for (final segment in _exportReasoningPayloadForMessage(
+      message,
+      expandThinkingContent: expandThinkingContent,
+    ).segments)
+      (
+        expanded: segment.expanded,
+        startAt: segment.startAt,
+        finishedAt: segment.finishedAt,
+      ),
+  ];
+}
+
+@visibleForTesting
+({List<int>? offsets, List<int>? reasoningCounts, List<int>? toolCounts})
+exportContentSplitsForTesting(
+  ChatMessage message, {
+  bool expandThinkingContent = true,
+}) {
+  final payload = _exportReasoningPayloadForMessage(
+    message,
+    expandThinkingContent: expandThinkingContent,
+  );
+  return (
+    offsets: payload.contentSplitOffsets,
+    reasoningCounts: payload.reasoningCountAtSplit,
+    toolCounts: payload.toolCountAtSplit,
+  );
+}
+
+@visibleForTesting
+List<bool> exportReasoningExpandedFlagsForTesting(
+  ChatMessage message, {
+  required bool expandThinkingContent,
+}) {
+  return [
+    for (final item in exportReasoningMetadataForTesting(
+      message,
+      expandThinkingContent: expandThinkingContent,
+    ))
+      item.expanded,
+  ];
 }
 
 Future<void> _saveExportTextWithPicker(
@@ -367,7 +695,7 @@ Future<void> _saveExportTextWithPicker(
       type: FileType.custom,
       allowedExtensions: allowedExtensions,
     );
-    if (savePath == null) return; // 用户已取消
+    if (savePath == null) return; // user cancelled
 
     try {
       await File(savePath).parent.create(recursive: true);
@@ -391,7 +719,7 @@ Future<void> _saveExportTextWithPicker(
     return;
   }
 
-  // 移动端：使用带 bytes 参数的 FilePicker（Android 与 iOS 必需）。
+  // Mobile: use FilePicker with bytes parameter (required on Android & iOS).
   final contentBytes = utf8.encode(content);
   final String? savePath = await FilePicker.platform.saveFile(
     dialogTitle: l10n.backupPageExportToFile,
@@ -452,56 +780,31 @@ Future<void> exportChatMessagesMarkdown(
       buf.writeln('> $time · $roleName');
       buf.writeln('');
 
-      final exportData = (msg.role == 'assistant')
-          ? _thinkingExportDataForMessage(msg)
-          : null;
-      final contentForExport = exportData?.cleanedContent ?? msg.content;
-
-      final parsed = _exportPartsFromMessage(
+      await _writeExportBlocks(
+        buf,
         msg,
-        textOverride: contentForExport,
-      );
-      if (parsed.text.isNotEmpty) {
-        buf.writeln(parsed.text);
-        buf.writeln('');
-      }
-
-      for (final p in parsed.images) {
-        final fixed = SandboxPathResolver.fix(p);
-        try {
-          final f = File(fixed);
-          if (await f.exists()) {
-            final bytes = await f.readAsBytes();
-            final b64 = base64Encode(bytes);
-            final mime = _guessImageMime(fixed);
-            buf.writeln('![](data:$mime;base64,$b64)');
-          } else {
+        includeThinking: includeThinking,
+        includeTools: showThinkingAndToolCards,
+        thinkingLabel: thinkingLabel,
+        markdown: true,
+        writeImage: (imageUri) async {
+          final fixed = SandboxPathResolver.fix(imageUri);
+          try {
+            final f = File(fixed);
+            if (await f.exists()) {
+              final bytes = await f.readAsBytes();
+              final b64 = base64Encode(bytes);
+              final mime = _guessImageMime(fixed);
+              buf.writeln('![](data:$mime;base64,$b64)');
+            } else {
+              buf.writeln('![image]($fixed)');
+            }
+          } catch (_) {
             buf.writeln('![image]($fixed)');
           }
-        } catch (_) {
-          buf.writeln('![image]($fixed)');
-        }
-        buf.writeln('');
-      }
-
-      for (final d in parsed.docs) {
-        buf.writeln('- ${d.fileName}  `(${d.mime})`');
-      }
-
-      if (includeThinking &&
-          exportData != null &&
-          exportData.thinkingTexts.isNotEmpty) {
-        final t = exportData.thinkingTexts.join('\n\n').trim();
-        if (t.isNotEmpty) {
           buf.writeln('');
-          buf.writeln('**$thinkingLabel**');
-          buf.writeln('');
-          buf.writeln('```text');
-          buf.writeln(t);
-          buf.writeln('```');
-          buf.writeln('');
-        }
-      }
+        },
+      );
 
       buf.writeln('\n---\n');
     }
@@ -567,40 +870,24 @@ Future<void> exportChatMessagesTxt(
       buf.writeln('$time · $roleName');
       buf.writeln('');
 
-      final exportData = (msg.role == 'assistant')
-          ? _thinkingExportDataForMessage(msg)
-          : null;
-      final contentForExport = exportData?.cleanedContent ?? msg.content;
-
-      final parsed = _exportPartsFromMessage(
+      await _writeExportBlocks(
+        buf,
         msg,
-        textOverride: contentForExport,
+        includeThinking: includeThinking,
+        includeTools: showThinkingAndToolCards,
+        thinkingLabel: thinkingLabel,
+        markdown: false,
+        writeImage: (imageUri) async {
+          buf.writeln(imageUri);
+          buf.writeln('');
+        },
       );
-      if (parsed.text.isNotEmpty) {
-        buf.writeln(parsed.text);
-        buf.writeln('');
-      }
-
-      for (final d in parsed.docs) {
-        buf.writeln('- ${d.fileName} (${d.mime})');
-      }
-
-      if (includeThinking &&
-          exportData != null &&
-          exportData.thinkingTexts.isNotEmpty) {
-        final t = exportData.thinkingTexts.join('\n\n').trim();
-        if (t.isNotEmpty) {
-          buf.writeln('');
-          buf.writeln('[$thinkingLabel]');
-          buf.writeln(t);
-          buf.writeln('');
-        }
-      }
 
       buf.writeln('\n---\n');
     }
 
     final filename = 'chat-export-${DateTime.now().millisecondsSinceEpoch}.txt';
+    if (!context.mounted) return;
     await _saveExportTextWithPicker(
       context,
       filename: filename,
@@ -625,19 +912,24 @@ Future<void> exportChatMessagesImage(
   bool expandThinkingContent = false,
 }) async {
   try {
-    File? file;
-    await _runWithExportingOverlay(context, () async {
+    _ExportedImageResult? file;
+    await _runWithExportingOverlay(context, (progress) async {
       file = await _renderAndSaveChatImage(
         context,
         conversation,
         messages,
+        progress: progress,
         showThinkingAndToolCards: showThinkingAndToolCards,
         expandThinkingContent: expandThinkingContent,
       );
     });
     if (file == null) throw 'render error';
     if (!context.mounted) return;
-    await showImagePreviewSheet(context, file: file!);
+    await showImagePreviewSheet(
+      context,
+      file: file!.file,
+      preparedPreview: file!.preview,
+    );
   } catch (e) {
     if (!context.mounted) return;
     final l10n = AppLocalizations.of(context)!;
@@ -649,9 +941,10 @@ Future<void> exportChatMessagesImage(
   }
 }
 
-Future<File?> _renderAndSaveMessageImage(
+Future<_ExportedImageResult?> _renderAndSaveMessageImage(
   BuildContext context,
   ChatMessage message, {
+  required ValueNotifier<ExportImageProgress> progress,
   bool showThinkingAndToolCards = false,
   bool expandThinkingContent = false,
 }) async {
@@ -663,10 +956,20 @@ Future<File?> _renderAndSaveMessageImage(
   final title =
       chatService.getConversation(message.conversationId)?.title ??
       l10n.messageExportSheetDefaultTitle;
-  // 为导出预渲染 Mermaid 与 SVG 图表为图片
+  // Pre-render Mermaid and SVG diagrams to images for export
   try {
     final codes = extractDiagramCodes(message.content);
-    await preRenderDiagramCodesForExport(context, codes);
+    await preRenderDiagramCodesForExport(
+      context,
+      codes,
+      onProgress: (completed, total) {
+        progress.value = ExportImageProgress(
+          ExportImageStage.diagrams,
+          completed: completed,
+          total: total,
+        );
+      },
+    );
   } catch (_) {}
 
   final bool isDesktop =
@@ -690,15 +993,17 @@ Future<File?> _renderAndSaveMessageImage(
     context,
     buildContent,
     theme: theme,
+    progress: progress,
     width: exportConfig.width,
     pixelRatio: exportConfig.pixelRatio,
   );
 }
 
-Future<File?> _renderAndSaveChatImage(
+Future<_ExportedImageResult?> _renderAndSaveChatImage(
   BuildContext context,
   Conversation conversation,
   List<ChatMessage> messages, {
+  required ValueNotifier<ExportImageProgress> progress,
   bool showThinkingAndToolCards = false,
   bool expandThinkingContent = false,
 }) async {
@@ -706,13 +1011,23 @@ Future<File?> _renderAndSaveChatImage(
   final cs = theme.colorScheme;
   final settings = context.read<SettingsProvider>();
   final l10n = AppLocalizations.of(context)!;
-  // 预渲染选中消息中的所有 Mermaid 与 SVG 图表
+  // Pre-render all Mermaid and SVG diagrams found in selected messages
   try {
     final codes = messages
         .map((m) => extractDiagramCodes(m.content))
         .expand((e) => e)
         .toList();
-    await preRenderDiagramCodesForExport(context, codes);
+    await preRenderDiagramCodesForExport(
+      context,
+      codes,
+      onProgress: (completed, total) {
+        progress.value = ExportImageProgress(
+          ExportImageStage.diagrams,
+          completed: completed,
+          total: total,
+        );
+      },
+    );
   } catch (_) {}
 
   final bool isDesktop =
@@ -739,6 +1054,7 @@ Future<File?> _renderAndSaveChatImage(
     context,
     buildContent,
     theme: theme,
+    progress: progress,
     width: exportConfig.width,
     pixelRatio: exportConfig.pixelRatio,
   );
@@ -747,9 +1063,6 @@ Future<File?> _renderAndSaveChatImage(
 const double _desktopExportLogicalWidth = 720.0;
 const double _mobileExportLogicalWidth = 480.0;
 const double _exportImagePixelRatio = 3.0;
-const int _exportImageBlankTrimPreservePaddingPhysical = 48;
-const int _exportImageBlankAlphaTolerance = 8;
-const int _exportImageBlankColorTolerance = 3;
 
 ({double width, double pixelRatio}) _exportImageRenderConfig({
   required bool isDesktop,
@@ -767,107 +1080,35 @@ const int _exportImageBlankColorTolerance = 3;
   return _exportImageRenderConfig(isDesktop: isDesktop);
 }
 
-@visibleForTesting
-({List<int>? offsets, List<int>? reasoningCounts, List<int>? toolCounts})
-exportContentSplitsForTesting(ChatMessage message) {
-  final payload = _exportReasoningPayloadForMessage(
-    message,
-    expandThinkingContent: true,
-  );
-  return (
-    offsets: payload.contentSplitOffsets,
-    reasoningCounts: payload.reasoningCountAtSplit,
-    toolCounts: payload.toolCountAtSplit,
-  );
+class _ExportedImageResult {
+  const _ExportedImageResult(this.file, this.preview);
+  final File file;
+  final ExportImagePreview? preview;
 }
 
-// 不分页的直接渲染方案
-Future<File?> _renderWidgetDirectly(
+Future<_ExportedImageResult> _renderWidgetDirectly(
   BuildContext context,
   Widget Function() buildContent, {
   required ThemeData theme,
-  double width = 480, // 宽度*3
-  double pixelRatio = 3.0,
+  required ValueNotifier<ExportImageProgress> progress,
+  double width = 480,
+  double pixelRatio = 3,
 }) async {
-  final overlay = Overlay.of(context);
-
-  final boundaryKey = GlobalKey();
-  final completer = Completer<void>();
-
-  late OverlayEntry entry;
-  entry = OverlayEntry(
-    builder: (ctx) {
-      // 在多帧之后再触发完成回调，以确保渲染完成
-      int frameCount = 0;
-      void scheduleCompletion() {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          frameCount++;
-          if (frameCount < 3) {
-            // 等待 3 帧以确保渲染完成
-            scheduleCompletion();
-          } else if (!completer.isCompleted) {
-            completer.complete();
-          }
-        });
-      }
-
-      scheduleCompletion();
-
-      return Positioned(
-        left: -10000, // 放到屏幕外远处
-        top: -10000,
-        child: _ExportCaptureRoot(
-          theme: theme,
-          boundaryKey: boundaryKey,
-          width: width,
-          child: buildContent(),
-        ),
-      );
-    },
+  final result = await captureExportWidget(
+    context,
+    buildContent(),
+    theme: theme,
+    width: width,
+    pixelRatio: pixelRatio,
+    onProgress: (value) => progress.value = value,
   );
-
-  overlay.insert(entry);
-  var entryRemoved = false;
-
-  try {
-    // 等待 widget 就绪
-    await completer.future;
-    // 额外延时以确保全部绘制完成
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-
-    final boundary =
-        boundaryKey.currentContext?.findRenderObject()
-            as RenderRepaintBoundary?;
-    if (boundary == null) return null;
-
-    final contentSize = boundary.size;
-    var data = await _captureBoundaryPngBytes(boundary, pixelRatio: pixelRatio);
-    if (data == null && !contentSize.isEmpty) {
-      entry.remove();
-      entryRemoved = true;
-      await WidgetsBinding.instance.endOfFrame;
-      data = await _captureWidgetViewportSlicesPngBytes(
-        overlay,
-        buildContent,
-        theme: theme,
-        width: width,
-        pixelRatio: pixelRatio,
-        contentSize: contentSize,
-      );
-    }
-    if (data == null) return null;
-
-    // 保存到文件
-    final dir = await getTemporaryDirectory();
-    final file = File(
-      '${dir.path}/chat-export-${DateTime.now().millisecondsSinceEpoch}.png',
-    );
-    await file.writeAsBytes(data);
-
-    return file;
-  } finally {
-    if (!entryRemoved) entry.remove();
-  }
+  progress.value = const ExportImageProgress(ExportImageStage.saving);
+  final dir = await getTemporaryDirectory();
+  final file = File(
+    '${dir.path}/chat-export-${DateTime.now().microsecondsSinceEpoch}.png',
+  );
+  await file.writeAsBytes(result.pngBytes);
+  return _ExportedImageResult(file, result.preview);
 }
 
 @visibleForTesting
@@ -984,240 +1225,55 @@ class _ExportCaptureViewportRoot extends StatelessWidget {
   }
 }
 
-// 将整图截图控制在常见 16384px GPU 纹理上限以下，同时
-// 对仍能以 >=2x 适配的导出避免使用切片合成器。
-const double _maxExportFullCapturePhysicalDimension = 15360.0;
-const double _maxExportCaptureSlicePhysicalHeight = 4096.0;
-const double _minExportFullCapturePixelRatio = 2.0;
-
 @visibleForTesting
 Future<Uint8List?> captureExportBoundaryPngBytesForTesting(
   RenderRepaintBoundary boundary, {
   required double pixelRatio,
-}) {
-  return _captureBoundaryPngBytes(boundary, pixelRatio: pixelRatio);
+}) async {
+  final ratio = exportFullCaptureRatio(boundary.size, pixelRatio);
+  if (ratio == null) return null;
+  final png = await captureExportBoundary(boundary, ratio);
+  if (png == null) return null;
+  return (await compute(
+    processExportImage,
+    ExportImageProcessingRequest(singlePngBytes: png),
+  )).pngBytes;
 }
 
 @visibleForTesting
 bool shouldUseFullExportCaptureForTesting({
   required Size logicalSize,
   required double pixelRatio,
-}) {
-  return _shouldUseFullExportCapture(logicalSize, pixelRatio: pixelRatio);
-}
+}) => exportFullCaptureRatio(logicalSize, pixelRatio) != null;
 
 @visibleForTesting
 double? exportFullCapturePixelRatioForTesting({
   required Size logicalSize,
   required double requestedPixelRatio,
-}) {
-  return _exportFullCapturePixelRatio(
-    logicalSize,
-    requestedPixelRatio: requestedPixelRatio,
-  );
-}
+}) => exportFullCaptureRatio(logicalSize, requestedPixelRatio);
 
 @visibleForTesting
-double exportCaptureSliceLogicalHeightForTesting({required double pixelRatio}) {
-  return _exportCaptureSliceLogicalHeight(pixelRatio: pixelRatio);
-}
+double exportCaptureSliceLogicalHeightForTesting({
+  required double pixelRatio,
+}) => exportSliceLogicalHeight(pixelRatio);
 
 @visibleForTesting
 Uint8List stitchExportPngSlicesForTesting({
   required int outputWidth,
   required int outputHeight,
   required List<({Uint8List bytes, int y})> slices,
-}) {
-  return _stitchExportPngSlices(
-    outputWidth: outputWidth,
-    outputHeight: outputHeight,
-    slices: slices,
-  );
-}
+}) => image_lib.encodePng(stitchExportImage(outputWidth, outputHeight, slices));
 
-Future<Uint8List?> _captureBoundaryPngBytes(
-  RenderRepaintBoundary boundary, {
-  required double pixelRatio,
-}) async {
-  if (boundary.size.isEmpty) return null;
-  final fullCapturePixelRatio = _exportFullCapturePixelRatio(
-    boundary.size,
-    requestedPixelRatio: pixelRatio,
-  );
-  if (fullCapturePixelRatio != null) {
-    final fullCapture = await _captureFullBoundaryPngBytes(
-      boundary,
-      pixelRatio: fullCapturePixelRatio,
-    );
-    if (fullCapture != null) {
-      return _processCapturedExportPng(
-        _CapturedExportPngProcessingRequest.single(
-          singlePngBytes: fullCapture,
-          preservePadding: _exportImageBlankTrimPreservePaddingPhysical,
-        ),
-      );
-    }
-  }
-  return null;
-}
-
-Future<Uint8List?> _captureWidgetViewportSlicesPngBytes(
-  OverlayState overlay,
-  Widget Function() buildContent, {
-  required ThemeData theme,
-  required double width,
-  required double pixelRatio,
-  required Size contentSize,
-}) async {
-  final sliceLogicalHeight = _exportCaptureSliceLogicalHeight(
-    pixelRatio: pixelRatio,
-  );
-  final outputWidth = (contentSize.width * pixelRatio).ceil();
-  final outputHeight = (contentSize.height * pixelRatio).ceil();
-  final slices = <({Uint8List bytes, int y})>[];
-
-  double top = 0;
-  while (top < contentSize.height) {
-    final height = (contentSize.height - top).clamp(0.0, sliceLogicalHeight);
-    final boundaryKey = GlobalKey();
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (ctx) {
-        return Positioned(
-          left: -10000,
-          top: -10000,
-          child: _ExportCaptureViewportRoot(
-            theme: theme,
-            boundaryKey: boundaryKey,
-            width: width,
-            viewportHeight: height,
-            contentHeight: contentSize.height,
-            offsetY: top,
-            child: buildContent(),
-          ),
-        );
-      },
-    );
-
-    overlay.insert(entry);
-    try {
-      await _waitForExportCaptureFrames(
-        frameCount: 2,
-        settleDelay: const Duration(milliseconds: 80),
-      );
-      final boundary =
-          boundaryKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary == null) return null;
-      final slice = await _captureFullBoundaryPngBytes(
-        boundary,
-        pixelRatio: pixelRatio,
-      );
-      if (slice == null) return null;
-      slices.add((bytes: slice, y: (top * pixelRatio).round()));
-    } finally {
-      entry.remove();
-    }
-
-    top += height;
-    await WidgetsBinding.instance.endOfFrame;
-  }
-
-  return _processCapturedExportPng(
-    _CapturedExportPngProcessingRequest.slices(
-      outputWidth: outputWidth,
-      outputHeight: outputHeight,
-      slices: slices
-          .map(
-            (slice) => _ExportPngSlicePayload(bytes: slice.bytes, y: slice.y),
-          )
-          .toList(growable: false),
-      preservePadding: _exportImageBlankTrimPreservePaddingPhysical,
-    ),
-  );
-}
-
-Future<void> _waitForExportCaptureFrames({
-  required int frameCount,
-  Duration settleDelay = Duration.zero,
-}) async {
-  for (var i = 0; i < frameCount; i += 1) {
-    await WidgetsBinding.instance.endOfFrame;
-  }
-  if (settleDelay > Duration.zero) {
-    await Future<void>.delayed(settleDelay);
-  }
-}
-
-bool _shouldUseFullExportCapture(
-  Size logicalSize, {
-  required double pixelRatio,
-}) {
-  return _exportFullCapturePixelRatio(
-        logicalSize,
-        requestedPixelRatio: pixelRatio,
-      ) !=
-      null;
-}
-
-double? _exportFullCapturePixelRatio(
-  Size logicalSize, {
-  required double requestedPixelRatio,
-}) {
-  if (logicalSize.isEmpty || requestedPixelRatio <= 0) return null;
-  final maxLogicalDimension = math.max(logicalSize.width, logicalSize.height);
-  if (maxLogicalDimension <= 0) return null;
-  final requestedPhysicalDimension = maxLogicalDimension * requestedPixelRatio;
-  if (requestedPhysicalDimension <= _maxExportFullCapturePhysicalDimension) {
-    return requestedPixelRatio;
-  }
-  final cappedPixelRatio =
-      _maxExportFullCapturePhysicalDimension / maxLogicalDimension;
-  if (cappedPixelRatio < _minExportFullCapturePixelRatio) return null;
-  return math.min(requestedPixelRatio, cappedPixelRatio);
-}
-
-double _exportCaptureSliceLogicalHeight({required double pixelRatio}) {
-  final height = (_maxExportCaptureSlicePhysicalHeight / pixelRatio).floor();
-  return math.max(height, 1).toDouble();
-}
-
-Future<Uint8List?> _captureFullBoundaryPngBytes(
-  RenderRepaintBoundary boundary, {
-  required double pixelRatio,
-}) async {
-  ui.Image? image;
-  try {
-    image = await boundary.toImage(pixelRatio: pixelRatio);
-    final expectedWidth = (boundary.size.width * pixelRatio).ceil();
-    final expectedHeight = (boundary.size.height * pixelRatio).ceil();
-    if (image.width < expectedWidth || image.height < expectedHeight) {
-      debugPrint(
-        'Full export image capture was clipped '
-        '(${image.width}x${image.height}, expected '
-        '${expectedWidth}x$expectedHeight); falling back to slices.',
-      );
-      return null;
-    }
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    return data?.buffer.asUint8List();
-  } catch (e) {
-    debugPrint('Full export image capture failed, falling back to slices: $e');
-    return null;
-  } finally {
-    image?.dispose();
-  }
-}
-
-Future<Uint8List> _processCapturedExportPng(
-  _CapturedExportPngProcessingRequest request,
-) {
-  return compute(
-    _processCapturedExportPngSync,
-    request,
-    debugLabel: 'export-image-png-processing',
-  );
-}
+@visibleForTesting
+Uint8List trimExportPngBlankPaddingForTesting(
+  Uint8List bytes, {
+  required int preservePadding,
+}) => processExportImage(
+  ExportImageProcessingRequest(
+    singlePngBytes: bytes,
+    preservePadding: preservePadding,
+  ),
+).pngBytes;
 
 @visibleForTesting
 Future<Uint8List> processCapturedExportPngForTesting({
@@ -1226,281 +1282,24 @@ Future<Uint8List> processCapturedExportPngForTesting({
   int? outputHeight,
   List<({Uint8List bytes, int y})>? slices,
   required int preservePadding,
-}) {
-  final request = singlePngBytes != null
-      ? _CapturedExportPngProcessingRequest.single(
-          singlePngBytes: singlePngBytes,
-          preservePadding: preservePadding,
-        )
-      : _CapturedExportPngProcessingRequest.slices(
-          outputWidth: outputWidth ?? 0,
-          outputHeight: outputHeight ?? 0,
-          slices: (slices ?? const <({Uint8List bytes, int y})>[])
-              .map(
-                (slice) =>
-                    _ExportPngSlicePayload(bytes: slice.bytes, y: slice.y),
-              )
-              .toList(growable: false),
-          preservePadding: preservePadding,
-        );
-  return _processCapturedExportPng(request);
-}
-
-Uint8List _processCapturedExportPngSync(
-  _CapturedExportPngProcessingRequest request,
-) {
-  final singlePngBytes = request.singlePngBytes;
-  if (singlePngBytes != null) {
-    return _trimExportPngBlankPadding(
-      singlePngBytes,
-      preservePadding: request.preservePadding,
-    );
-  }
-
-  final stitched = _stitchExportPngSlicesImage(
-    outputWidth: request.outputWidth,
-    outputHeight: request.outputHeight,
-    slices: request.slices
-        .map((slice) => (bytes: slice.bytes, y: slice.y))
-        .toList(growable: false),
-  );
-  return _encodeTrimmedExportImage(
-    stitched,
-    preservePadding: request.preservePadding,
-  );
-}
-
-class _CapturedExportPngProcessingRequest {
-  const _CapturedExportPngProcessingRequest.single({
-    required this.singlePngBytes,
-    required this.preservePadding,
-  }) : outputWidth = 0,
-       outputHeight = 0,
-       slices = const <_ExportPngSlicePayload>[];
-
-  const _CapturedExportPngProcessingRequest.slices({
-    required this.outputWidth,
-    required this.outputHeight,
-    required this.slices,
-    required this.preservePadding,
-  }) : singlePngBytes = null;
-
-  final Uint8List? singlePngBytes;
-  final int outputWidth;
-  final int outputHeight;
-  final List<_ExportPngSlicePayload> slices;
-  final int preservePadding;
-}
-
-class _ExportPngSlicePayload {
-  const _ExportPngSlicePayload({required this.bytes, required this.y});
-
-  final Uint8List bytes;
-  final int y;
-}
-
-Uint8List _stitchExportPngSlices({
-  required int outputWidth,
-  required int outputHeight,
-  required List<({Uint8List bytes, int y})> slices,
-}) {
-  return image_lib.encodePng(
-    _stitchExportPngSlicesImage(
-      outputWidth: outputWidth,
-      outputHeight: outputHeight,
-      slices: slices,
-    ),
-  );
-}
-
-image_lib.Image _stitchExportPngSlicesImage({
-  required int outputWidth,
-  required int outputHeight,
-  required List<({Uint8List bytes, int y})> slices,
-}) {
-  final stitched = image_lib.Image(
-    width: outputWidth,
-    height: outputHeight,
-    numChannels: 4,
-  )..clear(image_lib.ColorRgba8(0, 0, 0, 0));
-
-  for (final slice in slices) {
-    final decoded = image_lib.decodePng(slice.bytes);
-    if (decoded == null) continue;
-    final dstY = math.max(slice.y, 0);
-    final srcY = math.max(-slice.y, 0);
-    final copyHeight = math.min(decoded.height - srcY, outputHeight - dstY);
-    final copyWidth = math.min(decoded.width, outputWidth);
-    if (copyWidth <= 0 || copyHeight <= 0) continue;
-
-    for (var y = 0; y < copyHeight; y += 1) {
-      for (var x = 0; x < copyWidth; x += 1) {
-        stitched.setPixel(x, dstY + y, decoded.getPixel(x, srcY + y));
-      }
-    }
-  }
-
-  return stitched;
-}
-
-@visibleForTesting
-Uint8List trimExportPngBlankPaddingForTesting(
-  Uint8List bytes, {
-  required int preservePadding,
-}) {
-  return _trimExportPngBlankPadding(bytes, preservePadding: preservePadding);
-}
-
-Uint8List _trimExportPngBlankPadding(
-  Uint8List bytes, {
-  required int preservePadding,
-}) {
-  final decoded = image_lib.decodePng(bytes);
-  if (decoded == null || decoded.width <= 0 || decoded.height <= 0) {
-    return bytes;
-  }
-  return _encodeTrimmedExportImage(decoded, preservePadding: preservePadding);
-}
-
-Uint8List _encodeTrimmedExportImage(
-  image_lib.Image decoded, {
-  required int preservePadding,
-}) {
-  final trimmed = _trimExportImageBlankPadding(
-    decoded,
+}) async => (await compute(
+  processExportImage,
+  ExportImageProcessingRequest(
+    singlePngBytes: singlePngBytes,
+    outputWidth: outputWidth ?? 0,
+    outputHeight: outputHeight ?? 0,
+    slices: slices ?? const [],
     preservePadding: preservePadding,
-  );
-  return image_lib.encodePng(trimmed);
-}
-
-image_lib.Image _trimExportImageBlankPadding(
-  image_lib.Image decoded, {
-  required int preservePadding,
-}) {
-  final background = _exportImageBlankReferencePixel(decoded);
-  final width = decoded.width;
-  final height = decoded.height;
-
-  int? top;
-  for (var y = 0; y < height; y += 1) {
-    if (_exportImageRowHasContent(decoded, y, background)) {
-      top = y;
-      break;
-    }
-  }
-  if (top == null) return decoded;
-
-  var bottom = height - 1;
-  for (var y = height - 1; y >= top; y -= 1) {
-    if (_exportImageRowHasContent(decoded, y, background)) {
-      bottom = y;
-      break;
-    }
-  }
-
-  var left = 0;
-  for (var x = 0; x < width; x += 1) {
-    if (_exportImageColumnHasContent(decoded, x, top, bottom, background)) {
-      left = x;
-      break;
-    }
-  }
-
-  var right = width - 1;
-  for (var x = width - 1; x >= left; x -= 1) {
-    if (_exportImageColumnHasContent(decoded, x, top, bottom, background)) {
-      right = x;
-      break;
-    }
-  }
-
-  final padding = math.max(preservePadding, 0);
-  final cropLeft = math.max(left - padding, 0);
-  final cropTop = math.max(top - padding, 0);
-  final cropRight = math.min(right + padding, width - 1);
-  final cropBottom = math.min(bottom + padding, height - 1);
-
-  if (cropLeft == 0 &&
-      cropTop == 0 &&
-      cropRight == width - 1 &&
-      cropBottom == height - 1) {
-    return decoded;
-  }
-
-  return image_lib.copyCrop(
-    decoded,
-    x: cropLeft,
-    y: cropTop,
-    width: cropRight - cropLeft + 1,
-    height: cropBottom - cropTop + 1,
-  );
-}
-
-image_lib.Pixel _exportImageBlankReferencePixel(image_lib.Image image) {
-  final corners = [
-    image.getPixel(0, 0),
-    image.getPixel(image.width - 1, 0),
-    image.getPixel(0, image.height - 1),
-    image.getPixel(image.width - 1, image.height - 1),
-  ];
-  for (final pixel in corners) {
-    if (pixel.a <= _exportImageBlankAlphaTolerance) return pixel;
-  }
-  return corners.first;
-}
-
-bool _exportImageRowHasContent(
-  image_lib.Image image,
-  int y,
-  image_lib.Pixel background,
-) {
-  for (var x = 0; x < image.width; x += 1) {
-    if (!_exportImageIsBlankPixel(image.getPixel(x, y), background)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool _exportImageColumnHasContent(
-  image_lib.Image image,
-  int x,
-  int top,
-  int bottom,
-  image_lib.Pixel background,
-) {
-  for (var y = top; y <= bottom; y += 1) {
-    if (!_exportImageIsBlankPixel(image.getPixel(x, y), background)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool _exportImageIsBlankPixel(
-  image_lib.Pixel pixel,
-  image_lib.Pixel background,
-) {
-  if (pixel.a <= _exportImageBlankAlphaTolerance) return true;
-  if (background.a <= _exportImageBlankAlphaTolerance) return false;
-  return _exportImageChannelNear(pixel.r, background.r) &&
-      _exportImageChannelNear(pixel.g, background.g) &&
-      _exportImageChannelNear(pixel.b, background.b) &&
-      _exportImageChannelNear(pixel.a, background.a);
-}
-
-bool _exportImageChannelNear(num a, num b) {
-  return (a - b).abs() <= _exportImageBlankColorTolerance;
-}
+  ),
+)).pngBytes;
 
 Future<void> showMessageExportSheet(
   BuildContext context,
   ChatMessage message,
 ) async {
-  final cs = Theme.of(context).colorScheme;
   try {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      // 桌面端：居中显示对话框
+      // Desktop: show centered dialog
       await showDialog<void>(
         context: context,
         barrierDismissible: true,
@@ -1519,13 +1318,13 @@ Future<void> showMessageExportSheet(
       return;
     }
   } catch (_) {
-    // 回退到下方底部弹层
+    // Fallback to bottom sheet below
   }
-  // 移动端：使用底部弹层
+  // Mobile: keep bottom sheet
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: cs.surface,
+    backgroundColor: context.overlaySurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -1543,10 +1342,9 @@ Future<void> showChatExportSheet(
   required Conversation conversation,
   required List<ChatMessage> selectedMessages,
 }) async {
-  final cs = Theme.of(context).colorScheme;
   try {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      // 桌面端：居中显示对话框
+      // Desktop: show centered dialog
       await showDialog<void>(
         context: context,
         barrierDismissible: true,
@@ -1569,12 +1367,12 @@ Future<void> showChatExportSheet(
       return;
     }
   } catch (_) {
-    // 回退到下方底部弹层
+    // Fallback to bottom sheet below
   }
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: cs.surface,
+    backgroundColor: context.overlaySurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -1591,7 +1389,7 @@ Future<void> showChatExportSheet(
   );
 }
 
-// 桌面端对话框：单条消息导出
+// Desktop dialog: single message export
 class _ExportDialog extends StatefulWidget {
   const _ExportDialog({required this.message, required this.parentContext});
   final ChatMessage message;
@@ -1672,18 +1470,23 @@ class _ExportDialogState extends State<_ExportDialog> {
       final pctx = widget.parentContext;
       await Navigator.of(context).maybePop();
       if (!pctx.mounted) return;
-      File? file;
-      await _runWithExportingOverlay(pctx, () async {
+      _ExportedImageResult? file;
+      await _runWithExportingOverlay(pctx, (progress) async {
         file = await _renderAndSaveMessageImage(
           pctx,
           widget.message,
+          progress: progress,
           showThinkingAndToolCards: _showThinkingAndToolCards,
           expandThinkingContent: _expandThinkingContent,
         );
       });
       if (file == null) throw 'render error';
       if (!pctx.mounted) return;
-      await showImagePreviewSheet(pctx, file: file!);
+      await showImagePreviewSheet(
+        pctx,
+        file: file!.file,
+        preparedPreview: file!.preview,
+      );
       return;
     } catch (e) {
       final pctx = widget.parentContext;
@@ -1710,11 +1513,11 @@ class _ExportDialogState extends State<_ExportDialog> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Material(
-          color: cs.surface,
+          color: context.appColors.surfaceCard,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 头部
+              // Header
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
                 child: Row(
@@ -1743,7 +1546,7 @@ class _ExportDialogState extends State<_ExportDialog> {
                 ),
               ),
               const SizedBox(height: 4),
-              // 正文
+              // Body
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -1847,7 +1650,7 @@ class _ExportDialogState extends State<_ExportDialog> {
   }
 }
 
-// 桌面端对话框：批量导出
+// Desktop dialog: batch export
 class _BatchExportDialog extends StatefulWidget {
   const _BatchExportDialog({
     required this.conversation,
@@ -1901,19 +1704,24 @@ class _BatchExportDialogState extends State<_BatchExportDialog> {
       final pctx = widget.parentContext;
       await Navigator.of(context).maybePop();
       if (!pctx.mounted) return;
-      File? file;
-      await _runWithExportingOverlay(pctx, () async {
+      _ExportedImageResult? file;
+      await _runWithExportingOverlay(pctx, (progress) async {
         file = await _renderAndSaveChatImage(
           pctx,
           widget.conversation,
           widget.messages,
+          progress: progress,
           showThinkingAndToolCards: _showThinkingAndToolCards,
           expandThinkingContent: _expandThinkingContent,
         );
       });
       if (file == null) throw 'render error';
       if (!pctx.mounted) return;
-      await showImagePreviewSheet(pctx, file: file!);
+      await showImagePreviewSheet(
+        pctx,
+        file: file!.file,
+        preparedPreview: file!.preview,
+      );
       return;
     } catch (e) {
       final pctx = widget.parentContext;
@@ -1940,11 +1748,11 @@ class _BatchExportDialogState extends State<_BatchExportDialog> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Material(
-          color: cs.surface,
+          color: context.appColors.surfaceCard,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 头部
+              // Header
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
                 child: Row(
@@ -1973,7 +1781,7 @@ class _BatchExportDialogState extends State<_BatchExportDialog> {
                 ),
               ),
               const SizedBox(height: 4),
-              // 正文
+              // Body
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -2115,7 +1923,7 @@ class _BatchExportSheetState extends State<_BatchExportSheet> {
   Future<void> _onExportMarkdown() async {
     if (_exporting) return;
 
-    // 立即关闭对话框
+    // Dismiss dialog immediately
     if (mounted) Navigator.of(context).maybePop();
 
     await exportChatMessagesMarkdown(
@@ -2130,7 +1938,7 @@ class _BatchExportSheetState extends State<_BatchExportSheet> {
   Future<void> _onExportTxt() async {
     if (_exporting) return;
 
-    // 立即关闭对话框
+    // Dismiss dialog immediately
     if (mounted) Navigator.of(context).maybePop();
 
     await exportChatMessagesTxt(
@@ -2147,22 +1955,27 @@ class _BatchExportSheetState extends State<_BatchExportSheet> {
     setState(() => _exporting = true);
     try {
       final pctx = widget.parentContext;
-      File? file;
-      await _runWithExportingOverlay(pctx, () async {
+      _ExportedImageResult? file;
+      await _runWithExportingOverlay(pctx, (progress) async {
         file = await _renderAndSaveChatImage(
           pctx,
           widget.conversation,
           widget.messages,
+          progress: progress,
           showThinkingAndToolCards: _showThinkingAndToolCards,
           expandThinkingContent: _expandThinkingContent,
         );
       });
       if (file == null) throw 'render error';
-      // 生成完成后关闭当前弹层并打开预览
+      // After generation, close current sheet then open preview
       if (mounted) await Navigator.of(context).maybePop();
       if (!pctx.mounted) return;
-      await showImagePreviewSheet(pctx, file: file!);
-      return; // pop 后不要继续执行到 setState
+      await showImagePreviewSheet(
+        pctx,
+        file: file!.file,
+        preparedPreview: file!.preview,
+      );
+      return; // do not fall through to setState after pop
     } catch (e) {
       final pctx = widget.parentContext;
       if (!pctx.mounted) return;
@@ -2248,7 +2061,7 @@ class _BatchExportSheetState extends State<_BatchExportSheet> {
                           },
                   ),
                   const SizedBox(height: 8),
-                  // 图片导出选项
+                  // Image export options
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
@@ -2404,11 +2217,12 @@ class _ExportSheetState extends State<_ExportSheet> {
     setState(() => _exporting = true);
     try {
       final pctx = widget.parentContext;
-      File? file;
-      await _runWithExportingOverlay(pctx, () async {
+      _ExportedImageResult? file;
+      await _runWithExportingOverlay(pctx, (progress) async {
         file = await _renderAndSaveMessageImage(
           pctx,
           widget.message,
+          progress: progress,
           showThinkingAndToolCards: _showThinkingAndToolCards,
           expandThinkingContent: _expandThinkingContent,
         );
@@ -2416,7 +2230,11 @@ class _ExportSheetState extends State<_ExportSheet> {
       if (file == null) throw 'render error';
       if (mounted) await Navigator.of(context).maybePop();
       if (!pctx.mounted) return;
-      await showImagePreviewSheet(pctx, file: file!);
+      await showImagePreviewSheet(
+        pctx,
+        file: file!.file,
+        preparedPreview: file!.preview,
+      );
       return;
     } catch (e) {
       final pctx = widget.parentContext;
@@ -2503,7 +2321,7 @@ class _ExportSheetState extends State<_ExportSheet> {
                           },
                   ),
                   const SizedBox(height: 8),
-                  // 图片导出选项
+                  // Image export options
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
@@ -2579,7 +2397,7 @@ class _ExportSheetState extends State<_ExportSheet> {
     );
   }
 
-  // 共享 widget 与辅助函数已移至顶层
+  // shared widgets and helpers moved to top-level
 }
 
 class _ExportedMessageCard extends StatelessWidget {
@@ -2606,17 +2424,17 @@ class _ExportedMessageCard extends StatelessWidget {
     final headerFg = cs.onSurface;
     final time = DateFormat('yyyy-MM-dd HH:mm').format(message.timestamp);
 
-    // 桌面端使用更小字号以获得更好的比例
+    // Desktop uses smaller font sizes for better proportions
     final double titleFontSize = isDesktop ? 15.0 : 18.0;
     final double timeFontSize = isDesktop ? 10.0 : 12.0;
-    // 桌面端使用更小的间距与内边距
+    // Desktop uses smaller margins and paddings
     final double containerMargin = isDesktop ? 12.0 : 16.0;
     final double containerPadding = isDesktop ? 12.0 : 16.0;
 
-    final exportThinkingData = _thinkingExportDataForMessage(message);
-    final messageForExport = (!showThinkingAndToolCards && isAssistant)
-        ? message.copyWith(content: exportThinkingData.cleanedContent)
-        : message;
+    final messageForExport = messageForThinkingExport(
+      message,
+      showThinkingAndToolCards: showThinkingAndToolCards,
+    );
     final exportReasoningPayload = showThinkingAndToolCards && isAssistant
         ? _exportReasoningPayloadForMessage(
             message,
@@ -2632,7 +2450,7 @@ class _ExportedMessageCard extends StatelessWidget {
     final useAssistName = isAssistant && (assistant?.useAssistantName == true);
 
     return MediaQuery(
-      // 导出渲染时遵循聊天字体缩放
+      // Respect chat font scale for export rendering
       data: MediaQuery.of(context).copyWith(
         textScaler: TextScaler.linear(
           MediaQuery.textScalerOf(context).scale(1) * chatFontScale,
@@ -2642,15 +2460,15 @@ class _ExportedMessageCard extends StatelessWidget {
         margin: EdgeInsets.all(containerMargin),
         padding: EdgeInsets.all(containerPadding),
         decoration: BoxDecoration(
-          color: cs.surface,
+          color: context.appColors.surfaceCard,
           borderRadius: BorderRadius.circular(16),
-          // 按 UX 要求移除外边框
+          // removed outer border per UX
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 标题（无图标、无边框容器）
+            // Title (no icon, no bordered container)
             Text(
               title,
               style: TextStyle(
@@ -2662,7 +2480,7 @@ class _ExportedMessageCard extends StatelessWidget {
               maxLines: 1,
             ),
             const SizedBox(height: 2),
-            // 标题下方的日期，与标题对齐
+            // Timestamp under title, aligned with title
             Text(
               time,
               style: TextStyle(
@@ -2694,9 +2512,6 @@ class _ExportedMessageCard extends StatelessWidget {
               assistantAvatar: useAssistAvatar
                   ? (assistant?.avatar ?? '')
                   : null,
-              assistantAvatarTransform: useAssistAvatar
-                  ? assistant?.avatarTransform
-                  : null,
               showUserAvatar: context.read<SettingsProvider>().showUserAvatar,
               showTokenStats: false,
               reasoningSegments: exportReasoningPayload.segments.isEmpty
@@ -2708,6 +2523,8 @@ class _ExportedMessageCard extends StatelessWidget {
                   exportReasoningPayload.reasoningCountAtSplit,
               toolCountAtSplit: exportReasoningPayload.toolCountAtSplit,
               hideStreamingIndicator: true,
+              showThinkingCards: true,
+              showToolCards: true,
             ),
             SizedBox(height: isDesktop ? 12.0 : 16.0),
             _ExportDisclaimer(isDesktop: isDesktop),
@@ -2740,7 +2557,7 @@ class _ExportedChatImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 桌面端使用更小字号以获得更好的比例
+    // Desktop uses smaller font sizes for better proportions
     final double titleFontSize = isDesktop ? 15.0 : 18.0;
     final double timeFontSize = isDesktop ? 10.0 : 12.0;
     final double containerMargin = isDesktop ? 5.0 : 6.0;
@@ -2757,15 +2574,15 @@ class _ExportedChatImage extends StatelessWidget {
           margin: EdgeInsets.all(containerMargin),
           padding: EdgeInsets.all(containerPadding),
           decoration: BoxDecoration(
-            color: cs.surface,
+            color: context.appColors.surfaceCard,
             borderRadius: BorderRadius.circular(isDesktop ? 12.0 : 16.0),
-            // 按 UX 要求移除外边框
+            // removed outer border per UX
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 标题（无图标、无边框容器）
+              // Title (no icon, no bordered container)
               Text(
                 conversationTitle,
                 style: TextStyle(
@@ -2777,7 +2594,7 @@ class _ExportedChatImage extends StatelessWidget {
                 maxLines: 1,
               ),
               const SizedBox(height: 2),
-              // 标题下方的日期，与标题对齐
+              // Timestamp under title, aligned with title
               Text(
                 DateFormat('yyyy-MM-dd HH:mm').format(timestamp),
                 style: TextStyle(
@@ -2826,13 +2643,13 @@ class _ExportedBubble extends StatelessWidget {
     final bubbleBg = cs.primary.withValues(alpha: 0.08);
     final bubbleFg = cs.onSurface;
 
-    // 桌面端使用更小字号以获得更好的比例
+    // Desktop uses smaller font sizes for better proportions
     final double contentFontSize = isDesktop ? 13.0 : 15.7;
 
-    final exportThinkingData = _thinkingExportDataForMessage(message);
-    final messageForExport = (!showThinkingAndToolCards && isAssistant)
-        ? message.copyWith(content: exportThinkingData.cleanedContent)
-        : message;
+    final messageForExport = messageForThinkingExport(
+      message,
+      showThinkingAndToolCards: showThinkingAndToolCards,
+    );
     final exportReasoningPayload = showThinkingAndToolCards && isAssistant
         ? _exportReasoningPayloadForMessage(
             message,
@@ -2847,8 +2664,8 @@ class _ExportedBubble extends StatelessWidget {
         isAssistant && (assistant?.useAssistantAvatar == true);
     final useAssistName = isAssistant && (assistant?.useAssistantName == true);
 
-    // 保留原消息 parts 中的附件。copyWith(content:)
-    // 会把 parts 重写为单个 TextPart，从而丢失 ImagePart/FilePart。
+    // Keep attachments from the original message parts. copyWith(content:)
+    // rewrites parts to a single TextPart and would drop ImagePart/FilePart.
     final parsed = _exportPartsFromMessage(
       message,
       textOverride: messageForExport.content,
@@ -2864,7 +2681,9 @@ class _ExportedBubble extends StatelessWidget {
     final Widget contentWidget = (mdText.toString().trim().isNotEmpty)
         ? DefaultTextStyle.merge(
             style: TextStyle(fontSize: contentFontSize, height: 1.5),
-            child: MarkdownWithCodeHighlight(text: mdText.toString()),
+            child: AppSelectionArea(
+              child: MarkdownWithCodeHighlight(text: mdText.toString()),
+            ),
           )
         : Text('—', style: TextStyle(color: bubbleFg.withValues(alpha: 0.5)));
 
@@ -2893,9 +2712,6 @@ class _ExportedBubble extends StatelessWidget {
                 ? (assistant?.name ?? 'Assistant')
                 : null,
             assistantAvatar: useAssistAvatar ? (assistant?.avatar ?? '') : null,
-            assistantAvatarTransform: useAssistAvatar
-                ? assistant?.avatarTransform
-                : null,
             showUserAvatar: context.read<SettingsProvider>().showUserAvatar,
             showTokenStats: false,
             reasoningSegments: exportReasoningPayload.segments.isEmpty
@@ -2906,6 +2722,8 @@ class _ExportedBubble extends StatelessWidget {
             reasoningCountAtSplit: exportReasoningPayload.reasoningCountAtSplit,
             toolCountAtSplit: exportReasoningPayload.toolCountAtSplit,
             hideStreamingIndicator: true,
+            showThinkingCards: true,
+            showToolCards: true,
           ),
         ),
       );
@@ -2955,52 +2773,95 @@ class _ExportDisclaimer extends StatelessWidget {
   }
 }
 
+@visibleForTesting
+Widget buildImageExportProgressForTesting(ExportImageProgress progress) =>
+    _ExportProgressContent(progress: progress);
+
+class _ExportProgressContent extends StatelessWidget {
+  const _ExportProgressContent({required this.progress});
+  final ExportImageProgress progress;
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final label = switch (progress.stage) {
+      ExportImageStage.preparing => l10n.imageExportPreparing,
+      ExportImageStage.diagrams => l10n.imageExportDiagrams(
+        progress.completed,
+        progress.total,
+      ),
+      ExportImageStage.capturing => l10n.imageExportCapturing(
+        progress.completed,
+        progress.total,
+      ),
+      ExportImageStage.processing => l10n.imageExportProcessing,
+      ExportImageStage.saving => l10n.imageExportSaving,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: SizedBox(
+        width: 240,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CupertinoActivityIndicator(radius: 16),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: .8),
+              ),
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: progress.fraction),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 Future<void> _runWithExportingOverlay(
   BuildContext context,
-  Future<void> Function() task,
+  Future<void> Function(ValueNotifier<ExportImageProgress> progress) task,
 ) async {
-  final cs = Theme.of(context).colorScheme;
-  final l10n = AppLocalizations.of(context)!;
   final navigator = Navigator.of(context, rootNavigator: true);
-  // 先显示遮罩层
-  showDialog<void>(
+  final progress = ValueNotifier(
+    const ExportImageProgress(ExportImageStage.preparing),
+  );
+  final route = DialogRoute<void>(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => Center(
-      child: Material(
-        color: cs.surface,
-        elevation: 6,
-        shadowColor: cs.shadow.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CupertinoActivityIndicator(radius: 16),
-              const SizedBox(height: 12),
-              Text(
-                l10n.messageExportSheetExporting,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: cs.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
+    builder: (context) => PopScope(
+      canPop: false,
+      child: Center(
+        child: Material(
+          color: context.appColors.surfaceCard,
+          elevation: 6,
+          shadowColor: Theme.of(
+            context,
+          ).colorScheme.shadow.withValues(alpha: .2),
+          borderRadius: BorderRadius.circular(14),
+          child: ValueListenableBuilder<ExportImageProgress>(
+            valueListenable: progress,
+            builder: (context, value, _) =>
+                _ExportProgressContent(progress: value),
           ),
         ),
       ),
     ),
   );
+  unawaited(navigator.push(route));
   try {
     await WidgetsBinding.instance.endOfFrame;
-    await task();
+    await task(progress);
   } finally {
-    await Future<void>.delayed(Duration.zero);
-    if (navigator.mounted) {
-      await navigator.maybePop();
-      await Future<void>.delayed(Duration.zero);
-    }
+    // Remove only this operation's dialog, even when another route was opened.
+    if (route.isActive) navigator.removeRoute(route);
+    progress.dispose();
   }
 }
 
@@ -3011,8 +2872,8 @@ class _Parsed {
   _Parsed(this.text, this.images, this.docs);
 }
 
-/// 仅用于展示的文档引用（fileName/MIME）。若后续代码读取 [path]，
-/// 须先经 [SandboxPathResolver.fix] 解析——它可能是 kelivo-file URI。
+/// Display-only document ref (fileName/MIME). If future code reads [path],
+/// resolve via [SandboxPathResolver.fix] first — it may be a kelivo-file URI.
 class _DocRef {
   final String path;
   final String fileName;

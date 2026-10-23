@@ -13680,6 +13680,25 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get migrationFreshStartFailedSubtitle =>
       '旧数据已保留。请重试重新开始，或关闭并重新打开 App。';
+
+  @override
+  String get imageExportPreparing => '正在准备图片…';
+
+  @override
+  String imageExportDiagrams(int completed, int total) {
+    return '正在准备图表 $completed/$total…';
+  }
+
+  @override
+  String imageExportCapturing(int completed, int total) {
+    return '正在截图 $completed/$total…';
+  }
+
+  @override
+  String get imageExportProcessing => '正在合成图片并准备预览…';
+
+  @override
+  String get imageExportSaving => '正在保存图片…';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -27358,6 +27377,25 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String get migrationFreshStartFailedSubtitle =>
       '旧数据已保留。请重试重新开始，或关闭并重新打开 App。';
+
+  @override
+  String get imageExportPreparing => '正在准备图片…';
+
+  @override
+  String imageExportDiagrams(int completed, int total) {
+    return '正在准备图表 $completed/$total…';
+  }
+
+  @override
+  String imageExportCapturing(int completed, int total) {
+    return '正在截图 $completed/$total…';
+  }
+
+  @override
+  String get imageExportProcessing => '正在合成图片并准备预览…';
+
+  @override
+  String get imageExportSaving => '正在保存图片…';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -41043,4 +41081,23 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String get migrationFreshStartFailedSubtitle =>
       '舊資料已保留。請重試重新開始，或關閉並重新開啟 App。';
+
+  @override
+  String get imageExportPreparing => '正在準備圖片…';
+
+  @override
+  String imageExportDiagrams(int completed, int total) {
+    return '正在準備圖表 $completed/$total…';
+  }
+
+  @override
+  String imageExportCapturing(int completed, int total) {
+    return '正在擷取圖片 $completed/$total…';
+  }
+
+  @override
+  String get imageExportProcessing => '正在合成圖片並準備預覽…';
+
+  @override
+  String get imageExportSaving => '正在儲存圖片…';
 }

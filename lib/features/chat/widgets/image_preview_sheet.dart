@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../utils/export_image_processor.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/snackbar.dart';
@@ -18,6 +19,7 @@ import '../../../utils/clipboard_images.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'dart:ui' as ui;
 import '../../../theme/app_font_weights.dart';
+import 'package:Kelivo/theme/app_semantic_colors.dart';
 
 const int _previewBlankTrimPreservePadding = 48;
 const int _previewBlankAlphaTolerance = 8;
@@ -31,32 +33,38 @@ const int _previewMaxTileSourceHeight = 2048;
 Future<void> showImagePreviewSheet(
   BuildContext context, {
   required File file,
+  ExportImagePreview? preparedPreview,
 }) async {
-  // 桌面平台显示自定义对话框而非底部弹层
+  // On desktop platforms, show a custom dialog instead of bottom sheet
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => _ImagePreviewDesktopDialog(file: file),
+      builder: (ctx) => _ImagePreviewDesktopDialog(
+        file: file,
+        preparedPreview: preparedPreview,
+      ),
     );
     return;
   }
 
-  final cs = Theme.of(context).colorScheme;
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: cs.surface,
+    backgroundColor: context.overlaySurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (ctx) =>
-        SafeArea(top: false, child: _ImagePreviewSheet(file: file)),
+    builder: (ctx) => SafeArea(
+      top: false,
+      child: _ImagePreviewSheet(file: file, preparedPreview: preparedPreview),
+    ),
   );
 }
 
 class _ImagePreviewDesktopDialog extends StatefulWidget {
-  const _ImagePreviewDesktopDialog({required this.file});
+  const _ImagePreviewDesktopDialog({required this.file, this.preparedPreview});
+  final ExportImagePreview? preparedPreview;
   final File file;
 
   @override
@@ -74,7 +82,13 @@ class _ImagePreviewDesktopDialogState
   @override
   void initState() {
     super.initState();
-    _loadDisplay();
+    final prepared = widget.preparedPreview;
+    if (prepared != null) {
+      _display = _displayFromExportPreview(prepared);
+      _loadingDisplay = false;
+    } else {
+      _loadDisplay();
+    }
   }
 
   Future<void> _loadDisplay() async {
@@ -158,7 +172,7 @@ class _ImagePreviewDesktopDialogState
       );
       if (!mounted) return;
       if (savePath == null) {
-        return; // 已取消
+        return; // cancelled
       }
 
       await File(savePath).parent.create(recursive: true);
@@ -184,7 +198,7 @@ class _ImagePreviewDesktopDialogState
   }
 
   Future<void> _onCopy() async {
-    // 优先使用 super_clipboard 以获得稳健的跨平台图片复制
+    // Prefer super_clipboard for robust cross-platform image copy
     bool ok = false;
     try {
       final clipboard = SystemClipboard.instance;
@@ -204,7 +218,7 @@ class _ImagePreviewDesktopDialogState
           } else if (ext == '.webp') {
             format = 'webp';
           } else {
-            // 通过图片编解码器将未知格式转为 PNG
+            // Convert unknown formats to PNG via image codec
             try {
               final codec = await ui.instantiateImageCodec(bytes);
               final frame = await codec.getNextFrame();
@@ -218,7 +232,7 @@ class _ImagePreviewDesktopDialogState
             } catch (_) {}
           }
 
-          // 构建带建议名称的剪贴板条目
+          // Build clipboard item with suggested name
           String suggestedName = p.basename(path);
           if (format == 'png' &&
               !suggestedName.toLowerCase().endsWith('.png')) {
@@ -246,7 +260,7 @@ class _ImagePreviewDesktopDialogState
     } catch (_) {
       ok = false;
     }
-    // 需要时回退到旧版平台 channel
+    // Fallback to legacy platform channel if needed
     if (!ok) {
       try {
         ok = await ClipboardImages.setImagePath(widget.file.path);
@@ -261,7 +275,7 @@ class _ImagePreviewDesktopDialogState
         type: NotificationType.success,
       );
     } else {
-      // 复用导出失败消息，避免新增 l10n
+      // Reuse export failed message to avoid adding new l10n
       showAppSnackBar(
         context,
         message: l10n.messageExportSheetExportFailed('copy-failed'),
@@ -279,7 +293,6 @@ class _ImagePreviewDesktopDialogState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final cs = Theme.of(context).colorScheme;
     return Dialog(
       elevation: 12,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -293,11 +306,11 @@ class _ImagePreviewDesktopDialogState
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Material(
-            color: cs.surface,
+            color: context.overlaySurface,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 头部
+                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
                   child: Row(
@@ -343,7 +356,7 @@ class _ImagePreviewDesktopDialogState
                   ),
                 ),
 
-                // 内容
+                // Content
                 Expanded(
                   child: Scrollbar(
                     controller: _scrollCtrl,
@@ -383,7 +396,8 @@ class _ImagePreviewDesktopDialogState
 }
 
 class _ImagePreviewSheet extends StatefulWidget {
-  const _ImagePreviewSheet({required this.file});
+  const _ImagePreviewSheet({required this.file, this.preparedPreview});
+  final ExportImagePreview? preparedPreview;
   final File file;
 
   @override
@@ -409,7 +423,7 @@ class _ImagePreviewCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
-      color: cs.surface,
+      color: context.appColors.surfaceCard,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: cs.outline.withValues(alpha: 0.08)),
@@ -512,6 +526,22 @@ previewImageDisplayLayoutForTesting({
 Object? readPreviewDisplayForTesting(File file) {
   return _readImagePreviewDisplay(file);
 }
+
+_ImagePreviewDisplay _displayFromExportPreview(ExportImagePreview preview) =>
+    _ImagePreviewDisplay(
+      dimensions: (width: preview.width, height: preview.height),
+      tiles: [
+        for (final tile in preview.tiles)
+          _ImagePreviewTile(
+            provider: MemoryImage(tile.bytes),
+            dimensions: (width: tile.width, height: tile.height),
+          ),
+      ],
+    );
+
+@visibleForTesting
+Object previewDisplayFromExportForTesting(ExportImagePreview preview) =>
+    _displayFromExportPreview(preview);
 
 class _ImagePreviewDisplay {
   const _ImagePreviewDisplay({required this.dimensions, required this.tiles});
@@ -723,12 +753,12 @@ List<_ImagePreviewTilePayload> _previewImageTilePayloads(
 image_lib.Pixel _previewBlankReferencePixel(image_lib.Image image) {
   final counts = <int, ({int count, image_lib.Pixel pixel})>{};
   void add(image_lib.Pixel pixel) {
-    if (pixel.a <= _previewBlankAlphaTolerance) return;
+    if (pixel.aNormalized * 255 <= _previewBlankAlphaTolerance) return;
     final key =
-        ((pixel.r.toInt() ~/ 8) << 24) |
-        ((pixel.g.toInt() ~/ 8) << 16) |
-        ((pixel.b.toInt() ~/ 8) << 8) |
-        (pixel.a.toInt() ~/ 8);
+        (((pixel.rNormalized * 255).round() ~/ 8) << 24) |
+        (((pixel.gNormalized * 255).round() ~/ 8) << 16) |
+        (((pixel.bNormalized * 255).round() ~/ 8) << 8) |
+        ((pixel.aNormalized * 255).round() ~/ 8);
     final current = counts[key];
     counts[key] = (
       count: (current?.count ?? 0) + 1,
@@ -827,12 +857,24 @@ int _previewContentRunThreshold(int lineLength) {
 }
 
 bool _previewIsBlankPixel(image_lib.Pixel pixel, image_lib.Pixel background) {
-  if (pixel.a <= _previewBlankAlphaTolerance) return true;
-  if (background.a <= _previewBlankAlphaTolerance) return false;
-  return _previewChannelNear(pixel.r, background.r) &&
-      _previewChannelNear(pixel.g, background.g) &&
-      _previewChannelNear(pixel.b, background.b) &&
-      _previewChannelNear(pixel.a, background.a);
+  if (pixel.aNormalized * 255 <= _previewBlankAlphaTolerance) return true;
+  if (background.aNormalized * 255 <= _previewBlankAlphaTolerance) return false;
+  return _previewChannelNear(
+        pixel.rNormalized * 255,
+        background.rNormalized * 255,
+      ) &&
+      _previewChannelNear(
+        pixel.gNormalized * 255,
+        background.gNormalized * 255,
+      ) &&
+      _previewChannelNear(
+        pixel.bNormalized * 255,
+        background.bNormalized * 255,
+      ) &&
+      _previewChannelNear(
+        pixel.aNormalized * 255,
+        background.aNormalized * 255,
+      );
 }
 
 bool _previewChannelNear(num a, num b) {
@@ -961,7 +1003,13 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
   @override
   void initState() {
     super.initState();
-    _loadDisplay();
+    final prepared = widget.preparedPreview;
+    if (prepared != null) {
+      _display = _displayFromExportPreview(prepared);
+      _loadingDisplay = false;
+    } else {
+      _loadDisplay();
+    }
   }
 
   Future<void> _loadDisplay() async {
@@ -1006,7 +1054,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
         ),
       );
       if (!mounted) return;
-      // 仅在分享成功时（平台报告成功）才关闭
+      // Close only if sharing succeeds (when the platform reports it)
       if (result.status == ShareResultStatus.success) {
         Navigator.of(context).pop();
       }
@@ -1041,7 +1089,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
           message: l10n.imagePreviewSheetSaveSuccess,
           type: NotificationType.success,
         );
-        // 保存成功后自动关闭预览弹层
+        // Auto-close the preview sheet after successful save
         if (!mounted) return;
         Navigator.of(context).pop();
       } else {
@@ -1077,7 +1125,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: Stack(
           children: [
-            // 可滚动的图片预览
+            // Scrollable image preview
             Positioned.fill(
               child: Column(
                 children: [
@@ -1119,7 +1167,9 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
                                     display: _display,
                                     maxWidth: constraints.maxWidth,
                                   ),
-                                const SizedBox(height: 80), // 在卡片外为操作栏重叠留出空间
+                                const SizedBox(
+                                  height: 80,
+                                ), // leave space for action bar overlap, outside the card
                               ],
                             ),
                           ),
@@ -1131,7 +1181,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
               ),
             ),
 
-            // 底部操作栏
+            // Bottom action bar
             Positioned(
               left: 0,
               right: 0,
@@ -1140,7 +1190,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
                 top: false,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: cs.surface,
+                    color: context.appColors.surfaceCard,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
@@ -1153,7 +1203,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                   child: Row(
                     children: [
-                      // 左侧方形小分享按钮（无涟漪）
+                      // Left small square share button (no ripple)
                       Builder(
                         builder: (btnCtx) => SizedBox(
                           width: 48,
@@ -1161,7 +1211,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
                           child: IosCardPress(
                             onTap: () => _onShare(btnCtx),
                             borderRadius: BorderRadius.circular(12),
-                            baseColor: cs.surface,
+                            baseColor: context.appColors.surfaceCard,
                             pressedBlendStrength:
                                 Theme.of(context).brightness == Brightness.dark
                                 ? 0.14
@@ -1184,7 +1234,7 @@ class _ImagePreviewSheetState extends State<_ImagePreviewSheet> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // 右侧主保存按钮（无涟漪）
+                      // Right main save button (no ripple)
                       Expanded(
                         child: SizedBox(
                           height: 48,

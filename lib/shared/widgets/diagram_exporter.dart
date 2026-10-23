@@ -74,8 +74,9 @@ Map<String, String> buildThemeVarsFromColorScheme(ColorScheme cs) {
 
 Future<void> preRenderDiagramCodesForExport(
   BuildContext context,
-  List<DiagramCode> codes,
-) async {
+  List<DiagramCode> codes, {
+  void Function(int completed, int total)? onProgress,
+}) async {
   if (codes.isEmpty) return;
   final cs = Theme.of(context).colorScheme;
   final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -87,7 +88,6 @@ Future<void> preRenderDiagramCodesForExport(
     themeVars,
     isSvg: diagram.isSvg,
   );
-  // 去重代码，并跳过已缓存的代码
   final distinct = codes
       .toSet()
       .where((c) => MermaidImageCache.get(cacheKey(c)) == null)
@@ -97,7 +97,9 @@ Future<void> preRenderDiagramCodesForExport(
   final overlay = Overlay.maybeOf(context);
   if (overlay == null) return;
 
-  // 使用单个离屏 overlay 顺序渲染代码，避免昂贵的合成操作
+  var completed = 0;
+  onProgress?.call(completed, distinct.length);
+  // Sequentially render codes with a single offscreen overlay to avoid heavy composites
   for (final diagram in distinct) {
     if (!context.mounted) return;
     final key = GlobalKey();
@@ -111,12 +113,15 @@ Future<void> preRenderDiagramCodesForExport(
             viewKey: key,
             isSvg: diagram.isSvg,
           );
-    if (handle == null) continue;
+    if (handle == null) {
+      onProgress?.call(++completed, distinct.length);
+      continue;
+    }
     final ready = Completer<void>();
     late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (ctx) {
-        // 等待几帧，让 WebView 加载并让 mermaid 渲染
+        // Wait a few frames to allow WebView to load and mermaid to render
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!ready.isCompleted) ready.complete();
         });
@@ -132,13 +137,13 @@ Future<void> preRenderDiagramCodesForExport(
     );
     overlay.insert(entry);
     try {
-      // 等待首帧，并稍作延迟以等待 mermaid.run
+      // Wait initial frame and a small delay for mermaid.run
       await ready.future;
       await Future<void>.delayed(const Duration(milliseconds: 500));
       final toBytes = handle.exportPngBytes;
       if (toBytes != null) {
         Uint8List? bytes;
-        // Mermaid 可能不会立即就绪，因此重试几次
+        // Retry a few times as Mermaid may not be ready immediately
         for (int i = 0; i < 8; i++) {
           bytes = await toBytes();
           if (bytes != null && bytes.isNotEmpty) break;
@@ -150,6 +155,7 @@ Future<void> preRenderDiagramCodesForExport(
       }
     } finally {
       entry.remove();
+      onProgress?.call(++completed, distinct.length);
     }
   }
 }
