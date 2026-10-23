@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../../database/app_database.dart';
+import '../../../utils/app_directories.dart';
 import 'restore_durability.dart';
 import 'restore_previous_plan.dart';
 import 'restore_receipt.dart';
@@ -50,7 +51,9 @@ final class RestorePreviousBuilder {
     final database = await inspectDatabase(appDataDirectory);
     final assets =
         preparedReceipt.selectedComponents.contains(RestoreComponent.assets)
-        ? await inspectAssets(appDataDirectory)
+        ? await inspectAssets(
+            await AppDirectories.contentDirectoryFor(appDataDirectory),
+          )
         : null;
     final totalBytes =
         (database.descriptor?.bytes ?? 0) +
@@ -89,7 +92,9 @@ final class RestorePreviousBuilder {
       throw StateError('restore_previous_database_changed');
     }
     if (expected.assets != null) {
-      final actual = await inspectAssets(appDataDirectory);
+      final actual = await inspectAssets(
+        await AppDirectories.contentDirectoryFor(appDataDirectory),
+      );
       if (!_sameAssets(actual, expected.assets!)) {
         throw StateError('restore_previous_assets_changed');
       }
@@ -172,7 +177,14 @@ final class RestorePreviousBuilder {
     return RestorePreviousDatabasePlan.file(descriptor);
   }
 
-  static Future<RestorePreviousAssetsPlan> inspectAssets(Directory root) async {
+  static Future<RestorePreviousAssetsPlan> inspectAssets(
+    Directory root, {
+    Iterable<String> rootNames = assetRootNames,
+  }) async {
+    if (rootNames.isEmpty ||
+        rootNames.any((name) => !assetRootNames.contains(name))) {
+      throw ArgumentError.value(rootNames, 'rootNames');
+    }
     final rootStates = <String, RestorePreviousAssetRootState>{};
     final entries = <String, RestoreAssetDescriptor>{};
     final foldedNames = <String>{};
@@ -181,7 +193,7 @@ final class RestorePreviousBuilder {
     var entryCount = 0;
     var totalBytes = 0;
 
-    for (final rootName in assetRootNames) {
+    for (final rootName in rootNames) {
       final assetRoot = Directory(p.join(root.path, rootName));
       final rootType = await FileSystemEntity.type(
         assetRoot.path,

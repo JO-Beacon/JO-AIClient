@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import '../../database/database_family_preserver.dart';
+
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -105,6 +107,7 @@ typedef _VersionedBackupInfo = ({
   bool secretsIncluded,
   Map<String, Object?>? businessEntityRowIds,
   String normalizedManifestSha256,
+  ChatDatabaseSnapshotInfo? databaseInfo,
 
   /// 本包导出时选择的类别（旧包没有这个字段，按全选计）。
   BackupScope scope,
@@ -435,6 +438,7 @@ class DataSync {
   static Future<PreparedRestoreBundle> prepareStartupSnapshotRestore({
     required Directory appDataDirectory,
     required File snapshot,
+    Directory? filesDirectory,
     RestoreBusinessLease? businessLease,
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
@@ -495,7 +499,7 @@ class DataSync {
             cancelToken: cancelToken,
             onProgress: onProgress,
           );
-      if (!info.includeChats) {
+      if (!info.includeChats || info.databaseInfo == null) {
         throw const FormatException('restore_preparation_database_required');
       }
       final settings = await runBackupIsolate<Map<String, dynamic>, String>(
@@ -510,6 +514,18 @@ class DataSync {
       await workspaceLock.synchronized(
         workspaceLock.beginSnapshotRecoveryWhileLocked,
       );
+      // 逐出被损坏的保留记录/清单前先归档现场，否则启动闸门会一直卡在
+      // 不可读的保留元数据上，显式恢复也就无法开始。
+      await DatabaseFamilyPreserver.prepareExplicitRecovery(
+        appDataDirectory,
+        recoveryBarrier: File(
+          p.join(
+            appDataDirectory.path,
+            RestoreWorkspaceLock.snapshotRecoveryMarkerName,
+          ),
+        ),
+        durability: workspaceLock.durability,
+      );
       final prepared = await RestoreBundlePreparation.prepare(
         appDataDirectory: appDataDirectory,
         extractedDirectory: extractDir,
@@ -519,6 +535,7 @@ class DataSync {
         restoreChats: true,
         restoreFiles: false,
         useExistingLocalAttachments: true,
+        filesDirectory: filesDirectory,
         validatedSettings: settings,
         onProgress: onProgress,
         cancelToken: cancelToken,
@@ -541,6 +558,52 @@ class DataSync {
       } finally {
         await ownedLease?.close();
       }
+    }
+  }
+
+  /// 在临时解包上做完整校验；绝不打开源数据库，也不改写保留的归档
+  /// 与其 sidecar 元数据。
+  static Future<ChatDatabaseSnapshotInfo> inspectRecoverySnapshot(
+    File snapshot,
+  ) async {
+    final extracted = await Directory.systemTemp.createTemp(
+      'kelivo-recovery-check-',
+    );
+    registerLiveTempPath(extracted.path);
+    Object? failure;
+    try {
+      await runBackupIsolate<void, _BackupExtractArgs>(
+        body: _extractZipInIsolate,
+        payload: _BackupExtractArgs(
+          zipPath: snapshot.path,
+          extractDirPath: extracted.path,
+        ),
+      );
+      final info =
+          await runBackupIsolate<_VersionedBackupInfo, _BackupPreflightArgs>(
+            body: _preflightVersionedBackupInIsolate,
+            payload: _BackupPreflightArgs(
+              manifestPath: p.join(extracted.path, _manifestEntryName),
+              extractDirPath: extracted.path,
+              allowUnverifiedForwardCompatible: false,
+            ),
+          );
+      if (!info.includeChats || info.databaseInfo == null) {
+        throw const FormatException('restore_preparation_database_required');
+      }
+      final settings = await runBackupIsolate<Map<String, dynamic>, String>(
+        body: _readSettingsJsonInIsolate,
+        payload: p.join(extracted.path, 'settings.json'),
+      );
+      BackupSettingsValidator.normalizeAndValidate(settings);
+      // 预检已在工作 isolate 上校验过数据库，直接复用其行数，
+      // 不再用第二次遍历阻塞界面。
+      return info.databaseInfo!;
+    } catch (error) {
+      failure = error;
+      rethrow;
+    } finally {
+      await deleteTempDirectoryWhenIsolateSafe(extracted, error: failure);
     }
   }
 
@@ -680,6 +743,7 @@ class DataSync {
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
   }) async => (await _prepareBackupArchive(
+    chatService: chatService,
     includeChats: cfg.includeChats,
     includeFiles: cfg.includeFiles,
     scope: cfg.scope,
@@ -830,6 +894,7 @@ class DataSync {
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
   }) => _prepareBackupArchive(
+    chatService: chatService,
     includeChats: true,
     includeFiles: false,
     exportSettings: _exportBusinessSettings,
@@ -867,7 +932,8 @@ class DataSync {
     }
   }
 
-  Future<PreparedBackupArchive> _prepareBackupArchive({
+  static Future<PreparedBackupArchive> _prepareBackupArchive({
+    ChatService? chatService,
     required bool includeChats,
     required bool includeFiles,
     BackupScope scope = BackupScope.all,
@@ -931,7 +997,7 @@ class DataSync {
       } else if (includeFiles) {
         // 不导聊天时也要能认出“已随消息发出”的草稿附件：
         // 它们在实时库里登记为 composerPublishedFile，只有这些允许进包。
-        final store = chatService.composerDrafts;
+        final store = chatService?.composerDrafts;
         publishedDraftFiles = store != null
             ? await store.publishedFiles()
             : _publishedDraftFilesFrom(
@@ -1051,7 +1117,20 @@ class DataSync {
     bool allowForwardCompatible = false,
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
+  }) => prepareRecoveryDatabaseArchive(
+    sourceDatabase,
+    allowForwardCompatible: allowForwardCompatible,
+    onProgress: onProgress,
+    cancelToken: cancelToken,
+  );
+
+  static Future<File> prepareRecoveryDatabaseArchive(
+    File sourceDatabase, {
+    bool allowForwardCompatible = false,
+    BackupProgressSink? onProgress,
+    BackupCancelToken? cancelToken,
   }) async {
+    await DatabaseFamilyPreserver.validateSource(sourceDatabase);
     if (!await sourceDatabase.exists()) {
       throw FileSystemException(
         'Database copy does not exist',
@@ -2362,7 +2441,7 @@ class DataSync {
   }
 
   /// 确保临时目录存在（某些 macOS 安装要等到首次使用才创建缓存目录）。
-  Future<Directory> _ensureTempDir() async {
+  static Future<Directory> _ensureTempDir() async {
     Directory dir = await getTemporaryDirectory();
     if (!await dir.exists()) {
       try {
@@ -2375,7 +2454,7 @@ class DataSync {
     return dir;
   }
 
-  Future<File> _writeTempText(
+  static Future<File> _writeTempText(
     Directory directory,
     String name,
     String content,
@@ -2602,6 +2681,7 @@ class DataSync {
       ),
     );
 
+    ChatDatabaseSnapshotInfo? validatedDatabase;
     final rawDatabase = manifest['database'];
     if (payloadKind == 'sqlite') {
       if (!includeChats ||
@@ -2684,6 +2764,7 @@ class DataSync {
           databaseInfo.messageCount != messageCount) {
         throw const FormatException('manifest_database_metadata');
       }
+      validatedDatabase = databaseInfo;
       entries[_databaseEntryName] = (
         bytes: databaseFile.lengthSync(),
         sha256: _sha256FileSync(databaseFile, ctx: ctx),
@@ -2726,6 +2807,7 @@ class DataSync {
       secretsIncluded: true,
       businessEntityRowIds: businessEntityRowIds,
       normalizedManifestSha256: normalizedManifestSha256,
+      databaseInfo: validatedDatabase,
       scope: scope,
       createdAtUtc: DateTime.tryParse(
         (manifest['createdAtUtc'] as String?) ?? '',

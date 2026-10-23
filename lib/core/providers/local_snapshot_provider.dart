@@ -165,12 +165,14 @@ class LocalSnapshotProvider extends ChangeNotifier {
     File archive, {
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
+    bool allowUnverifiedForwardCompatible = false,
   }) => whileHoldingCopies(
     () => _dataSync.restoreFromLocalFile(
       archive,
       LocalSnapshotService.archiveConfig,
       onProgress: onProgress,
       cancelToken: cancelToken,
+      allowUnverifiedForwardCompatible: allowUnverifiedForwardCompatible,
     ),
   );
 
@@ -204,6 +206,7 @@ class LocalSnapshotProvider extends ChangeNotifier {
   /// ordinary backup already uses.
   Future<MaterializedLocalCopy> materialize(
     LocalCopy copy, {
+    bool allowForwardCompatible = false,
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
   }) async {
@@ -213,6 +216,7 @@ class LocalSnapshotProvider extends ChangeNotifier {
     try {
       final archive = await _dataSync.prepareBackupFileFromDatabase(
         copy.file,
+        allowForwardCompatible: allowForwardCompatible,
         onProgress: onProgress,
         cancelToken: cancelToken,
       );
@@ -250,7 +254,7 @@ class LocalSnapshotProvider extends ChangeNotifier {
   }
 
   Future<void> setPinned(LocalCopy copy, bool pinned) async {
-    if (copy.kind != LocalCopyKind.snapshot) return;
+    if (copy.discovered || copy.kind != LocalCopyKind.snapshot) return;
     await _store.setPinned(copy.id, pinned);
     await refresh();
   }

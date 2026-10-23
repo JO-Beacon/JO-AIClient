@@ -20,6 +20,7 @@ import '../../core/providers/s3_backup_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/local_snapshot_provider.dart';
 import '../../features/backup/pages/local_snapshots_page.dart';
+import '../../features/backup/widgets/storage_migration_notice_button.dart';
 import '../../shared/utils/format_bytes.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../core/services/backup/data_sync.dart';
@@ -671,6 +672,14 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                         ),
                       ),
                       if (busy) const SizedBox(width: 8),
+                      if (context.watch<LocalSnapshotProvider?>() != null) ...[
+                        StorageMigrationNoticeButton(
+                          dataDirectory: context
+                              .read<LocalSnapshotProvider>()
+                              .appDataDirectory,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       if (busy)
                         SizedBox(
                           width: 18,

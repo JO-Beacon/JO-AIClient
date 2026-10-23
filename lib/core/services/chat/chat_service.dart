@@ -350,19 +350,22 @@ class ChatService extends ChangeNotifier {
       _initialized = true;
       notifyListeners();
       late final Future<void> postStartupMaintenance;
-      postStartupMaintenance = _runAssetReferenceMaintenance(appDataDir)
-          .then((_) => runAssetMaintenance())
-          .catchError((Object error) {
-            debugPrint('Post-startup asset maintenance failed: $error');
-          })
-          .whenComplete(() {
-            if (identical(
-              _postStartupAssetMaintenanceFuture,
-              postStartupMaintenance,
-            )) {
-              _postStartupAssetMaintenanceFuture = null;
-            }
-          });
+      postStartupMaintenance =
+          _runAssetReferenceMaintenance(
+                await AppDirectories.getContentDirectory(),
+              )
+              .then((_) => runAssetMaintenance())
+              .catchError((Object error) {
+                debugPrint('Post-startup asset maintenance failed: $error');
+              })
+              .whenComplete(() {
+                if (identical(
+                  _postStartupAssetMaintenanceFuture,
+                  postStartupMaintenance,
+                )) {
+                  _postStartupAssetMaintenanceFuture = null;
+                }
+              });
       _postStartupAssetMaintenanceFuture = postStartupMaintenance;
       unawaited(postStartupMaintenance);
     } catch (_) {
@@ -2110,7 +2113,7 @@ class ChatService extends ChangeNotifier {
   Future<void> runAssetReferenceMaintenance() async {
     if (!_initialized) await init();
     return _runAssetReferenceMaintenance(
-      await AppDirectories.getAppDataDirectory(),
+      await AppDirectories.getContentDirectory(),
     );
   }
 
@@ -2141,7 +2144,7 @@ class ChatService extends ChangeNotifier {
       await _repo.markMessageAssetReferencesDirty(message.id);
       return false;
     }
-    final appDataDir = await AppDirectories.getAppDataDirectory();
+    final appDataDir = await AppDirectories.getContentDirectory();
     final allowedRoots = [
       p.normalize(p.join(appDataDir.absolute.path, 'upload')),
       p.normalize(p.join(appDataDir.absolute.path, 'images')),
@@ -2231,7 +2234,7 @@ class ChatService extends ChangeNotifier {
         notBefore: effectiveNow.add(_assetGcDelay),
       );
       final candidates = await _repo.claimAssetGc(now: effectiveNow);
-      final appDataDir = await AppDirectories.getAppDataDirectory();
+      final appDataDir = await AppDirectories.getContentDirectory();
       final allowedRoots = [
         p.normalize(p.join(appDataDir.absolute.path, 'upload')),
         p.normalize(p.join(appDataDir.absolute.path, 'images')),
@@ -2369,6 +2372,7 @@ class ChatService extends ChangeNotifier {
   Future<void> commitParsedImport({
     required BusinessRepository businessRepository,
     required bool overwrite,
+    bool deleteUploads = true,
     required List<ParsedChatImportBatch> conversationBatches,
     required Map<String, List<ChatMessage>> messagesToAppend,
     required BusinessSnapshot Function(BusinessSnapshot current)
@@ -2385,7 +2389,7 @@ class ChatService extends ChangeNotifier {
 
     if (overwrite) {
       await _resetAfterOverwriteRestore();
-      await _deleteUploadDirectory();
+      if (deleteUploads) await _deleteUploadDirectory();
       return;
     }
     _clearPersistedMessageCache();

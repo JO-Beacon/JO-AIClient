@@ -76,6 +76,8 @@ import 'core/services/workspace/workspace_runtime_bootstrap.dart';
 import 'features/workspace/terminal/terminal_session_manager.dart';
 import 'core/database/extension_entity_store.dart';
 import 'core/database/database_installation_gate.dart';
+import 'core/database/empty_database_recovery_guard.dart';
+import 'core/database/private_data_storage.dart';
 import 'core/database/app_database.dart';
 import 'core/database/business_migration_engine.dart';
 import 'core/database/business_preferences.dart';
@@ -218,6 +220,36 @@ Future<void> main(List<String> arguments) async {
       final appDataDirectory =
           bootstrappedAppData ?? await AppDirectories.getAppDataDirectory();
       FlutterLogger.stage('app data directory resolved');
+      final retained = await AppDirectories.documentsDirectoryFor(
+        appDataDirectory,
+      );
+      if (retained != null) {
+        try {
+          await PrivateDataStorage.prepare(
+            source: retained,
+            target: appDataDirectory,
+            onCopying: () => runApp(
+              _RestoreProgressApp(
+                stage: ValueNotifier(RestoreStartupStage.protectingData),
+              ),
+            ),
+          );
+        } catch (error, stackTrace) {
+          runApp(
+            _RestoreFailureApp(
+              report: StartupFailureReport.capture(
+                stage: StartupFailureStage.databaseAdmission,
+                error: error,
+                step: 'private_storage_activation',
+                stackTrace: stackTrace,
+              ),
+              appDataDirectory: appDataDirectory,
+              privateStorageSource: retained,
+            ),
+          );
+          return;
+        }
+      }
       String? associatedJoaiclientPath = commandLineAssociatedJoaiclientPath;
       final suppressAssociatedPathOnRestart = Platform.isWindows
           ? await AssociatedBackupPathEvents.consumeRestartSuppression(
@@ -354,7 +386,10 @@ Future<void> main(List<String> arguments) async {
           if (migrationDecision.needsMigration) {
             runApp(
               MigrationApp(
-                service: HiveToSqliteMigrationService(migrationDecision),
+                service: HiveToSqliteMigrationService(
+                  migrationDecision,
+                  businessLease: businessLease,
+                ),
                 restoreOutcome: restoreOutcome?.state,
               ),
             );
@@ -374,14 +409,27 @@ Future<void> main(List<String> arguments) async {
             return;
           }
           admissionStep = 'installation_gate';
-          await DatabaseInstallationGate.ensureReady(
-            appDataDirectory: appDataDirectory,
-            allowDatabaseIdentityChange:
-                restoreOutcome?.selectedComponents.contains(
-                  RestoreComponent.database,
-                ) ??
-                false,
-          );
+          final installationReceipt =
+              await DatabaseInstallationGate.ensureReady(
+                appDataDirectory: appDataDirectory,
+                allowDatabaseIdentityChange:
+                    restoreOutcome?.selectedComponents.contains(
+                      RestoreComponent.database,
+                    ) ??
+                    false,
+              );
+          admissionStep = 'empty_database_recovery_check';
+          if (restoreOutcome?.state == RestoreReceiptState.committed &&
+              restoreOutcome!.selectedComponents.contains(
+                RestoreComponent.database,
+              )) {
+            await EmptyDatabaseRecoveryGuard.acknowledge(appDataDirectory);
+          } else {
+            await EmptyDatabaseRecoveryGuard.check(
+              appDataDirectory: appDataDirectory,
+              databaseId: installationReceipt.databaseId,
+            );
+          }
           FlutterLogger.stage('database admission done');
           reportStartupProgress(0.66);
           final databaseFile = File(
@@ -434,14 +482,12 @@ Future<void> main(List<String> arguments) async {
                 MigrationApp(
                   service: HiveToSqliteMigrationService(
                     _legacyMigrationDecision(appDataDirectory),
+                    businessLease: businessLease,
                   ),
                   restoreOutcome: restoreOutcome?.state,
                 ),
               );
               return;
-            }
-            if (recovery == _AdmissionRecovery.rebuilt) {
-              continue;
             }
           }
           await _initRestoreFailureWindow();
@@ -492,7 +538,7 @@ Future<void> main(List<String> arguments) async {
   );
 }
 
-enum _AdmissionRecovery { none, rebuilt, remigrate }
+enum _AdmissionRecovery { none, remigrate }
 
 /// 名称必须与 HiveToSqliteMigrationService.check() 保持一致。
 const _legacyHiveSourceNames = <String>[
@@ -516,18 +562,6 @@ Future<_AdmissionRecovery> _recoverFailedAdmission(
     legacyHiveDataPresent: _legacyHiveSourcesExist(appDataDirectory),
   );
   switch (action) {
-    case DatabaseRecoveryAction.rebuildAutomatically:
-      try {
-        await DatabaseInstallationGate.rebuildFresh(
-          appDataDirectory: appDataDirectory,
-        );
-        return _AdmissionRecovery.rebuilt;
-      } catch (rebuildError, rebuildStack) {
-        stderr.writeln(
-          '[DatabaseAdmission] rebuild failed: $rebuildError\n$rebuildStack',
-        );
-        return _AdmissionRecovery.none;
-      }
     case DatabaseRecoveryAction.promptRemigration:
       return _AdmissionRecovery.remigrate;
     case DatabaseRecoveryAction.promptUpgrade:
@@ -584,6 +618,7 @@ Future<void> _initRestoreFailureWindow() async {
 /// 阶段内没有可量化进度，所以只取区间起点。
 double? _restoreStageFraction(RestoreStartupStage stage) {
   final phase = switch (stage) {
+    RestoreStartupStage.protectingData => BackupPhase.stagingCandidate,
     RestoreStartupStage.checkingBackup => BackupPhase.validating,
     RestoreStartupStage.preservingCurrentData => BackupPhase.stagingCandidate,
     RestoreStartupStage.installingBackup => BackupPhase.committing,
@@ -625,10 +660,12 @@ class _RestoreFailureApp extends StatelessWidget {
     required this.report,
     this.appDataDirectory,
     this.businessLease,
+    this.privateStorageSource,
   });
 
   final StartupFailureReport report;
   final Directory? appDataDirectory;
+  final Directory? privateStorageSource;
   final RestoreBusinessLease? businessLease;
 
   @override

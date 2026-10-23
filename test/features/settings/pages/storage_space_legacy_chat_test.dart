@@ -64,22 +64,30 @@ void main() {
     previousPathProvider = PathProviderPlatform.instance;
     PathProviderPlatform.instance = _FakePathProvider(root.path);
     SharedPreferences.setMockInitialValues({});
-    final database = sqlite3.open(
-      p.join(root.path, AppDatabase.databaseFileName),
-    );
-    try {
-      database.execute(
-        'CREATE TABLE IF NOT EXISTS chat_storage_meta_rows '
-        '(key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL);',
+    Future<void> writeDatabase(Directory directory) async {
+      await directory.create(recursive: true);
+      final database = sqlite3.open(
+        p.join(directory.path, AppDatabase.databaseFileName),
       );
-      database.execute(
-        'INSERT OR REPLACE INTO chat_storage_meta_rows (key, value) '
-        'VALUES (?, ?);',
-        [ChatStorageMetaKeys.hiveMigrationComplete, 'true'],
-      );
-    } finally {
-      database.close();
+      try {
+        database.execute(
+          'CREATE TABLE IF NOT EXISTS chat_storage_meta_rows '
+          '(key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL);',
+        );
+        database.execute(
+          'INSERT OR REPLACE INTO chat_storage_meta_rows (key, value) '
+          'VALUES (?, ?);',
+          [ChatStorageMetaKeys.hiveMigrationComplete, 'true'],
+        );
+      } finally {
+        database.close();
+      }
     }
+
+    // Android 的数据库在 Documents（= root），iOS 的在私有 kelivo-data 下；
+    // 旧 Hive 文件始终留在公共 Documents（= root）。
+    await writeDatabase(root);
+    await writeDatabase(Directory(p.join(root.path, 'kelivo-data')));
     await File(p.join(root.path, 'messages.hive')).writeAsString('legacy');
   });
 
@@ -139,7 +147,14 @@ void main() {
               ),
             ),
           );
-          await _pumpUntilFound(tester, find.text('Chat Records (Old)'));
+          await _pumpUntilFound(
+            tester,
+            find.text(
+              platform == TargetPlatform.iOS
+                  ? 'Storage Space'
+                  : 'Chat Records (Old)',
+            ),
+          );
 
           expect(find.text('Open User Data Directory'), findsNothing);
         } finally {

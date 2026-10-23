@@ -63,6 +63,12 @@ final class SqliteSchemaMigrationService implements MigrationWorkflow {
   bool get canOfferSkip => false;
 
   @override
+  bool get isComplete => false;
+
+  @override
+  bool get freshStartSelected => false;
+
+  @override
   Future<int> loadAttemptState() async => 0;
 
   void _emit(

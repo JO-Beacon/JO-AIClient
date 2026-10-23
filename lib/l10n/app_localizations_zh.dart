@@ -13596,6 +13596,90 @@ class AppLocalizationsZh extends AppLocalizations {
   String markdownPlaygroundProgress(int shown, int total) {
     return '已输入 $shown / $total';
   }
+
+  @override
+  String get recoveryMissingDataTitle => '检测到已有数据';
+
+  @override
+  String get recoveryMissingDataBody =>
+      '当前数据库缺失，但设备上仍有旧数据。JO-AIClient 已暂停启动，没有新建空数据库，并保留现有文件和副本。';
+
+  @override
+  String get recoveryEmptyDataTitle => '当前聊天记录为空';
+
+  @override
+  String get recoveryEmptyDataBody =>
+      '当前数据库没有对话，但发现了历史副本。JO-AIClient 已暂停启动，你可以恢复副本，也可以明确选择保留当前数据。应用不会自动覆盖数据。';
+
+  @override
+  String get recoveryKeepCurrent => '保留当前数据并继续';
+
+  @override
+  String get recoveryKeepCurrentConfirm => '继续使用当前空数据库？历史副本仍会保留，可以稍后恢复。';
+
+  @override
+  String get recoverySearchingCopies => '正在查找并校验本机数据副本…';
+
+  @override
+  String recoveryFoundCopies(int count) {
+    return '找到 $count 份通过校验的副本。可以选择恢复聊天与设置，原文件会保留。';
+  }
+
+  @override
+  String recoveryInvalidCopy(String name) {
+    return '$name：校验未通过，原文件已保留。';
+  }
+
+  @override
+  String get recoverySearchFailed => '部分数据位置无法读取。现有文件已保留，请先导出数据副本再尝试其他恢复操作。';
+
+  @override
+  String get recoveryDiscoveredCopyBody =>
+      '在原存储目录或其他位置发现的副本。原文件会保留，恢复前会进行完整校验。';
+
+  @override
+  String get recoveryStorageFailureTitle => '数据存储需要检查';
+
+  @override
+  String get recoveryStorageFailureBody =>
+      'JO-AIClient 未能启用受保护的数据存储，已暂停启动并保留原数据。可以导出数据副本或重试，应用不会因此新建空数据库。';
+
+  @override
+  String get recoveryProtectingTitle => '正在保护聊天数据库';
+
+  @override
+  String get recoveryProtectingData =>
+      '正在复制并校验数据库。图片、附件和快照留在 Documents，不会重复复制；原数据库也会保留。';
+
+  @override
+  String get recoveryStorageReadyTitle => '聊天数据库已转存至 App 内部';
+
+  @override
+  String get recoveryStorageReadyBody =>
+      '存放聊天、助手和设置的数据库已转存至 App 内部。快照、图片和附件仍在系统“文件”App 可访问的 Documents 中，原数据库也已保留。若之前的聊天仍然缺失，可前往“设置 → 备份与恢复 → 本地副本”查看恢复副本。';
+
+  @override
+  String get recoveryRetainedData => '保留的原数据';
+
+  @override
+  String get recoveryNoValidCopies => '找到了数据副本，但没有副本通过校验。原文件均已保留，可以导出数据进一步排查。';
+
+  @override
+  String get recoveryStorageInsufficientSpaceBody =>
+      '剩余空间不足，无法在保留原数据库的同时建立经过校验的内部副本。现有数据和快照均未改动，请腾出一些空间后重试。';
+
+  @override
+  String get migrationFreshStartTitle => '已重新开始';
+
+  @override
+  String get migrationFreshStartSubtitle => '已新建空数据库，旧数据已保留。请重启 App 后继续使用。';
+
+  @override
+  String get migrationFreshStartFailedTitle => '重新开始未完成';
+
+  @override
+  String get migrationFreshStartFailedSubtitle =>
+      '旧数据已保留。请重试重新开始，或关闭并重新打开 App。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -27190,6 +27274,90 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String markdownPlaygroundProgress(int shown, int total) {
     return '已输入 $shown / $total';
   }
+
+  @override
+  String get recoveryMissingDataTitle => '检测到已有数据';
+
+  @override
+  String get recoveryMissingDataBody =>
+      '当前数据库缺失，但设备上仍有旧数据。JO-AIClient 已暂停启动，没有新建空数据库，并保留现有文件和副本。';
+
+  @override
+  String get recoveryEmptyDataTitle => '当前聊天记录为空';
+
+  @override
+  String get recoveryEmptyDataBody =>
+      '当前数据库没有对话，但发现了历史副本。JO-AIClient 已暂停启动，你可以恢复副本，也可以明确选择保留当前数据。应用不会自动覆盖数据。';
+
+  @override
+  String get recoveryKeepCurrent => '保留当前数据并继续';
+
+  @override
+  String get recoveryKeepCurrentConfirm => '继续使用当前空数据库？历史副本仍会保留，可以稍后恢复。';
+
+  @override
+  String get recoverySearchingCopies => '正在查找并校验本机数据副本…';
+
+  @override
+  String recoveryFoundCopies(int count) {
+    return '找到 $count 份通过校验的副本。可以选择恢复聊天与设置，原文件会保留。';
+  }
+
+  @override
+  String recoveryInvalidCopy(String name) {
+    return '$name：校验未通过，原文件已保留。';
+  }
+
+  @override
+  String get recoverySearchFailed => '部分数据位置无法读取。现有文件已保留，请先导出数据副本再尝试其他恢复操作。';
+
+  @override
+  String get recoveryDiscoveredCopyBody =>
+      '在原存储目录或其他位置发现的副本。原文件会保留，恢复前会进行完整校验。';
+
+  @override
+  String get recoveryStorageFailureTitle => '数据存储需要检查';
+
+  @override
+  String get recoveryStorageFailureBody =>
+      'JO-AIClient 未能启用受保护的数据存储，已暂停启动并保留原数据。可以导出数据副本或重试，应用不会因此新建空数据库。';
+
+  @override
+  String get recoveryProtectingTitle => '正在保护聊天数据库';
+
+  @override
+  String get recoveryProtectingData =>
+      '正在复制并校验数据库。图片、附件和快照留在 Documents，不会重复复制；原数据库也会保留。';
+
+  @override
+  String get recoveryStorageReadyTitle => '聊天数据库已转存至 App 内部';
+
+  @override
+  String get recoveryStorageReadyBody =>
+      '存放聊天、助手和设置的数据库已转存至 App 内部。快照、图片和附件仍在系统“文件”App 可访问的 Documents 中，原数据库也已保留。若之前的聊天仍然缺失，可前往“设置 → 备份与恢复 → 本地副本”查看恢复副本。';
+
+  @override
+  String get recoveryRetainedData => '保留的原数据';
+
+  @override
+  String get recoveryNoValidCopies => '找到了数据副本，但没有副本通过校验。原文件均已保留，可以导出数据进一步排查。';
+
+  @override
+  String get recoveryStorageInsufficientSpaceBody =>
+      '剩余空间不足，无法在保留原数据库的同时建立经过校验的内部副本。现有数据和快照均未改动，请腾出一些空间后重试。';
+
+  @override
+  String get migrationFreshStartTitle => '已重新开始';
+
+  @override
+  String get migrationFreshStartSubtitle => '已新建空数据库，旧数据已保留。请重启 App 后继续使用。';
+
+  @override
+  String get migrationFreshStartFailedTitle => '重新开始未完成';
+
+  @override
+  String get migrationFreshStartFailedSubtitle =>
+      '旧数据已保留。请重试重新开始，或关闭并重新打开 App。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -40790,4 +40958,89 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String markdownPlaygroundProgress(int shown, int total) {
     return '已輸入 $shown / $total';
   }
+
+  @override
+  String get recoveryMissingDataTitle => '偵測到既有資料';
+
+  @override
+  String get recoveryMissingDataBody =>
+      '目前資料庫遺失，但裝置上仍有舊資料。JO-AIClient 已暫停啟動，沒有建立空資料庫，並保留現有檔案與副本。';
+
+  @override
+  String get recoveryEmptyDataTitle => '目前聊天記錄為空';
+
+  @override
+  String get recoveryEmptyDataBody =>
+      '目前資料庫沒有對話，但發現了歷史副本。JO-AIClient 已暫停啟動，你可以還原副本，也可以明確選擇保留目前資料。應用程式不會自動覆寫資料。';
+
+  @override
+  String get recoveryKeepCurrent => '保留目前資料並繼續';
+
+  @override
+  String get recoveryKeepCurrentConfirm => '繼續使用目前的空資料庫？歷史副本仍會保留，可稍後還原。';
+
+  @override
+  String get recoverySearchingCopies => '正在尋找並驗證本機資料副本…';
+
+  @override
+  String recoveryFoundCopies(int count) {
+    return '找到 $count 份通過驗證的副本。可選擇還原聊天與設定，原始檔案會保留。';
+  }
+
+  @override
+  String recoveryInvalidCopy(String name) {
+    return '$name：驗證未通過，原始檔案已保留。';
+  }
+
+  @override
+  String get recoverySearchFailed => '部分資料位置無法讀取。現有檔案已保留，請先匯出資料副本再嘗試其他還原操作。';
+
+  @override
+  String get recoveryDiscoveredCopyBody =>
+      '在原儲存目錄或其他位置發現的副本。原始檔案會保留，還原前會進行完整驗證。';
+
+  @override
+  String get recoveryStorageFailureTitle => '資料儲存需要檢查';
+
+  @override
+  String get recoveryStorageFailureBody =>
+      'JO-AIClient 未能啟用受保護的資料儲存，已暫停啟動並保留原資料。可匯出資料副本或重試，應用程式不會因此建立空資料庫。';
+
+  @override
+  String get recoveryProtectingTitle => '正在保護聊天資料庫';
+
+  @override
+  String get recoveryProtectingData =>
+      '正在複製並驗證資料庫。圖片、附件和快照留在 Documents，不會重複複製；原資料庫也會保留。';
+
+  @override
+  String get recoveryStorageReadyTitle => '聊天資料庫已轉存至 App 內部';
+
+  @override
+  String get recoveryStorageReadyBody =>
+      '存放聊天、助手和設定的資料庫已轉存至 App 內部。快照、圖片和附件仍在系統“檔案”App 可存取的 Documents 中，原資料庫也已保留。若先前的聊天仍然遺失，可前往“設定 → 備份與還原 → 本機副本”查看還原副本。';
+
+  @override
+  String get recoveryRetainedData => '保留的原資料';
+
+  @override
+  String get recoveryNoValidCopies => '找到了資料副本，但沒有副本通過驗證。原始檔案均已保留，可匯出資料進一步檢查。';
+
+  @override
+  String get recoveryStorageInsufficientSpaceBody =>
+      '剩餘空間不足，無法在保留原資料庫的同時建立經過驗證的內部副本。現有資料和快照均未更動，請釋放一些空間後重試。';
+
+  @override
+  String get migrationFreshStartTitle => '已重新開始';
+
+  @override
+  String get migrationFreshStartSubtitle =>
+      '已建立新的空白資料庫，舊資料已保留。請重新啟動 App 後繼續使用。';
+
+  @override
+  String get migrationFreshStartFailedTitle => '重新開始未完成';
+
+  @override
+  String get migrationFreshStartFailedSubtitle =>
+      '舊資料已保留。請重試重新開始，或關閉並重新開啟 App。';
 }

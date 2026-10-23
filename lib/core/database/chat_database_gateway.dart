@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'database_installation_gate.dart';
 
 import 'app_database.dart';
 import 'business_repository.dart';
@@ -14,7 +16,7 @@ final class ChatDatabaseLease {
     this._gateway,
   );
 
-  /// 面向现有仅聊天的调用方的兼容性别名。
+  /// Compatibility alias for existing chat-only callers.
   final ChatDatabaseRepository repository;
   ChatDatabaseRepository get chatRepository => repository;
   final BusinessRepository businessRepository;
@@ -86,7 +88,17 @@ final class ChatDatabaseGateway {
 
   Future<_DatabaseRepositories> _open(File databaseFile) async {
     return _observer.measure(ChatDatabaseOperation.gatewayOpen, () async {
-      final database = AppDatabase.open(file: databaseFile);
+      final installed =
+          p.basename(databaseFile.path) == AppDatabase.databaseFileName;
+      if (installed && !await databaseFile.exists()) {
+        await DatabaseInstallationGate.ensureReady(
+          appDataDirectory: databaseFile.parent,
+        );
+      }
+      final database = AppDatabase.open(
+        file: databaseFile,
+        requireExisting: installed,
+      );
       final chatRepository = ChatDatabaseRepository(
         database,
         databaseFile: databaseFile,

@@ -5,7 +5,10 @@ import 'dart:isolate';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
+import '../../database/business_data.dart';
 import '../../database/business_repository.dart';
+import '../../database/chat_database_repository.dart'
+    show ParsedChatImportBatch;
 import '../../database/business_settings_router.dart';
 import '../../models/api_keys.dart';
 import '../../models/backup.dart';
@@ -197,22 +200,11 @@ class CherryImporter {
       }
     }
 
-    // 5) 在打开单一写事务之前解析业务数据。
+    // 5) 解析业务数据，但先不写入：它会在聊天事务里一起提交。
     final importedProviders = _parseProviders(cherryProviders);
     final importedAssistants = _parseAssistants(cherryAssistants);
-    await _importBusinessData(
-      businessRepository: businessRepository,
-      mode: mode,
-      providers: importedProviders,
-      assistants: importedAssistants,
-    );
-
-    // 如果覆盖，则在写入任何上传内容之前先清除 chats/files，以免稍后被删除
     if (!chatService.initialized) {
       await chatService.init();
-    }
-    if (mode == RestoreMode.overwrite) {
-      await chatService.clearAllData();
     }
 
     // 7) 准备文件（仅当消息引用了这些文件时）
@@ -292,8 +284,8 @@ class CherryImporter {
       }
     }
 
-    // 8) 将 topics 与 messages 导入 ChatService
-    final convCountAndMsgCount = await _importConversations(
+    // 8) 先把所有可能失败的文件与消息准备完，再在一个事务里发布。
+    final prepared = await _importConversations(
       topicMeta: topicMeta,
       topicMessages: topicMessages,
       filePaths: pathsByFileId,
@@ -302,13 +294,26 @@ class CherryImporter {
       blockTexts: blockTextByMessageId,
       pendingAttachmentsByMessage: pendingAttachmentsByMessage,
     );
+    await chatService.commitParsedImport(
+      businessRepository: businessRepository,
+      overwrite: mode == RestoreMode.overwrite,
+      deleteUploads: false,
+      conversationBatches: prepared.batches,
+      messagesToAppend: prepared.messagesToAppend,
+      transformBusiness: (current) => _transformBusinessData(
+        current: current,
+        mode: mode,
+        providers: importedProviders,
+        assistants: importedAssistants,
+      ),
+    );
 
     return CherryImportResult(
       providers: importedProviders.length,
       assistants: importedAssistants.length,
-      conversations: convCountAndMsgCount.$1,
-      messages: convCountAndMsgCount.$2,
-      files: pathsByFileId.length + convCountAndMsgCount.$3,
+      conversations: prepared.conversations,
+      messages: prepared.messages,
+      files: pathsByFileId.length + prepared.extraSaved,
     );
   }
 
@@ -693,78 +698,76 @@ class CherryImporter {
     return out;
   }
 
-  static Future<void> _importBusinessData({
-    required BusinessRepository businessRepository,
+  static BusinessSnapshot _transformBusinessData({
+    required BusinessSnapshot current,
     required RestoreMode mode,
     required Map<String, Map<String, dynamic>> providers,
     required List<Map<String, dynamic>> assistants,
   }) {
-    return businessRepository.transformSnapshot((current) {
-      final settings = BusinessSettingsRouter.exportSnapshot(current);
-      if (mode == RestoreMode.overwrite) {
-        settings[_providersKey] = jsonEncode(providers);
-        settings[_providersOrderKey] = providers.keys.toList();
-        settings[_assistantsKey] = jsonEncode(assistants);
-        return BusinessSettingsRouter.normalizeAndRoute(settings);
-      }
-
-      final currentProviders = _jsonObjectMap(
-        settings[_providersKey],
-        _providersKey,
-      );
-      for (final entry in providers.entries) {
-        final local = currentProviders[entry.key];
-        if (local is! Map) {
-          currentProviders[entry.key] = entry.value;
-          continue;
-        }
-        final next = local.map((key, value) => MapEntry(key.toString(), value));
-        for (final importedField in entry.value.entries) {
-          final value = importedField.value;
-          if (value == null || (value is String && value.trim().isEmpty)) {
-            continue;
-          }
-          next[importedField.key] = value;
-        }
-        currentProviders[entry.key] = next;
-      }
-      settings[_providersKey] = jsonEncode(currentProviders);
-
-      final order = List<String>.from(
-        (settings[_providersOrderKey] as List).cast<String>(),
-      );
-      for (final providerId in providers.keys) {
-        if (!order.contains(providerId)) order.add(providerId);
-      }
-      settings[_providersOrderKey] = order;
-
-      final currentAssistants = _jsonObjectList(
-        settings[_assistantsKey],
-        _assistantsKey,
-      );
-      final assistantsById = <String, Map<String, dynamic>>{
-        for (final assistant in currentAssistants)
-          if (assistant['id'] != null) assistant['id'].toString(): assistant,
-      };
-      for (final assistant in assistants) {
-        final id = assistant['id'] as String;
-        final local = assistantsById[id];
-        if (local == null) {
-          assistantsById[id] = assistant;
-          continue;
-        }
-        final prompt = (assistant['systemPrompt'] as String?)?.trim() ?? '';
-        if (prompt.isNotEmpty) local['systemPrompt'] = prompt;
-        if (assistant['chatModelProvider'] != null) {
-          local['chatModelProvider'] = assistant['chatModelProvider'];
-        }
-        if (assistant['chatModelId'] != null) {
-          local['chatModelId'] = assistant['chatModelId'];
-        }
-      }
-      settings[_assistantsKey] = jsonEncode(assistantsById.values.toList());
+    final settings = BusinessSettingsRouter.exportSnapshot(current);
+    if (mode == RestoreMode.overwrite) {
+      settings[_providersKey] = jsonEncode(providers);
+      settings[_providersOrderKey] = providers.keys.toList();
+      settings[_assistantsKey] = jsonEncode(assistants);
       return BusinessSettingsRouter.normalizeAndRoute(settings);
-    }, writeReceipt: true);
+    }
+
+    final currentProviders = _jsonObjectMap(
+      settings[_providersKey],
+      _providersKey,
+    );
+    for (final entry in providers.entries) {
+      final local = currentProviders[entry.key];
+      if (local is! Map) {
+        currentProviders[entry.key] = entry.value;
+        continue;
+      }
+      final next = local.map((key, value) => MapEntry(key.toString(), value));
+      for (final importedField in entry.value.entries) {
+        final value = importedField.value;
+        if (value == null || (value is String && value.trim().isEmpty)) {
+          continue;
+        }
+        next[importedField.key] = value;
+      }
+      currentProviders[entry.key] = next;
+    }
+    settings[_providersKey] = jsonEncode(currentProviders);
+
+    final order = List<String>.from(
+      (settings[_providersOrderKey] as List).cast<String>(),
+    );
+    for (final providerId in providers.keys) {
+      if (!order.contains(providerId)) order.add(providerId);
+    }
+    settings[_providersOrderKey] = order;
+
+    final currentAssistants = _jsonObjectList(
+      settings[_assistantsKey],
+      _assistantsKey,
+    );
+    final assistantsById = <String, Map<String, dynamic>>{
+      for (final assistant in currentAssistants)
+        if (assistant['id'] != null) assistant['id'].toString(): assistant,
+    };
+    for (final assistant in assistants) {
+      final id = assistant['id'] as String;
+      final local = assistantsById[id];
+      if (local == null) {
+        assistantsById[id] = assistant;
+        continue;
+      }
+      final prompt = (assistant['systemPrompt'] as String?)?.trim() ?? '';
+      if (prompt.isNotEmpty) local['systemPrompt'] = prompt;
+      if (assistant['chatModelProvider'] != null) {
+        local['chatModelProvider'] = assistant['chatModelProvider'];
+      }
+      if (assistant['chatModelId'] != null) {
+        local['chatModelId'] = assistant['chatModelId'];
+      }
+    }
+    settings[_assistantsKey] = jsonEncode(assistantsById.values.toList());
+    return BusinessSettingsRouter.normalizeAndRoute(settings);
   }
 
   static Map<String, dynamic> _jsonObjectMap(Object? raw, String key) {
@@ -1163,7 +1166,16 @@ class CherryImporter {
   }
 
   // 返回 (conversations, messages, extraFilesSaved)
-  static Future<(int, int, int)> _importConversations({
+  static Future<
+    ({
+      List<ParsedChatImportBatch> batches,
+      Map<String, List<ChatMessage>> messagesToAppend,
+      int conversations,
+      int messages,
+      int extraSaved,
+    })
+  >
+  _importConversations({
     required Map<String, Map<String, dynamic>> topicMeta,
     required Map<String, List<Map<String, dynamic>>> topicMessages,
     required Map<String, String> filePaths,
@@ -1189,6 +1201,8 @@ class CherryImporter {
     int convCount = 0;
     int msgCount = 0;
     int extraSaved = 0; // 从 base64/data url 保存的文件数量
+    final conversationBatches = <ParsedChatImportBatch>[];
+    final messagesToAppend = <String, List<ChatMessage>>{};
 
     final topicIds = <String>{...topicMeta.keys, ...topicMessages.keys};
     for (final topicId in topicIds) {
@@ -1503,29 +1517,35 @@ class CherryImporter {
         updatedAt = times.last;
       }
 
-      // 持久化
+      // 只构造批次，不写库；由调用方在一个事务里发布。
       if (mode == RestoreMode.merge && existingConvIds.contains(topicId)) {
-        // 仅添加新消息
-        for (final m in messages) {
-          await chatService.addMessageDirectly(topicId, m);
-          msgCount += 1;
-        }
+        messagesToAppend[topicId] = messages;
+        msgCount += messages.length;
       } else {
-        final conv = Conversation(
-          id: topicId,
-          title: title,
-          createdAt: createdAt,
-          updatedAt: updatedAt,
-          isPinned: pinned,
-          assistantId: assistantId,
-        );
-        await chatService.restoreConversation(conv, messages);
+        conversationBatches.add((
+          conversation: Conversation(
+            id: topicId,
+            title: title,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            isPinned: pinned,
+            assistantId: assistantId,
+          ),
+          messages: messages,
+          tree: null,
+        ));
         convCount += 1;
         msgCount += messages.length;
       }
     }
 
-    return (convCount, msgCount, extraSaved);
+    return (
+      batches: conversationBatches,
+      messagesToAppend: messagesToAppend,
+      conversations: convCount,
+      messages: msgCount,
+      extraSaved: extraSaved,
+    );
   }
 
   static MessagePart _attachmentPart({

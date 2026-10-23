@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'database_family_preserver.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:uuid/uuid.dart';
 
+import '../services/backup/recovery_file_discovery.dart';
 import '../services/backup/restore_durability.dart';
 import 'app_database.dart';
 import 'chat_database_repository.dart';
+import '../../utils/app_directories.dart';
 
 final class DatabaseInstallationReceipt {
   const DatabaseInstallationReceipt({
@@ -45,16 +48,12 @@ final class DatabaseInstallationReceipt {
   }
 }
 
-/// 启动准入失败后的恢复路由。只有 [rebuildAutomatically] 可以在无需进一步
-/// 用户确认的情况下运行；其他所有路由都必须先经用户确认。
-enum DatabaseRecoveryAction {
-  none,
-  rebuildAutomatically,
-  promptRemigration,
-  promptUpgrade,
-}
+/// Recovery route for a failed startup admission. Existing data is never
+/// replaced automatically after an admission failure.
+enum DatabaseRecoveryAction { none, promptRemigration, promptUpgrade }
 
-/// 被 [DatabaseInstallationGate.rebuildFresh] 改名移开（而非删除）的数据库族。
+/// A database family that [DatabaseInstallationGate.rebuildFresh] moved aside
+/// instead of deleting.
 final class DisplacedDatabaseCopy {
   const DisplacedDatabaseCopy({
     required this.file,
@@ -63,41 +62,44 @@ final class DisplacedDatabaseCopy {
     required this.bytes,
   });
 
-  /// 数据库本体；附属文件带各自后缀位于其旁。
+  /// The database itself; sidecars sit beside it with their own suffixes.
   final File file;
 
-  /// 标识这一个世代。按文本排序即时间序。
+  /// Identifies the family. Sorts chronologically as text.
   final String stamp;
 
-  /// 当时间戳早于现行命名规则、无法解读时为 null。
+  /// Null when the stamp predates the current naming and cannot be read.
   final DateTime? displacedAt;
 
-  /// 整个族的总字节数，含附属文件。
+  /// The whole family, sidecars included.
   final int bytes;
 }
 
 final class DatabaseInstallationGate {
   DatabaseInstallationGate._();
 
+  static const historyFileName = '.kelivo_database_history.json';
+
   static const _receiptPrefix = 'database_installation_receipt_';
   static const _receiptSuffix = '.json';
-  // 创建临时文件与重命名之间发生崩溃不能阻塞下次启动，因此每次发布都使用
-  // 唯一临时名并清理过期文件，而不是复用一个可能被残留文件阻塞的固定名。
-  // 前缀有意省略尾部路径分隔符，以便清理也能删除旧的固定名临时文件
-  // ('.database_installation_receipt.tmp')。
+  // A crash between creating the temp file and renaming it must not brick the
+  // next launch, so each publish uses a unique temp name and sweeps stale ones
+  // rather than reusing a single fixed name that a leftover could block. The
+  // prefix intentionally omits the trailing separator so the sweep also clears
+  // the legacy fixed-name temp ('.database_installation_receipt.tmp').
   static const _temporaryPrefix = '.database_installation_receipt';
   static const _temporarySuffix = '.tmp';
   static const _maximumReceiptBytes = 4096;
 
-  /// 被 [rebuildFresh] 改名保留（而非删除）的数据库族所带的后缀。时间戳使
-  /// 各世代互不混淆、且按字典序即时间序；每个附属文件保留自身后缀，整套仍
-  /// 可打开，包含尚未做检查点的事务。
+  /// Suffix marking a database family moved aside by [rebuildFresh] rather
+  /// than deleted. The stamp keeps generations distinct and sorts
+  /// chronologically; every sidecar keeps its suffix so the whole set stays
+  /// openable, uncheckpointed transactions included.
   static const displacedDatabasePrefix = '.displaced-';
-  static const _maximumDisplacedGenerations = 3;
 
-  /// 数据库本身及 SQLite 可能留在它旁边的全部附属文件。必须与
-  /// ChatDatabaseRepository 的族处理保持一致：只搬数据库而丢下日志，会把
-  /// 日志留在替代者的旁边。
+  /// The database and every sidecar SQLite may leave beside it. Must stay in
+  /// step with ChatDatabaseRepository's own family handling: moving a database
+  /// without its journal strands the journal next to whatever takes its place.
   static const _databaseFamilySuffixes = <String>[
     '',
     '-wal',
@@ -108,20 +110,39 @@ final class DatabaseInstallationGate {
   static Future<DatabaseInstallationReceipt> ensureReady({
     required Directory appDataDirectory,
     bool allowDatabaseIdentityChange = false,
+    bool allowEmptyInitialization = false,
     RestoreDurability? durability,
   }) async {
     final resolvedDurability = durability ?? RestorePlatformDurability();
     await appDataDirectory.create(recursive: true);
+    await DatabaseFamilyPreserver.resume(
+      appDataDirectory,
+      durability: resolvedDurability,
+    );
     final databaseFile = File(
       p.join(appDataDirectory.path, AppDatabase.databaseFileName),
+    );
+    // A crash during a schema upgrade -- or during the rollback from a failed
+    // one -- can leave the pre-migration copy behind. Resolve it before the
+    // migration below writes a fresh one; this may restore the database from
+    // that copy, so it has to run before we decide the database is missing.
+    await _sweepPreMigrationBackups(
+      appDataDirectory,
+      durability: resolvedDurability,
     );
     final receipts = await _readReceipts(appDataDirectory);
     final databaseType = await FileSystemEntity.type(
       databaseFile.path,
       followLinks: false,
     );
-    if (receipts.isNotEmpty && databaseType == FileSystemEntityType.notFound) {
-      throw StateError('database_missing');
+    if (databaseType == FileSystemEntityType.notFound &&
+        (receipts.isNotEmpty ||
+            (!allowEmptyInitialization &&
+                (await (await _historyFile(appDataDirectory)).exists() ||
+                    await RecoveryFileDiscovery.hasPriorData(
+                      appDataDirectory,
+                    ))))) {
+      throw StateError('database_missing_with_prior_data');
     }
     if (databaseType != FileSystemEntityType.notFound &&
         databaseType != FileSystemEntityType.file) {
@@ -138,13 +159,16 @@ final class DatabaseInstallationGate {
           await repository.close();
         }
       } else {
-        await ChatDatabaseRepository.migrateInstalledDatabase(databaseFile);
+        await ChatDatabaseRepository.migrateInstalledDatabase(
+          databaseFile,
+          durability: resolvedDurability,
+        );
       }
 
       info = ChatDatabaseRepository.inspectInstalledDatabase(databaseFile);
     } on StateError catch (error) {
-      // migrateInstalledDatabase 对所有 schema 不匹配都报告相同的
-      // 代码；只有较新的 schema 才意味着用户必须更新应用。
+      // migrateInstalledDatabase reports every schema mismatch with the same
+      // code; only a newer schema means the user must update the app.
       if (error.message == 'database_schema_version') {
         final userVersion = _tryReadUserVersion(databaseFile);
         if (userVersion != null &&
@@ -179,6 +203,11 @@ final class DatabaseInstallationGate {
         receipts.where((entry) => entry.file.path != matching.single.file.path),
         durability: resolvedDurability,
       );
+      await _recordHistory(
+        appDataDirectory,
+        matching.single.receipt,
+        resolvedDurability,
+      );
       return matching.single.receipt;
     }
     if (receipts.isNotEmpty) {
@@ -204,13 +233,34 @@ final class DatabaseInstallationGate {
     );
     await _publishReceipt(receiptFile, updated, durability: resolvedDurability);
     await _removeStaleReceipts(receipts, durability: resolvedDurability);
+    await _recordHistory(appDataDirectory, updated, resolvedDurability);
     return updated;
   }
 
-  /// 让安装元数据与一次已提交、已验证的还原对齐。
-  ///
-  /// 必须在归档终态运行之前、持有启动业务／工作区租约时运行。它从不改动
-  /// 数据库字节，因此被打断的终态复核仍能把数据库与候选哈希做比较。
+  static Future<File> _historyFile(Directory root) async {
+    final retained = await AppDirectories.documentsDirectoryFor(root);
+    return File(
+      p.join(retained == null ? root.path : root.parent.path, historyFileName),
+    );
+  }
+
+  static Future<void> _recordHistory(
+    Directory root,
+    DatabaseInstallationReceipt receipt,
+    RestoreDurability durability,
+  ) async {
+    final file = await _historyFile(root);
+    if (await file.exists()) return;
+    final temporary = File('${file.path}.tmp');
+    await temporary.writeAsString(jsonEncode(receipt.toJson()), flush: true);
+    await durability.syncFile(temporary, fullBarrier: true);
+    await durability.renameAndSync(source: temporary, targetPath: file.path);
+  }
+
+  /// Reconciles installation metadata with a committed, verified restore.
+  /// Must run under the startup business/workspace leases before archiving the
+  /// terminal run. It never changes database bytes, so interrupted terminal
+  /// revalidation can still compare the database with the candidate hash.
   static Future<void> reconcileCommittedRestore({
     required Directory appDataDirectory,
     required RestoreDurability durability,
@@ -222,7 +272,7 @@ final class DatabaseInstallationGate {
     try {
       receipts = await _readReceipts(appDataDirectory);
     } on FormatException {
-      // 下面会原样保住这份畸形元数据，而不是信任或删除它。
+      // Preserve the malformed metadata below instead of trusting or deleting it.
     }
     if (info.databaseId != null &&
         receipts.length == 1 &&
@@ -254,8 +304,9 @@ final class DatabaseInstallationGate {
         );
       }
     }
-    // 旧快照可能没有身份。旧回执已安全移走，因此即便再经历一次冷启动，正常
-    // 准入也会补发一个。在这里补发会让尚未归档的终态运行的哈希对不上。
+    // An older snapshot may have no identity. With the old receipts safely
+    // removed, normal admission will assign one even after another cold start.
+    // Assigning it here would invalidate the pending terminal run's hash.
     final databaseId = info.databaseId;
     if (databaseId == null) return;
     final installationIds = receipts
@@ -279,11 +330,7 @@ final class DatabaseInstallationGate {
     );
   }
 
-  /// 将启动准入失败映射到最安全有效的恢复路径。
-  ///
-  /// 仅当不存在安装回执、不存在旧版 Hive 源，且已安装文件处于半创建
-  /// （userVersion 0）或不可读状态时，才会返回自动重建，因此不会丢失任何
-  /// 可达数据。
+  /// Offers explicit recovery or an upgrade; never rebuilds a failed database.
   static Future<DatabaseRecoveryAction> recoveryActionFor({
     required Directory appDataDirectory,
     required Object error,
@@ -300,43 +347,23 @@ final class DatabaseInstallationGate {
     if (!isSchemaOrCorrupt && !isRawSqliteFailure) {
       return DatabaseRecoveryAction.none;
     }
-    // 存在但无法解析的回执仍然证明之前安装过，
-    // 因此它必须像有效回执一样阻止自动重建。
-    final bool hasReceipts;
+    // A receipt, including a malformed receipt, proves this is not first use.
     try {
-      hasReceipts = (await _readReceipts(appDataDirectory)).isNotEmpty;
+      if ((await _readReceipts(appDataDirectory)).isNotEmpty) {
+        return DatabaseRecoveryAction.none;
+      }
     } catch (_) {
       return DatabaseRecoveryAction.none;
     }
-    if (hasReceipts) return DatabaseRecoveryAction.none;
-    if (legacyHiveDataPresent) {
-      return DatabaseRecoveryAction.promptRemigration;
-    }
-    if (isRawSqliteFailure) {
-      // 原始 sqlite 错误绝不能成为自动删除数据的理由。
-      return DatabaseRecoveryAction.none;
-    }
-    final databaseFile = File(
-      p.join(appDataDirectory.path, AppDatabase.databaseFileName),
-    );
-    if (await FileSystemEntity.type(databaseFile.path, followLinks: false) !=
-        FileSystemEntityType.file) {
-      return DatabaseRecoveryAction.none;
-    }
-    final userVersion = _tryReadUserVersion(databaseFile);
-    if (userVersion == null || userVersion == 0) {
-      return DatabaseRecoveryAction.rebuildAutomatically;
-    }
-    return DatabaseRecoveryAction.none;
+    return legacyHiveDataPresent
+        ? DatabaseRecoveryAction.promptRemigration
+        : DatabaseRecoveryAction.none;
   }
 
-  /// 移开已安装的数据库族并重复首次启动设置。仅在 [recoveryActionFor]
-  /// 返回 [DatabaseRecoveryAction.rebuildAutomatically] 时安全。
+  /// Starts a fresh database only after an explicit reset request.
   ///
-  /// [preserveDisplacedCopy] 为真时把旧族改名保留而非删除：一次事后发现判断
-  /// 错误的重建仍可挽回，也留下了说明问题所需的现场。无人值守的重建必须保留
-  /// 副本；用户已确认的重置不能保留——对话框承诺数据已经没了。最多保留
-  /// [_maximumDisplacedGenerations] 份，最旧的一份先丢弃。
+  /// Preserves every previous family by default. Explicit deletion is only
+  /// available to callers that specifically requested removal of those files.
   static Future<DatabaseInstallationReceipt> rebuildFresh({
     required Directory appDataDirectory,
     RestoreDurability? durability,
@@ -344,6 +371,10 @@ final class DatabaseInstallationGate {
   }) async {
     final resolvedDurability = durability ?? RestorePlatformDurability();
     await appDataDirectory.create(recursive: true);
+    await DatabaseFamilyPreserver.resume(
+      appDataDirectory,
+      durability: resolvedDurability,
+    );
     final databaseFile = File(
       p.join(appDataDirectory.path, AppDatabase.databaseFileName),
     );
@@ -370,24 +401,11 @@ final class DatabaseInstallationGate {
     return ensureReady(
       appDataDirectory: appDataDirectory,
       durability: resolvedDurability,
+      allowEmptyInitialization: true,
     );
   }
 
-  /// 在安装一份已验证的快照之前，先保住读不出来的现行文件。调用方必须持有
-  /// 业务／工作区租约，并且已经有一份持久化的还原候选。与自动重建不同，这里
-  /// 从不剪枝现场。
-  static Future<void> preserveFailedDatabaseForRestore({
-    required Directory appDataDirectory,
-    required RestoreDurability durability,
-  }) async {
-    await _displaceDatabaseFamily(
-      File(p.join(appDataDirectory.path, AppDatabase.databaseFileName)),
-      durability: durability,
-      prune: false,
-    );
-  }
-
-  /// [appDataDirectory] 中是否存在任何被移开的数据库副本。
+  /// Whether [appDataDirectory] holds any displaced database copy.
   static Future<bool> hasDisplacedDatabases({
     required Directory appDataDirectory,
   }) async {
@@ -400,21 +418,35 @@ final class DatabaseInstallationGate {
     return false;
   }
 
-  /// 被 [rebuildFresh] 移开的数据库族，最新的在前。
+  /// The database families set aside by [rebuildFresh], newest first.
   ///
-  /// 每一个都是裸 SQLite 族：可能停在更旧的 schema 上，也可能还带着未回放的
-  /// 日志，所以这里一律不打开它们。这份清单是给一个“导出或还原它”的界面用
-  /// 的，而这两条路都走备份流水线，不直接读取文件本身。
+  /// Each is a bare SQLite family, possibly on an older schema and possibly
+  /// still holding an unreplayed journal, so nothing here opens one: the
+  /// listing is for a screen that offers to export or restore it, and both of
+  /// those go through the backup pipeline rather than reading it directly.
   static Future<List<DisplacedDatabaseCopy>> listDisplacedDatabases({
     required Directory appDataDirectory,
   }) async {
     final prefix = '${AppDatabase.databaseFileName}$displacedDatabasePrefix';
     final bytesByStamp = <String, int>{};
+    final directoryCopies = <String>{};
     try {
       await for (final entity in appDataDirectory.list(followLinks: false)) {
-        if (entity is! File) continue;
         final name = p.basename(entity.path);
-        if (!name.startsWith(prefix)) continue;
+        if (entity is Directory &&
+            DatabaseFamilyPreserver.isCopyDirectory(name)) {
+          final stamp = name.substring(prefix.length);
+          directoryCopies.add(stamp);
+          bytesByStamp[stamp] = 0;
+          await for (final member in entity.list(followLinks: false)) {
+            if (member is File) {
+              bytesByStamp[stamp] =
+                  bytesByStamp[stamp]! + await member.length();
+            }
+          }
+          continue;
+        }
+        if (entity is! File || !name.startsWith(prefix)) continue;
         var stamp = name.substring(prefix.length);
         for (final suffix in _databaseFamilySuffixes) {
           if (suffix.isEmpty) continue;
@@ -437,10 +469,15 @@ final class DatabaseInstallationGate {
 
     final copies = <DisplacedDatabaseCopy>[];
     for (final entry in bytesByStamp.entries) {
-      final base = File(p.join(appDataDirectory.path, '$prefix${entry.key}'));
+      final base = File(
+        directoryCopies.contains(entry.key)
+            ? p.join(appDataDirectory.path, '$prefix${entry.key}', 'kelivo.db')
+            : p.join(appDataDirectory.path, '$prefix${entry.key}'),
+      );
       if (await FileSystemEntity.type(base.path, followLinks: false) !=
           FileSystemEntityType.file) {
-        // 族还在、但数据库本体不在了：没有东西可以拿来还原，因此不列出。
+        // The family exists but its database does not; there is nothing a
+        // restore could be built from, so do not offer it.
         continue;
       }
       final micros = int.tryParse(entry.key);
@@ -459,7 +496,7 @@ final class DatabaseInstallationGate {
     return copies;
   }
 
-  /// 删除一个被移开的族。有任何残留即抛错。
+  /// Removes one displaced family. Throws if anything survives.
   static Future<void> deleteDisplacedDatabase({
     required Directory appDataDirectory,
     required String stamp,
@@ -468,9 +505,21 @@ final class DatabaseInstallationGate {
       throw ArgumentError.value(stamp, 'stamp');
     }
     final prefix = '${AppDatabase.databaseFileName}$displacedDatabasePrefix';
-    // 先删附属文件，最后删数据库本体。[listDisplacedDatabases] 只列出数据库
-    // 本体仍在的族，所以先删本体就会把“随后删除失败的附属文件”藏起来——留下
-    // 用户再也够不着的残骸，而 [hasDisplacedDatabases] 仍报告它存在。
+    if (await File(
+      p.join(appDataDirectory.path, DatabaseFamilyPreserver.pendingName),
+    ).exists()) {
+      throw StateError('database_preservation_pending');
+    }
+    final directory = Directory(p.join(appDataDirectory.path, '$prefix$stamp'));
+    if (await FileSystemEntity.type(directory.path, followLinks: false) ==
+        FileSystemEntityType.directory) {
+      await directory.delete(recursive: true);
+      return;
+    }
+    // Sidecars first, database last. [listDisplacedDatabases] only surfaces a
+    // family whose database still exists, so removing the database first would
+    // hide any sidecar that then failed to delete -- leaving debris the user
+    // can no longer reach, while `hasDisplacedDatabases` still reports it.
     for (final suffix in _databaseFamilySuffixes.reversed) {
       final file = File(p.join(appDataDirectory.path, '$prefix$stamp$suffix'));
       try {
@@ -489,10 +538,11 @@ final class DatabaseInstallationGate {
     }
   }
 
-  /// 删除全部被移开的数据库副本。
+  /// Removes every displaced database copy.
   ///
-  /// 一份副本可能是用户数据唯一幸存的版本，所以没有任何流程会按自己的节奏调
-  /// 用这里——它服务于存储空间页，那里已经告诉用户即将丢弃什么。
+  /// A copy can be the only surviving version of the user's data, so nothing
+  /// calls this on its own schedule — it exists for the storage screen, where
+  /// the user is told what they are discarding.
   static Future<void> clearDisplacedDatabases({
     required Directory appDataDirectory,
     RestoreDurability? durability,
@@ -502,56 +552,48 @@ final class DatabaseInstallationGate {
       keep: 0,
       durability: durability ?? RestorePlatformDurability(),
     );
-    // 剪枝会吞掉单个文件的错误，这样日常清理永远不会让一次重建失败。但这里的
-    // 调用方是按下删除的用户，所以必须如实报告什么都没做成，而不是给出一个没
-    // 达成的成功提示。
+    // Pruning swallows per-file errors so housekeeping can never fail a
+    // rebuild. This caller is a user pressing Delete, so it has to report
+    // that nothing happened rather than show a success it did not achieve.
     if (await hasDisplacedDatabases(appDataDirectory: appDataDirectory)) {
       throw StateError('displaced_databases_not_cleared');
     }
   }
 
-  /// 把数据库族改名移开。返回新的基准路径；没有可移的文件时返回 null。
+  /// Preserves unreadable live files before installing a validated snapshot.
+  /// The caller must hold the business/workspace leases and have a durable
+  /// restore candidate. Unlike automatic rebuilds, this never prunes evidence.
+  static Future<void> preserveFailedDatabaseForRestore({
+    required Directory appDataDirectory,
+    required RestoreDurability durability,
+  }) async {
+    await _displaceDatabaseFamily(
+      File(p.join(appDataDirectory.path, AppDatabase.databaseFileName)),
+      durability: durability,
+    );
+  }
+
+  /// Renames the database family aside. Returns the new base path, or null
+  /// when there was nothing to move.
   static Future<String?> _displaceDatabaseFamily(
     File databaseFile, {
     required RestoreDurability durability,
-    bool prune = true,
   }) async {
-    // 补零到固定宽度，使时间戳的字典序即时间序。
-    final stamp = DateTime.now()
-        .toUtc()
-        .microsecondsSinceEpoch
-        .toString()
-        .padLeft(16, '0');
-    final base = '${databaseFile.path}$displacedDatabasePrefix$stamp';
-    String? displaced;
-    for (final suffix in _databaseFamilySuffixes) {
-      final source = File('${databaseFile.path}$suffix');
-      if (await FileSystemEntity.type(source.path, followLinks: false) !=
-          FileSystemEntityType.file) {
-        continue;
-      }
-      await durability.renameAndSync(
-        source: source,
-        targetPath: '$base$suffix',
-      );
-      displaced = base;
-    }
-    if (prune) {
-      await _pruneDisplacedGenerations(
-        databaseFile.parent,
-        keep: _maximumDisplacedGenerations,
-        durability: durability,
-      );
-    }
-    return displaced;
+    return DatabaseFamilyPreserver.preserve(
+      databaseFile,
+      durability: durability,
+    );
   }
 
-  /// 约束保留的世代数，且永远保住最旧的一份。
+  /// Bounds the displaced generations, always keeping the oldest.
   ///
-  /// 最旧的世代不可替代：它保存的是任何东西被移开之前磁盘上的状态，而后面的
-  /// 世代通常是我们自己产出的状态的副本。若一个反复重试的调用方（例如一直失
-  /// 败、每次启动都重新移开的迁移回滚）落在“保留最新”的窗口里，会把用户唯一
-  /// 的真实副本挤出去。因此第一份无条件保留，窗口只覆盖最近 keep − 1 份。
+  /// The oldest generation is the irreplaceable one: it holds what was on disk
+  /// before anything started displacing, while later generations are usually
+  /// copies of a state we produced ourselves. A caller that retries -- a
+  /// pre-migration rollback that keeps failing re-displaces on every launch --
+  /// would otherwise walk the user's only real copy off the end of a
+  /// keep-the-newest window. So the first is kept outright and the window
+  /// covers the most recent [keep] - 1.
   static Future<void> _pruneDisplacedGenerations(
     Directory directory, {
     required int keep,
@@ -574,7 +616,7 @@ final class DatabaseInstallationGate {
         if (stamp.isNotEmpty) stamps.add(stamp);
       }
     } catch (_) {
-      // 剪枝属于清理事务，它的失败绝不能让一次重建失败。
+      // Pruning is housekeeping; failing it must never fail a rebuild.
       return;
     }
     if (stamps.length <= keep) return;
@@ -585,6 +627,17 @@ final class DatabaseInstallationGate {
     final expiring = ordered.where((stamp) => !retained.contains(stamp));
     var removed = false;
     for (final stamp in expiring) {
+      final preserved = Directory(p.join(directory.path, '$prefix$stamp'));
+      if (DatabaseFamilyPreserver.isCopyDirectory(p.basename(preserved.path)) &&
+          await FileSystemEntity.type(preserved.path, followLinks: false) ==
+              FileSystemEntityType.directory) {
+        await deleteDisplacedDatabase(
+          appDataDirectory: directory,
+          stamp: stamp,
+        );
+        removed = true;
+        continue;
+      }
       for (final suffix in _databaseFamilySuffixes) {
         final file = File(p.join(directory.path, '$prefix$stamp$suffix'));
         try {
@@ -663,6 +716,71 @@ final class DatabaseInstallationGate {
     return receipts;
   }
 
+  /// Resolves any pre-migration copy left behind by a crashed schema upgrade.
+  ///
+  /// The copy is only ever deleted once the installed database is confirmed
+  /// usable. If it is not — a crash mid-rollback, when the database had been
+  /// removed but the copy not yet written back — the copy is the only
+  /// surviving good state and is restored instead. Deleting unconditionally
+  /// would turn a recoverable crash into permanent data loss.
+  static Future<void> _sweepPreMigrationBackups(
+    Directory appDataDirectory, {
+    required RestoreDurability durability,
+  }) async {
+    final prefix =
+        '${AppDatabase.databaseFileName}'
+        '${ChatDatabaseRepository.premigrationBackupPrefix}';
+    final backups = <File>[];
+    await for (final entity in appDataDirectory.list(followLinks: false)) {
+      if (entity is! File) continue;
+      if (!p.basename(entity.path).startsWith(prefix)) continue;
+      backups.add(entity);
+    }
+    if (backups.isEmpty) return;
+
+    final databaseFile = File(
+      p.join(appDataDirectory.path, AppDatabase.databaseFileName),
+    );
+    switch (ChatDatabaseRepository.classifyInstalledDatabase(databaseFile)) {
+      case InstalledDatabaseDisposition.usable:
+        for (final backup in backups) {
+          await durability.renameAndSync(
+            source: backup,
+            targetPath:
+                '${databaseFile.path}$displacedDatabasePrefix${DateTime.now().microsecondsSinceEpoch}',
+          );
+        }
+        await durability.syncDirectory(appDataDirectory, fullBarrier: true);
+
+      case InstalledDatabaseDisposition.foreignSchema:
+        // A newer build migrated this database and left its copy behind, and
+        // we are the downgrade. The database on disk is strictly ahead of the
+        // copy, so touching either would destroy data; leave both and let the
+        // gate below ask the user to update.
+        return;
+
+      case InstalledDatabaseDisposition.unusable:
+        // More than one copy means we cannot tell which state to return to.
+        // Failing closed keeps every candidate on disk for the recovery UI
+        // rather than guessing and destroying the rest.
+        if (backups.length != 1) {
+          throw StateError('database_premigration_ambiguous');
+        }
+        await ChatDatabaseRepository.restorePreMigrationBackup(
+          backup: backups.single,
+          target: databaseFile,
+          durability: durability,
+          // `unusable` also covers "could not be opened", which a healthy
+          // database looks like whenever the OS is denying the read. This
+          // rollback runs on every launch with nobody watching, so the file it
+          // rolls over is kept rather than deleted: if the guess was wrong,
+          // what it displaced is still there.
+          retireTarget: (file) =>
+              _displaceDatabaseFamily(file, durability: durability),
+        );
+    }
+  }
+
   static Future<void> _removeStaleReceipts(
     Iterable<({File file, DatabaseInstallationReceipt receipt})> entries, {
     required RestoreDurability durability,
@@ -690,8 +808,9 @@ final class DatabaseInstallationGate {
     DatabaseInstallationReceipt receipt, {
     required RestoreDurability durability,
   }) async {
-    // 删除早前发布崩溃留下的临时文件；它们不携带权威状态（数据库身份才是
-    // 事实来源），绝不能阻塞新的发布。
+    // Remove any temp files left by a crashed earlier publish; they carry no
+    // authoritative state (the database identity is the source of truth) and
+    // must never block a fresh publish.
     await _sweepStaleTemporaries(target.parent);
     final temporary = File(
       p.join(
@@ -738,8 +857,8 @@ final class DatabaseInstallationGate {
         try {
           await File(entity.path).delete();
         } catch (_) {
-          // 尽力而为：无法删除的临时文件仍然不会阻止发布，
-          // 因为现在发布使用唯一名称。
+          // Best-effort: a temp we cannot delete still does not block publish,
+          // which now uses a unique name.
         }
       }
     }

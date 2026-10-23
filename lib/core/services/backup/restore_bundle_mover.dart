@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../database/app_database.dart';
+import '../../../utils/app_directories.dart';
 import '../../database/chat_database_repository.dart';
 import 'restore_bundle_staging.dart';
 import 'restore_durability.dart';
@@ -72,7 +73,9 @@ final class RestoreBundleMover {
       final expected = _candidateAssetsPlan(candidate);
       await _moveAssetRoots(
         sourceContainer: candidateDirectory,
-        targetContainer: appDataDirectory,
+        targetContainer: await AppDirectories.contentDirectoryFor(
+          appDataDirectory,
+        ),
         expected: expected,
       );
     }
@@ -127,7 +130,7 @@ final class RestoreBundleMover {
         candidateDirectory,
       );
       final target = await RestorePreviousBuilder.inspectAssets(
-        appDataDirectory,
+        await AppDirectories.contentDirectoryFor(appDataDirectory),
       );
       for (final root in RestorePreviousAssetsPlan.rootNames) {
         if (_exactAssetRootPresence(source, expected, root) ||
@@ -168,7 +171,7 @@ final class RestoreBundleMover {
         candidateDirectory,
       );
       final liveActual = await RestorePreviousBuilder.inspectAssets(
-        appDataDirectory,
+        await AppDirectories.contentDirectoryFor(appDataDirectory),
       );
       for (final root in RestorePreviousAssetsPlan.rootNames) {
         _requireAssetSplit(
@@ -379,7 +382,7 @@ final class RestoreBundleMover {
       candidateDirectory,
     );
     final liveActual = await RestorePreviousBuilder.inspectAssets(
-      appDataDirectory,
+      await AppDirectories.contentDirectoryFor(appDataDirectory),
     );
     final previousActual = await RestorePreviousBuilder.inspectAssets(
       previousStore.previousDirectory,
@@ -527,7 +530,9 @@ final class RestoreBundleMover {
 
   Future<void> _movePreviousAssets(RestorePreviousAssetsPlan expected) async {
     await _moveAssetRoots(
-      sourceContainer: appDataDirectory,
+      sourceContainer: await AppDirectories.contentDirectoryFor(
+        appDataDirectory,
+      ),
       targetContainer: previousStore.pendingDirectory,
       expected: expected,
       syncSourceBeforeMove: true,
@@ -540,10 +545,16 @@ final class RestoreBundleMover {
     required RestorePreviousAssetsPlan expected,
     bool syncSourceBeforeMove = false,
   }) async {
-    final source = await RestorePreviousBuilder.inspectAssets(sourceContainer);
-    final target = await RestorePreviousBuilder.inspectAssets(targetContainer);
+    final source = await RestorePreviousBuilder.inspectAssets(
+      sourceContainer,
+      rootNames: expected.rootStates.keys,
+    );
+    final target = await RestorePreviousBuilder.inspectAssets(
+      targetContainer,
+      rootNames: expected.rootStates.keys,
+    );
     final rootsToMove = <String>{};
-    for (final root in RestorePreviousAssetsPlan.rootNames) {
+    for (final root in expected.rootStates.keys) {
       final expectedState = expected.rootStates[root]!;
       if (expectedState == RestorePreviousAssetRootState.missing) {
         if (source.rootStates[root] != RestorePreviousAssetRootState.missing ||

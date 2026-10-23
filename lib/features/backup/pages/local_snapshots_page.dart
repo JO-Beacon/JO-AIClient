@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/database/startup_failure_report.dart' show formatBytes;
 import '../../../core/providers/local_snapshot_provider.dart';
 import '../../../core/services/backup/local_copy_catalog.dart';
 import '../../../core/services/backup/local_snapshot_schedule.dart';
@@ -13,7 +14,6 @@ import '../../../core/services/backup/local_snapshot_store.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/utils/format_bytes.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
@@ -54,7 +54,7 @@ Future<void> openLocalSnapshotsPage(BuildContext context) {
   ).push<void>(MaterialPageRoute(builder: (_) => const LocalSnapshotsPage()));
 }
 
-/// 手机端推入整页；桌面端由 [openLocalSnapshotsPage] 嵌入统一的对话框外壳。
+/// 列出这台设备上的所有数据库副本，并允许还原、导出或删除。
 class LocalSnapshotsPage extends StatefulWidget {
   const LocalSnapshotsPage({super.key, this.embedded = false});
 
@@ -93,121 +93,122 @@ class _LocalSnapshotsPageState extends State<LocalSnapshotsPage> {
       ),
     );
 
-    final list = ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      children: [
-        header(l10n.localSnapshotSectionTitle, first: true),
-        SectionCard(
-          children: [
-            _SwitchRow(
-              icon: Lucide.Shield,
-              label: l10n.localSnapshotEnabledTitle,
-              value: settings.enabled,
-              onChanged: (value) =>
-                  vm.updateSettings(settings.copyWith(enabled: value)),
-            ),
-            if (settings.enabled) ...[
-              const _Divider(),
-              _NavRow(
-                icon: Lucide.Repeat,
-                label: l10n.localSnapshotIntervalTitle,
-                detail: _intervalLabel(l10n, settings.intervalDays),
-                onTap: () => _chooseInterval(context, vm),
-              ),
-              const _Divider(),
-              _NavRow(
-                icon: Lucide.Layers,
-                label: l10n.localSnapshotKeepTitle,
-                detail: l10n.localSnapshotKeepValue(settings.keepRecent),
-                onTap: () => _chooseKeepRecent(context, vm),
-              ),
-              const _Divider(),
-              _SwitchRow(
-                icon: Lucide.CalendarPlus,
-                label: l10n.localSnapshotKeepWeekly,
-                value: settings.keepWeekly,
-                onChanged: (value) =>
-                    vm.updateSettings(settings.copyWith(keepWeekly: value)),
-              ),
-              const _Divider(),
-              _SwitchRow(
-                icon: Lucide.Calendar,
-                label: l10n.localSnapshotKeepMonthly,
-                value: settings.keepMonthly,
-                onChanged: (value) =>
-                    vm.updateSettings(settings.copyWith(keepMonthly: value)),
-              ),
-              const _Divider(),
-              _NavRow(
-                icon: Lucide.HardDrive,
-                label: l10n.localSnapshotMaximumTitle,
-                detail: settings.maximumTotalBytes <= 0
-                    ? l10n.localSnapshotMaximumUnlimited
-                    : formatBytes(settings.maximumTotalBytes),
-                onTap: () => _chooseMaximum(context, vm),
-              ),
-              const _Divider(),
-              _SwitchRow(
-                icon: Lucide.MessageSquare,
-                label: l10n.localSnapshotAnnounceTitle,
-                value: settings.announceResult,
-                onChanged: (value) =>
-                    vm.updateSettings(settings.copyWith(announceResult: value)),
-              ),
-            ],
-          ],
-        ),
-        _Note(
-          settings.enabled
-              ? l10n.localSnapshotKeepProtectedNote
-              : l10n.localSnapshotEnabledSubtitle,
-        ),
-        const SizedBox(height: 10),
-        _StatusLine(state: vm.state),
-        const SizedBox(height: 12),
-        IosTileButton(
-          icon: Lucide.Download,
-          label: l10n.localSnapshotTakeNow,
-          enabled: !vm.working,
-          onTap: () => _takeNow(context, vm),
-        ),
-        header(
-          '${l10n.localSnapshotCopiesTitle} · '
-          '${l10n.localSnapshotUsage(vm.copies.length, formatBytes(vm.totalBytes))}',
-        ),
-        if (vm.copies.isEmpty)
-          _EmptyState(loading: vm.loading)
-        else
-          for (final copy in vm.copies)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _CopyCard(
-                copy: copy,
-                onRestore: () => _restore(context, vm, copy),
-                onExport: () => _export(context, vm, copy),
-                onDelete: () => _delete(context, vm, copy),
-                onTogglePin: copy.kind == LocalCopyKind.snapshot
-                    ? () => vm.setPinned(copy, !copy.pinned)
-                    : null,
-              ),
-            ),
-        const SizedBox(height: 8),
-        _Note(l10n.localSnapshotCopiesScopeNote),
-      ],
-    );
-
-    if (widget.embedded) return list;
     return Scaffold(
-      appBar: AppBar(
-        leading: IosIconButton(
-          icon: Lucide.ArrowLeft,
-          size: 22,
-          minSize: 44,
-          onTap: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(l10n.localSnapshotCopiesTitle),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              leading: IosIconButton(
+                icon: Lucide.ArrowLeft,
+                size: 22,
+                minSize: 44,
+                onTap: () => Navigator.of(context).maybePop(),
+              ),
+              title: Text(l10n.localSnapshotCopiesTitle),
+            ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          header(l10n.localSnapshotSectionTitle, first: true),
+          SectionCard(
+            children: [
+              _SwitchRow(
+                icon: Lucide.Shield,
+                label: l10n.localSnapshotEnabledTitle,
+                value: settings.enabled,
+                onChanged: (value) =>
+                    vm.updateSettings(settings.copyWith(enabled: value)),
+              ),
+              if (settings.enabled) ...[
+                const _Divider(),
+                _NavRow(
+                  icon: Lucide.Repeat,
+                  label: l10n.localSnapshotIntervalTitle,
+                  detail: _intervalLabel(l10n, settings.intervalDays),
+                  onTap: () => _chooseInterval(context, vm),
+                ),
+                const _Divider(),
+                _NavRow(
+                  icon: Lucide.Layers,
+                  label: l10n.localSnapshotKeepTitle,
+                  detail: l10n.localSnapshotKeepValue(settings.keepRecent),
+                  onTap: () => _chooseKeepRecent(context, vm),
+                ),
+                const _Divider(),
+                _SwitchRow(
+                  icon: Lucide.CalendarPlus,
+                  label: l10n.localSnapshotKeepWeekly,
+                  value: settings.keepWeekly,
+                  onChanged: (value) =>
+                      vm.updateSettings(settings.copyWith(keepWeekly: value)),
+                ),
+                const _Divider(),
+                _SwitchRow(
+                  icon: Lucide.Calendar,
+                  label: l10n.localSnapshotKeepMonthly,
+                  value: settings.keepMonthly,
+                  onChanged: (value) =>
+                      vm.updateSettings(settings.copyWith(keepMonthly: value)),
+                ),
+                const _Divider(),
+                _NavRow(
+                  icon: Lucide.HardDrive,
+                  label: l10n.localSnapshotMaximumTitle,
+                  detail: settings.maximumTotalBytes <= 0
+                      ? l10n.localSnapshotMaximumUnlimited
+                      : formatBytes(settings.maximumTotalBytes),
+                  onTap: () => _chooseMaximum(context, vm),
+                ),
+                const _Divider(),
+                _SwitchRow(
+                  icon: Lucide.MessageSquare,
+                  label: l10n.localSnapshotAnnounceTitle,
+                  value: settings.announceResult,
+                  onChanged: (value) => vm.updateSettings(
+                    settings.copyWith(announceResult: value),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          _Note(
+            settings.enabled
+                ? l10n.localSnapshotKeepProtectedNote
+                : l10n.localSnapshotEnabledSubtitle,
+          ),
+          const SizedBox(height: 10),
+          _StatusLine(state: vm.state),
+          const SizedBox(height: 12),
+          IosTileButton(
+            icon: Lucide.Download,
+            label: l10n.localSnapshotTakeNow,
+            enabled: !vm.working,
+            onTap: () => _takeNow(context, vm),
+          ),
+          header(
+            '${l10n.localSnapshotCopiesTitle} · '
+            '${l10n.localSnapshotUsage(vm.copies.length, formatBytes(vm.totalBytes))}',
+          ),
+          if (vm.copies.isEmpty)
+            _EmptyState(loading: vm.loading)
+          else
+            for (final copy in vm.copies)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _CopyCard(
+                  copy: copy,
+                  onRestore: () => _restore(context, vm, copy),
+                  onExport: () => _export(context, vm, copy),
+                  onDelete: () => _delete(context, vm, copy),
+                  onTogglePin:
+                      copy.kind == LocalCopyKind.snapshot && !copy.discovered
+                      ? () => vm.setPinned(copy, !copy.pinned)
+                      : null,
+                ),
+              ),
+          const SizedBox(height: 8),
+          _Note(l10n.localSnapshotCopiesScopeNote),
+        ],
       ),
-      body: list,
     );
   }
 
@@ -681,6 +682,14 @@ class _CopyCard extends StatelessWidget {
                   color: cs.onSurface.withValues(alpha: 0.6),
                 ),
               ),
+              if (copy.discovered) ...[
+                const SizedBox(height: 8),
+                Text(l10n.recoveryDiscoveredCopyBody),
+                Text(
+                  copy.file.path,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: 2),
               Text(
                 conversations == null || messages == null
@@ -711,16 +720,17 @@ class _CopyCard extends StatelessWidget {
                       onTap: onExport,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: IosTileButton(
-                      icon: Lucide.Trash2,
-                      label: l10n.localSnapshotActionDelete,
-                      fontSize: 13,
-                      backgroundColor: cs.error,
-                      onTap: onDelete,
+                  if (!copy.discovered) const SizedBox(width: 8),
+                  if (!copy.discovered)
+                    Expanded(
+                      child: IosTileButton(
+                        icon: Lucide.Trash2,
+                        label: l10n.localSnapshotActionDelete,
+                        fontSize: 13,
+                        backgroundColor: cs.error,
+                        onTap: onDelete,
+                      ),
                     ),
-                  ),
                 ],
               ),
               if (onTogglePin != null)

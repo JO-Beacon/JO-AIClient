@@ -25385,6 +25385,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Input {shown} / {total}'**
   String markdownPlaygroundProgress(int shown, int total);
+
+  /// No description provided for @recoveryMissingDataTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous data detected'**
+  String get recoveryMissingDataTitle;
+
+  /// No description provided for @recoveryMissingDataBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The current database is missing, but this device still contains previous data. JO-AIClient has paused startup and has not created an empty database. Your remaining files and copies are being preserved.'**
+  String get recoveryMissingDataBody;
+
+  /// No description provided for @recoveryEmptyDataTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Current chat history is empty'**
+  String get recoveryEmptyDataTitle;
+
+  /// No description provided for @recoveryEmptyDataBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The current database has no conversations, but previous copies were found. JO-AIClient has paused startup so you can recover a copy or explicitly keep the current data. Nothing will be overwritten automatically.'**
+  String get recoveryEmptyDataBody;
+
+  /// No description provided for @recoveryKeepCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep current data and continue'**
+  String get recoveryKeepCurrent;
+
+  /// No description provided for @recoveryKeepCurrentConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with the current empty database? Previous copies will remain available for recovery later.'**
+  String get recoveryKeepCurrentConfirm;
+
+  /// No description provided for @recoverySearchingCopies.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding and validating local data copies…'**
+  String get recoverySearchingCopies;
+
+  /// No description provided for @recoveryFoundCopies.
+  ///
+  /// In en, this message translates to:
+  /// **'Found {count} validated copies. Choose one to recover your chats and settings. The original files will be kept.'**
+  String recoveryFoundCopies(int count);
+
+  /// No description provided for @recoveryInvalidCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: validation failed. The original file has been kept.'**
+  String recoveryInvalidCopy(String name);
+
+  /// No description provided for @recoverySearchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Some data locations could not be read. Your files have been kept; export a data copy before trying other recovery actions.'**
+  String get recoverySearchFailed;
+
+  /// No description provided for @recoveryDiscoveredCopyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Found outside the managed copy folder. This original is preserved and will be fully validated before recovery.'**
+  String get recoveryDiscoveredCopyBody;
+
+  /// No description provided for @recoveryStorageFailureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data storage needs attention'**
+  String get recoveryStorageFailureTitle;
+
+  /// No description provided for @recoveryStorageFailureBody.
+  ///
+  /// In en, this message translates to:
+  /// **'JO-AIClient could not activate its protected data storage. Startup has stopped and the original data has been kept. Export a copy of your data or retry; no empty database will be created.'**
+  String get recoveryStorageFailureBody;
+
+  /// No description provided for @recoveryProtectingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Protecting the chat database'**
+  String get recoveryProtectingTitle;
+
+  /// No description provided for @recoveryProtectingData.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying and verifying the database. Images, attachments and snapshots stay in Documents and are not copied again. The original database will be kept.'**
+  String get recoveryProtectingData;
+
+  /// No description provided for @recoveryStorageReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat database moved to internal storage'**
+  String get recoveryStorageReadyTitle;
+
+  /// No description provided for @recoveryStorageReadyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The database containing chats, assistants and settings now uses internal app storage. Snapshots, images and attachments remain accessible in the Files app under Documents. The original database is retained. If older chats are missing, open Settings → Backup → Local Copies.'**
+  String get recoveryStorageReadyBody;
+
+  /// No description provided for @recoveryRetainedData.
+  ///
+  /// In en, this message translates to:
+  /// **'Retained original data'**
+  String get recoveryRetainedData;
+
+  /// No description provided for @recoveryNoValidCopies.
+  ///
+  /// In en, this message translates to:
+  /// **'Copies were found, but none passed validation. The originals have been kept. You can export your data for further diagnosis.'**
+  String get recoveryNoValidCopies;
+
+  /// No description provided for @recoveryStorageInsufficientSpaceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'There is not enough free space to keep the original database and create its verified internal copy. Existing data and snapshots are unchanged. Free some space, then retry.'**
+  String get recoveryStorageInsufficientSpaceBody;
+
+  /// No description provided for @migrationFreshStartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fresh start is ready'**
+  String get migrationFreshStartTitle;
+
+  /// No description provided for @migrationFreshStartSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A new empty database is ready, and your previous data has been retained. Restart the app to continue.'**
+  String get migrationFreshStartSubtitle;
+
+  /// No description provided for @migrationFreshStartFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fresh start could not be completed'**
+  String get migrationFreshStartFailedTitle;
+
+  /// No description provided for @migrationFreshStartFailedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your previous data has been retained. Retry starting fresh, or close and reopen the app.'**
+  String get migrationFreshStartFailedSubtitle;
 }
 
 class _AppLocalizationsDelegate

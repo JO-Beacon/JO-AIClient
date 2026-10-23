@@ -19,8 +19,9 @@ import 'backup_cancel_token.dart';
 import 'backup_isolate_runner.dart';
 import 'backup_settings_validator.dart';
 import 'backup_task_progress.dart';
-import 'restore_durability.dart';
 import 'restore_diagnostic_exception.dart';
+import '../../../utils/app_directories.dart';
+import 'restore_durability.dart';
 import 'restore_workspace_lock.dart';
 
 typedef ValidatedRestoreEntry = ({int bytes, String sha256});
@@ -127,6 +128,7 @@ final class RestoreBundleStaging {
     /// 本次要恢复的附件根目录；空表示按包内全部。
     Set<String>? assetRoots,
     bool useExistingLocalAttachments = false,
+    Directory? filesDirectory,
     bool? sourceIncludesChats,
     bool? sourceIncludesFiles,
     required String sourceManifestSha256,
@@ -275,7 +277,11 @@ final class RestoreBundleStaging {
         durability: resolvedDurability,
         recomputeAttachmentsUnavailable: !includeFiles,
         localSnapshotAppDataPath: useExistingLocalAttachments
-            ? appDataDirectory.path
+            ? (filesDirectory ??
+                      await AppDirectories.contentDirectoryFor(
+                        appDataDirectory,
+                      ))
+                  .path
             : null,
         onProgress: onProgress,
         cancelToken: cancelToken,

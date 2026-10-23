@@ -84,7 +84,11 @@ class _HiveToSqliteMigrationPageState extends State<HiveToSqliteMigrationPage> {
   }
 
   Future<void> _pickBackupAndStart() async {
-    if (_busy) return;
+    if (_busy ||
+        widget.service.isComplete ||
+        widget.service.freshStartSelected) {
+      return;
+    }
     setState(() => _busy = true);
     var backupPhaseComplete = false;
     try {
@@ -220,7 +224,11 @@ class _HiveToSqliteMigrationPageState extends State<HiveToSqliteMigrationPage> {
   }
 
   Future<void> _retry() async {
-    if (_busy) return;
+    if (_busy || widget.service.isComplete) return;
+    if (widget.service.freshStartSelected) {
+      await _startFresh();
+      return;
+    }
     final backupPath = _mobileBackupSaved ? null : _backupFile?.path;
     if (!_mobileBackupSaved && backupPath == null) {
       await _pickBackupAndStart();
@@ -239,7 +247,7 @@ class _HiveToSqliteMigrationPageState extends State<HiveToSqliteMigrationPage> {
   }
 
   Future<void> _confirmSkipMigration() async {
-    if (_busy) return;
+    if (_busy || widget.service.isComplete) return;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -264,18 +272,28 @@ class _HiveToSqliteMigrationPageState extends State<HiveToSqliteMigrationPage> {
         );
       },
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted || _busy || widget.service.isComplete) {
+      return;
+    }
+    await _startFresh();
+  }
+
+  Future<void> _startFresh() async {
+    if (_busy || widget.service.isComplete) return;
     setState(() => _busy = true);
     try {
       await widget.service.skipMigrationAndStartFresh();
       if (!mounted) return;
-      setState(() => _canOfferSkip = false);
+      setState(() {
+        _canOfferSkip = false;
+        _status = widget.service.initialStatus();
+      });
       await requestAppRestart(context, PlatformUtils.restartApp);
     } catch (error, stackTrace) {
       await _refreshSkipAvailability();
       if (mounted) {
         setState(() {
-          _status = _status.copyWith(
+          _status = widget.service.initialStatus().copyWith(
             error: '$error',
             log: [..._status.log, '$error', stackTrace.toString()],
           );

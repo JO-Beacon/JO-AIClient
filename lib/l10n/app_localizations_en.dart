@@ -14257,4 +14257,95 @@ class AppLocalizationsEn extends AppLocalizations {
   String markdownPlaygroundProgress(int shown, int total) {
     return 'Input $shown / $total';
   }
+
+  @override
+  String get recoveryMissingDataTitle => 'Previous data detected';
+
+  @override
+  String get recoveryMissingDataBody =>
+      'The current database is missing, but this device still contains previous data. JO-AIClient has paused startup and has not created an empty database. Your remaining files and copies are being preserved.';
+
+  @override
+  String get recoveryEmptyDataTitle => 'Current chat history is empty';
+
+  @override
+  String get recoveryEmptyDataBody =>
+      'The current database has no conversations, but previous copies were found. JO-AIClient has paused startup so you can recover a copy or explicitly keep the current data. Nothing will be overwritten automatically.';
+
+  @override
+  String get recoveryKeepCurrent => 'Keep current data and continue';
+
+  @override
+  String get recoveryKeepCurrentConfirm =>
+      'Continue with the current empty database? Previous copies will remain available for recovery later.';
+
+  @override
+  String get recoverySearchingCopies =>
+      'Finding and validating local data copies…';
+
+  @override
+  String recoveryFoundCopies(int count) {
+    return 'Found $count validated copies. Choose one to recover your chats and settings. The original files will be kept.';
+  }
+
+  @override
+  String recoveryInvalidCopy(String name) {
+    return '$name: validation failed. The original file has been kept.';
+  }
+
+  @override
+  String get recoverySearchFailed =>
+      'Some data locations could not be read. Your files have been kept; export a data copy before trying other recovery actions.';
+
+  @override
+  String get recoveryDiscoveredCopyBody =>
+      'Found outside the managed copy folder. This original is preserved and will be fully validated before recovery.';
+
+  @override
+  String get recoveryStorageFailureTitle => 'Data storage needs attention';
+
+  @override
+  String get recoveryStorageFailureBody =>
+      'JO-AIClient could not activate its protected data storage. Startup has stopped and the original data has been kept. Export a copy of your data or retry; no empty database will be created.';
+
+  @override
+  String get recoveryProtectingTitle => 'Protecting the chat database';
+
+  @override
+  String get recoveryProtectingData =>
+      'Copying and verifying the database. Images, attachments and snapshots stay in Documents and are not copied again. The original database will be kept.';
+
+  @override
+  String get recoveryStorageReadyTitle =>
+      'Chat database moved to internal storage';
+
+  @override
+  String get recoveryStorageReadyBody =>
+      'The database containing chats, assistants and settings now uses internal app storage. Snapshots, images and attachments remain accessible in the Files app under Documents. The original database is retained. If older chats are missing, open Settings → Backup → Local Copies.';
+
+  @override
+  String get recoveryRetainedData => 'Retained original data';
+
+  @override
+  String get recoveryNoValidCopies =>
+      'Copies were found, but none passed validation. The originals have been kept. You can export your data for further diagnosis.';
+
+  @override
+  String get recoveryStorageInsufficientSpaceBody =>
+      'There is not enough free space to keep the original database and create its verified internal copy. Existing data and snapshots are unchanged. Free some space, then retry.';
+
+  @override
+  String get migrationFreshStartTitle => 'Fresh start is ready';
+
+  @override
+  String get migrationFreshStartSubtitle =>
+      'A new empty database is ready, and your previous data has been retained. Restart the app to continue.';
+
+  @override
+  String get migrationFreshStartFailedTitle =>
+      'Fresh start could not be completed';
+
+  @override
+  String get migrationFreshStartFailedSubtitle =>
+      'Your previous data has been retained. Retry starting fresh, or close and reopen the app.';
 }

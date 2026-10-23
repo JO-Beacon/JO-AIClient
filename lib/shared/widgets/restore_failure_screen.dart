@@ -8,13 +8,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/startup_failure_report.dart';
+import '../../core/database/empty_database_recovery_guard.dart';
+import '../../core/database/private_data_storage.dart';
 import '../../core/database/startup_recovery_service.dart';
 import '../../core/services/backup/data_sync.dart';
 import '../../core/services/backup/local_copy_catalog.dart';
 import '../../core/services/backup/restore_business_lease.dart';
 import '../../icons/lucide_adapter.dart';
 import '../../l10n/app_localizations.dart';
-import '../utils/format_bytes.dart';
 
 /// 让调用方（`main.dart` 与测试）继续从本文件取这些诊断符号，
 /// 它们的定义在 `startup_failure_report.dart`。
@@ -39,6 +40,7 @@ class RestoreFailureScreen extends StatefulWidget {
     this.appDataDirectory,
     this.businessLease,
     this.appVersionLoader,
+    this.privateStorageSource,
   });
 
   final StartupFailureReport report;
@@ -47,6 +49,9 @@ class RestoreFailureScreen extends StatefulWidget {
   /// 当提供该参数且失败不是租约冲突时，屏幕会提供文件级恢复操作，
   /// 确保失败关闭的启动不会变成永久性锁死。
   final Directory? appDataDirectory;
+
+  /// iOS 私有存储启用失败时仍可读取的源目录（原 Documents）。
+  final Directory? privateStorageSource;
 
   /// 启动时已取得的业务租约。传入它可以让恢复操作复用同一把租约，
   /// 而不是在失败路径上再抢一次锁。
@@ -85,6 +90,10 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
   /// 库比本应用新：没有可用的降级路径，只能更新应用或还原更早的副本。
   bool get _databaseTooNew =>
       _report.diagnosticCode == 'database_schema_too_new';
+
+  /// 当前库是空的、但旁边还有可恢复副本：用户可以明确选择保留空库。
+  bool get _isEmptyDatabase =>
+      _report.diagnosticCode == 'database_empty_with_recovery_copies';
 
   @override
   void initState() {
@@ -141,7 +150,17 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
     final directory = widget.appDataDirectory;
     if (directory == null) return;
     try {
-      final copies = await LocalCopyCatalog(appDataDirectory: directory).list();
+      final copies = await LocalCopyCatalog(
+        appDataDirectory: directory,
+        includeActiveDatabase:
+            widget.report.step == 'private_storage_activation',
+        additionalRoots: widget.privateStorageSource == null
+            ? const []
+            : await PrivateDataStorage.recoveryDirectories(
+                source: widget.privateStorageSource!,
+                target: directory,
+              ),
+      ).list();
       if (!mounted) return;
       setState(() => _localCopies = copies);
     } catch (_) {
@@ -475,6 +494,60 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
     }
   }
 
+  /// 用户确认保留当前空库：签发一次性授权，然后重启回到正常启动。
+  Future<void> _keepCurrentData() async {
+    final directory = widget.appDataDirectory;
+    if (directory == null || _recoveryBusy || _restarting) return;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.recoveryKeepCurrent),
+        content: Text(l10n.recoveryKeepCurrentConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.startupRecoveryResetDialogCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.recoveryKeepCurrent),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _recoveryBusy = true;
+      _recoveryMessage = null;
+      _restartFailed = false;
+    });
+    try {
+      await EmptyDatabaseRecoveryGuard.acknowledge(directory);
+      await widget.restart();
+      if (!mounted) return;
+      setState(() {
+        _recoveryBusy = false;
+        _restartFailed = true;
+      });
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'JO-AIClient restore',
+          context: ErrorDescription('while keeping the current empty database'),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _recoveryBusy = false;
+        _recoveryMessage = l10n.startupRecoveryRepairFailed;
+        _recoveryMessageIsError = true;
+      });
+    }
+  }
+
   Future<void> _resetAndRestart() async {
     final directory = widget.appDataDirectory;
     if (directory == null || _recoveryBusy || _restarting) return;
@@ -743,6 +816,22 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
                           if (_localCopies.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             _LocalCopiesNotice(copies: _localCopies),
+                          ],
+                          if (_isEmptyDatabase) ...[
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: (_restarting || _recoveryBusy)
+                                    ? null
+                                    : _keepCurrentData,
+                                icon: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(l10n.recoveryKeepCurrent),
+                              ),
+                            ),
                           ],
                           const SizedBox(height: 8),
                           SizedBox(

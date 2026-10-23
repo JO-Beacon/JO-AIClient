@@ -1521,15 +1521,15 @@ void main() {
           'theme_mode_v1': 'light',
           'display_chat_font_scale_v1': 1.25,
         });
+        final chatService = ChatService();
+        await chatService.init();
+        addTearDown(chatService.close);
         final uploadDirectory = Directory(p.join(root.path, 'upload'));
         await uploadDirectory.create(recursive: true);
         await File(
           p.join(uploadDirectory.path, 'shared.txt'),
         ).writeAsString('JO-Kelivo shared attachment');
 
-        final chatService = ChatService();
-        await chatService.init();
-        addTearDown(chatService.close);
         await chatService.restoreConversation(
           Conversation(
             id: conversationId,

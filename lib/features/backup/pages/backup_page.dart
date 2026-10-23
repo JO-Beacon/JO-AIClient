@@ -30,6 +30,7 @@ import '../../../core/services/backup/data_sync.dart';
 import '../../../core/services/backup/backup_progress_timeline.dart';
 import '../widgets/backup_progress_dialog.dart';
 import '../widgets/backup_scope_tile.dart';
+import '../widgets/storage_migration_notice_button.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
@@ -315,7 +316,16 @@ class _BackupPageState extends State<BackupPage> {
                 ),
               ),
               title: Text(l10n.backupPageTitle),
-              actions: const [SizedBox(width: 12)],
+              actions: [
+                if (context.watch<LocalSnapshotProvider?>() != null) ...[
+                  StorageMigrationNoticeButton(
+                    dataDirectory: context
+                        .read<LocalSnapshotProvider>()
+                        .appDataDirectory,
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ],
             ),
             body: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),

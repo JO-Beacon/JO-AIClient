@@ -15,8 +15,11 @@ import '../models/token_usage.dart';
 import '../models/conversation.dart';
 import '../models/conversation_tree.dart';
 import '../models/message_part.dart';
+import '../services/backup/restore_durability.dart';
 import '../services/backup/restore_previous_plan.dart';
 import 'composer_draft_store.dart';
+import 'empty_database_permission.dart';
+import 'empty_database_recovery_guard.dart';
 import '../services/api/stream/stream_chunk_handler.dart';
 import '../services/api/providers/claude/claude_history.dart';
 import '../services/api/providers/claude/claude_thinking_recovery.dart';
@@ -41,6 +44,20 @@ typedef ChatDatabaseSnapshotInfo = ({
 });
 
 typedef InstalledChatDatabaseInfo = ({int schemaVersion, String? databaseId});
+
+/// 崩溃恢复可以怎么处置已安装数据库。
+enum InstalledDatabaseDisposition {
+  /// 能以本构建认识的 schema 干净打开。旁边的升级前副本是多余的，可删。
+  usable,
+
+  /// 能打开，但 schema 是本构建不认识的——实际就是新版本升级后又被旧版
+  /// 打开。此时什么都不能删、不能覆盖：副本比磁盘上的更旧，
+  /// 启动门会报 `database_schema_too_new`，请用户去更新。
+  foreignSchema,
+
+  /// 缺失、被截断，或 quick_check 不通过。升级前副本才是更好的状态。
+  unusable,
+}
 
 class _DecodedBranchRelation {
   const _DecodedBranchRelation({this.parentBranchId, this.forkAnchorMessageId});
@@ -256,27 +273,174 @@ class ChatDatabaseRepository {
     );
   }
 
-  static Future<bool> migrateInstalledDatabase(File file) async {
-    try {
-      final installedSchemaVersion = _readRawUserVersion(file);
-      if (installedSchemaVersion > AppDatabase.currentSchemaVersion) {
-        throw StateError('database_schema_too_new');
-      }
-      if (installedSchemaVersion == AppDatabase.currentSchemaVersion) {
-        _validateRawDatabaseFile(file);
-        return false;
-      }
+  /// 已安装库升级前保留的副本后缀。
+  ///
+  /// 名字带版本号，崩溃残留无需打开就能认出来。
+  static const premigrationBackupPrefix = '.premigrate-v';
 
-      final appDatabase = AppDatabase.open(file: file);
-      try {
-        await appDatabase.customSelect('SELECT 1;').getSingle();
-      } finally {
-        await appDatabase.close();
-      }
-      _validateRawDatabaseFile(file);
-      return true;
+  static Future<bool> migrateInstalledDatabase(
+    File file, {
+    RestoreDurability? durability,
+  }) async {
+    final int installedSchemaVersion;
+    try {
+      installedSchemaVersion = _readRawUserVersion(file);
     } on sqlite.SqliteException {
       throw StateError('database_corrupt');
+    }
+    if (installedSchemaVersion > AppDatabase.currentSchemaVersion) {
+      throw StateError('database_schema_too_new');
+    }
+    if (installedSchemaVersion == AppDatabase.currentSchemaVersion) {
+      _validateRawDatabaseFile(file);
+      return false;
+    }
+    if (!SchemaMigrations.needsUpgrade(installedSchemaVersion)) {
+      throw StateError('database_schema_version');
+    }
+
+    final resolvedDurability = durability ?? RestorePlatformDurability();
+    final parent = file.absolute.parent;
+    final backup = File(
+      '${file.absolute.path}$premigrationBackupPrefix$installedSchemaVersion',
+    );
+
+    // 先把 WAL 折回去，保证副本是自包含的。
+    try {
+      final database = sqlite.sqlite3.open(file.absolute.path);
+      try {
+        database.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+      } finally {
+        database.close();
+      }
+    } on sqlite.SqliteException {
+      throw StateError('database_corrupt');
+    }
+
+    if (await backup.exists()) await backup.delete();
+    await file.copy(backup.path);
+    await resolvedDurability.restrictFile(backup);
+    await resolvedDurability.syncFile(backup, fullBarrier: true);
+    await resolvedDurability.syncDirectory(parent, fullBarrier: true);
+
+    try {
+      await SchemaMigrations.upgradeFileInPlace(file);
+      _validateRawDatabaseFile(file);
+    } catch (error) {
+      // 副本刻意保留：从删除数据库族到拷回完成之间，磁盘上没有可用
+      // 数据库，副本是唯一幸存的好状态，必须活过本进程。
+      await restorePreMigrationBackup(
+        backup: backup,
+        target: file,
+        durability: resolvedDurability,
+      );
+      // 表结构冲突这类具体诊断比笼统的迁移失败更有用，原样向上抛。
+      if ('$error'.contains('assistant_group_table_conflict')) {
+        rethrow;
+      }
+      throw StateError('database_migration_failed:$installedSchemaVersion');
+    }
+
+    await resolvedDurability.syncFile(file, fullBarrier: true);
+    await backup.delete();
+    await resolvedDurability.syncDirectory(parent, fullBarrier: true);
+    return true;
+  }
+
+  /// 回滚一次失败的升级：用 [backup] 覆盖 [target]。
+  ///
+  /// [retireTarget] 决定被覆盖的数据库怎么处理，默认删除；崩溃扫描
+  /// 无法分辨目标是否真的损坏时，必须传入非破坏性的做法。
+  static Future<void> restorePreMigrationBackup({
+    required File backup,
+    required File target,
+    RestoreDurability? durability,
+    Future<void> Function(File target)? retireTarget,
+  }) async {
+    final resolvedDurability = durability ?? RestorePlatformDurability();
+    final parent = target.absolute.parent;
+    await (retireTarget ?? _deleteDatabaseFamily)(target);
+    await backup.copy(target.absolute.path);
+    await resolvedDurability.syncFile(target, fullBarrier: true);
+    await resolvedDurability.syncDirectory(parent, fullBarrier: true);
+    if (classifyInstalledDatabase(target) !=
+        InstalledDatabaseDisposition.usable) {
+      throw StateError('database_rollback_failed');
+    }
+    await backup.delete();
+    await resolvedDurability.syncDirectory(parent, fullBarrier: true);
+  }
+
+  /// 崩溃恢复可以拿已安装库怎么办。
+  ///
+  /// 关键区别是“损坏”与“本版本不认识的版本”：前者可以用升级前的
+  /// 副本替换，后者替换就等于旧版本静默覆盖新版本写下的全部内容。
+  static InstalledDatabaseDisposition classifyInstalledDatabase(File file) {
+    if (!file.existsSync()) return InstalledDatabaseDisposition.unusable;
+
+    // 先只读地看 schema 版本。更新的版本绝不能被碰，为看清它而
+    // 以读写方式打开，恰恰就是会毁掉它的动作。
+    final peeked = _peekSchemaVersion(file, writable: false);
+    if (peeked != null && _isForeignSchema(peeked)) {
+      return InstalledDatabaseDisposition.foreignSchema;
+    }
+
+    try {
+      final database = sqlite.sqlite3.open(file.absolute.path);
+      try {
+        // 把热 WAL 折进来，避免把已提交数据当成损坏。
+        database.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+        // 检查点之后再读一次：上面的只读窥探在热 WAL 上可能直接失败，
+        // 这里才是第一个可靠读数。
+        final schemaVersion = database.userVersion;
+        if (_isForeignSchema(schemaVersion)) {
+          return InstalledDatabaseDisposition.foreignSchema;
+        }
+        // 0 是被创建却从未写入 schema 的文件——在最开始就被打断的副本，
+        // 不是来自别处的版本。
+        if (schemaVersion == 0) return InstalledDatabaseDisposition.unusable;
+        final check = database.select('PRAGMA quick_check;');
+        if (check.length != 1 || check.single.values.single != 'ok') {
+          return InstalledDatabaseDisposition.unusable;
+        }
+        // quick_check 只证明文件物理上完好，说不出缺表、缺列、缺索引。
+        // 一次已提交但结构不完整的升级在这里会被当成健康，
+        // 而唯一能退回去的升级前副本恰好就在几分钟前被删掉。
+        if (schemaVersion == AppDatabase.currentSchemaVersion) {
+          try {
+            _validateRawDatabaseFile(file);
+          } catch (_) {
+            return InstalledDatabaseDisposition.unusable;
+          }
+        }
+        return InstalledDatabaseDisposition.usable;
+      } finally {
+        database.close();
+      }
+    } catch (_) {
+      return InstalledDatabaseDisposition.unusable;
+    }
+  }
+
+  /// 属于别的构建的版本，而不是损坏。
+  ///
+  /// 0 被有意排除：它意味着从未写过 schema，是中断的副本而非外来版本。
+  static bool _isForeignSchema(int userVersion) =>
+      userVersion != 0 && !SchemaMigrations.isPublished(userVersion);
+
+  static int? _peekSchemaVersion(File file, {required bool writable}) {
+    try {
+      final database = sqlite.sqlite3.open(
+        file.absolute.path,
+        mode: writable ? sqlite.OpenMode.readWrite : sqlite.OpenMode.readOnly,
+      );
+      try {
+        return database.userVersion;
+      } finally {
+        database.close();
+      }
+    } catch (_) {
+      return null;
     }
   }
 
@@ -4146,8 +4310,45 @@ class ChatDatabaseRepository {
     _messageSearchFtsReady = true;
   }
 
+  /// 任何向聊天表写入内容之前都要先撤销“空库启动”授权。
+  /// 否则同一次会话里先确认空库、再写入、再清空，重启后会被当成合法空库。
+  Future<void> _invalidateEmptyAcknowledgement() async {
+    final file = _databaseFile;
+    if (file != null) {
+      await EmptyDatabaseRecoveryGuard.invalidate(file.parent);
+    }
+  }
+
+  /// 在显式删除／重置的事务末尾调用，给“空库启动”发一份新授权。
+  Future<void> _acknowledgeIntentionalEmptyState() async {
+    final file = _databaseFile;
+    if (file == null) return;
+    final hasData = await _db
+        .customSelect(EmptyDatabasePermission.hasDataQuery)
+        .getSingle();
+    if (hasData.read<int>('present') != 0) return;
+    final identity = await getDatabaseIdentity();
+    if (identity == null) return;
+    for (final statement in EmptyDatabasePermission.invalidationTriggers) {
+      await _db.customStatement(statement);
+    }
+    final token = await EmptyDatabaseRecoveryGuard.recordEmptyState(
+      file.parent,
+      identity,
+    );
+    await _db
+        .into(_db.chatStorageMetaRows)
+        .insertOnConflictUpdate(
+          ChatStorageMetaRowsCompanion.insert(
+            key: EmptyDatabasePermission.tokenKey,
+            value: token,
+          ),
+        );
+  }
+
   Future<void> putConversation(Conversation conversation) async {
     await _db.transaction(() async {
+      await _invalidateEmptyAcknowledgement();
       // 现有行保留 prompt freeze 写入的、由数据库拥有的 hash；
       // 缓存的 Conversation 实例可能仍持有较旧的值。
       final updated =
@@ -4264,6 +4465,7 @@ class ChatDatabaseRepository {
             ? -1
             : sourceMessages.last.messageOrder,
       );
+      await _invalidateEmptyAcknowledgement();
       await _db
           .into(_db.conversationRows)
           .insert(_conversationCompanion(duplicate));
@@ -4456,6 +4658,7 @@ class ChatDatabaseRepository {
       throw ArgumentError('conversation_tree_clone_id_mismatch');
     }
     await _db.transaction(() async {
+      await _invalidateEmptyAcknowledgement();
       await _db
           .into(_db.conversationRows)
           .insert(_conversationCompanion(conversation));
@@ -4958,6 +5161,7 @@ class ChatDatabaseRepository {
     return _observer.measure(
       ChatDatabaseOperation.commandAppendMessage,
       () => _db.transaction(() async {
+        await _invalidateEmptyAcknowledgement();
         final afterUser = await _appendLinearMessageToConversation(
           conversation: conversation,
           message: userMessage,
@@ -6058,6 +6262,7 @@ class ChatDatabaseRepository {
         freshParts: true,
       );
       await _writeMigrationCompleteReceipt();
+      await _acknowledgeIntentionalEmptyState();
     });
   }
 
@@ -7379,6 +7584,9 @@ class ChatDatabaseRepository {
     // 从而跳过逐 message 的 SELECT。
     required bool freshParts,
   }) async {
+    if (conversations.isNotEmpty || messages.isNotEmpty) {
+      await _invalidateEmptyAcknowledgement();
+    }
     await _db.batch((batch) {
       for (final conversation in conversations) {
         batch.insert(
@@ -7525,13 +7733,15 @@ class ChatDatabaseRepository {
     final current = await (_db.select(
       _db.messageRows,
     )..where((t) => t.id.equals(message.id))).getSingleOrNull();
+    if (current == null) return;
+    await _invalidateEmptyAcknowledgement();
     await (_db.update(
       _db.messageRows,
     )..where((t) => t.id.equals(message.id))).write(
       _messageUpdate(message).copyWith(
         extrasJson: Value(
           _encodeTokenExtras(
-            current?.extrasJson ?? '{}',
+            current.extrasJson,
             reasoningTokens: message.reasoningTokens,
             cacheWriteTokens: message.cacheWriteTokens,
             finishUsage: message.finishUsage,
@@ -7596,21 +7806,21 @@ class ChatDatabaseRepository {
       durationMs: durationMs != null ? Value(durationMs) : const Value.absent(),
     );
     return _db.transaction(() async {
+      final current = await (_db.select(
+        _db.messageRows,
+      )..where((t) => t.id.equals(messageId))).getSingleOrNull();
+      if (current == null) return null;
+      await _invalidateEmptyAcknowledgement();
       if (reasoningTokens != null || cacheWriteTokens != null) {
-        final current = await (_db.select(
-          _db.messageRows,
-        )..where((t) => t.id.equals(messageId))).getSingleOrNull();
-        if (current != null) {
-          companion = companion.copyWith(
-            extrasJson: Value(
-              _encodeTokenExtras(
-                current.extrasJson,
-                reasoningTokens: reasoningTokens,
-                cacheWriteTokens: cacheWriteTokens,
-              ),
+        companion = companion.copyWith(
+          extrasJson: Value(
+            _encodeTokenExtras(
+              current.extrasJson,
+              reasoningTokens: reasoningTokens,
+              cacheWriteTokens: cacheWriteTokens,
             ),
-          );
-        }
+          ),
+        );
       }
       await (_db.update(
         _db.messageRows,
@@ -7733,6 +7943,7 @@ class ChatDatabaseRepository {
                 ),
               ))
               .go();
+          await _acknowledgeIntentionalEmptyState();
         });
       },
     );
@@ -8094,6 +8305,7 @@ class ChatDatabaseRepository {
   Future<void> clearAllData() async {
     await _db.transaction(() async {
       await _clearChatRows();
+      await _acknowledgeIntentionalEmptyState();
     });
   }
 

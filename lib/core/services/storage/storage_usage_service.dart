@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../database/database_family_preserver.dart';
 import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
@@ -9,6 +10,7 @@ import '../../database/database_installation_gate.dart';
 import '../hive_migration_marker.dart';
 import '../legacy_data_retirement_service.dart';
 import '../backup/local_snapshot_schedule.dart';
+import '../backup/recovery_file_discovery.dart';
 import '../backup/restore_trace_service.dart';
 import '../../../utils/app_directories.dart';
 import '../../../utils/avatar_cache.dart';
@@ -102,8 +104,9 @@ class StorageFileEntry {
   });
 }
 
-/// 无人值守的数据库重建之前写下的只增记录的文件名。
-/// 它放在 `logs/` 下，便于应用内查看器展示，但**刻意豁免**于"清理日志"。
+/// Name of the append-only record written before an unattended database
+/// rebuild. Lives in `logs/` so the in-app viewer can surface it, but is
+/// deliberately exempt from "clear logs".
 const String startupRecoveryLogFileName = 'startup-recovery.log';
 
 abstract final class StorageUsageService {
@@ -159,19 +162,21 @@ abstract final class StorageUsageService {
     Future<Directory> Function()? rootfsUsageDirectory,
   }) async {
     final root = await AppDirectories.getAppDataDirectory();
+    final contentRoot = await AppDirectories.contentDirectoryFor(root);
+    final splitStorage = !p.equals(root.path, contentRoot.path);
     var migrationCompleted = false;
     try {
       migrationCompleted = HiveMigrationMarker.isMigrationComplete(
         File(p.join(root.path, AppDatabase.databaseFileName)),
       );
     } catch (_) {
-      // 数据库不可读时不得让旧版文件变为可清理。
+      // An unreadable database must not make legacy files clearable.
     }
     var restoreTraces = RestoreTraceSnapshot.empty;
     try {
       restoreTraces = await RestoreTraceService(root).inspect();
     } catch (_) {
-      // 损坏或正在使用的恢复工作区保持隐藏且不可清理。
+      // Malformed or active restore workspaces stay hidden and non-clearable.
     }
 
     final byCat = <StorageUsageCategoryKey, _MutableStats>{
@@ -193,6 +198,8 @@ abstract final class StorageUsageService {
       'fonts': _MutableStats(),
       'local_models': _MutableStats(),
       'app': _MutableStats(),
+      'app_documents': _MutableStats(),
+      'retained_data': _MutableStats(),
     };
 
     final cacheSubs = <String, _MutableStats>{
@@ -211,7 +218,7 @@ abstract final class StorageUsageService {
     int totalBytes = 0;
     int totalFiles = 0;
 
-    if (!await root.exists()) {
+    if (!await root.exists() && !await contentRoot.exists()) {
       return StorageUsageReport(
         totalBytes: 0,
         totalFiles: 0,
@@ -227,113 +234,148 @@ abstract final class StorageUsageService {
       );
     }
 
-    try {
-      await for (final ent in _listFiles(
-        root,
-        excludedTopDirectories: _isolateMeasuredTopDirs,
-      )) {
-        final rel = p.relative(ent.path, from: root.path);
-        final parts = p.split(rel);
-        int bytes = 0;
-        try {
-          bytes = await ent.length();
-        } catch (_) {
-          bytes = 0;
-        }
-        totalFiles += 1;
-        totalBytes += bytes;
-
-        if (parts.isEmpty) {
-          byCat[StorageUsageCategoryKey.other]!.add(bytes);
-          otherSubs['app']!.add(bytes);
-          continue;
-        }
-
-        // 根级聊天数据由 Drift 存储在 SQLite 数据库文件
-        // 族中。旧版 Hive boxes 只是迁移输入，不应影响
-        // 稳态聊天记录大小。
-        if (parts.length == 1) {
-          final name = parts.first;
-          final chatSubId = _chatDatabaseSubcategoryId(name);
-          if (name.startsWith(_displacedDatabasePrefix)) {
-            byCat[StorageUsageCategoryKey.displacedDatabases]!.add(bytes);
-          } else if (chatSubId != null) {
-            byCat[StorageUsageCategoryKey.chatData]!.add(bytes);
-            chatSubs[chatSubId]!.add(bytes);
-          } else if (migrationCompleted &&
-              LegacyDataRetirementService.hiveArtifactNames.contains(name)) {
-            byCat[StorageUsageCategoryKey.legacyChatData]!.add(bytes);
-            legacyChatSubs[name]!.add(bytes);
-          } else {
-            byCat[StorageUsageCategoryKey.other]!.add(bytes);
-            otherSubs['app']!.add(bytes);
+    for (final scanRoot in [root, if (splitStorage) contentRoot]) {
+      final publicFiles =
+          splitStorage && p.equals(scanRoot.path, contentRoot.path);
+      final otherApp = otherSubs[publicFiles ? 'app_documents' : 'app']!;
+      try {
+        await for (final ent in _listFiles(
+          scanRoot,
+          excludedTopDirectories: _isolateMeasuredTopDirs,
+        )) {
+          final rel = p.relative(ent.path, from: scanRoot.path);
+          final parts = p.split(rel);
+          int bytes = 0;
+          try {
+            bytes = await ent.length();
+          } catch (_) {
+            bytes = 0;
           }
-          continue;
-        }
+          totalFiles += 1;
+          totalBytes += bytes;
 
-        final top = parts.first.toLowerCase();
-        if (restoreTraces.visible &&
-            top == '.kelivo_restore' &&
-            parts.length >= 4 &&
-            parts[1] == 'completed' &&
-            RegExp(r'^run_[a-f0-9]{32}$').hasMatch(parts[2])) {
-          byCat[StorageUsageCategoryKey.restoreTraces]!.add(bytes);
-          continue;
-        }
-        switch (top) {
-          case LocalSnapshotPaths.directoryName:
+          if (parts.isEmpty) {
+            byCat[StorageUsageCategoryKey.other]!.add(bytes);
+            otherApp.add(bytes);
+            continue;
+          }
+
+          // Root-level chat data is stored by Drift in the SQLite database file
+          // family. Legacy Hive boxes are migration inputs only and should not
+          // affect the steady-state chat records size.
+          if (parts.length == 1) {
+            final name = parts.first;
+            final chatSubId = _chatDatabaseSubcategoryId(name);
+            if (splitStorage &&
+                p.equals(scanRoot.path, contentRoot.path) &&
+                (chatSubId != null ||
+                    RecoveryFileDiscovery.isDatabaseFamilyFile(name) ||
+                    name.startsWith('database_installation_receipt_') ||
+                    LegacyDataRetirementService.hiveArtifactNames.contains(
+                      name,
+                    ))) {
+              byCat[StorageUsageCategoryKey.other]!.add(bytes);
+              otherSubs['retained_data']!.add(bytes);
+            } else if (RecoveryFileDiscovery.isSnapshotArchive(name) ||
+                (name.endsWith('.json') &&
+                    RecoveryFileDiscovery.isSnapshotArchive(
+                      name.substring(0, name.length - 5),
+                    ))) {
+              byCat[StorageUsageCategoryKey.localSnapshots]!.add(bytes);
+            } else if (name.startsWith(_displacedDatabasePrefix)) {
+              byCat[StorageUsageCategoryKey.displacedDatabases]!.add(bytes);
+            } else if (chatSubId != null) {
+              byCat[StorageUsageCategoryKey.chatData]!.add(bytes);
+              chatSubs[chatSubId]!.add(bytes);
+            } else if (migrationCompleted &&
+                LegacyDataRetirementService.hiveArtifactNames.contains(name)) {
+              byCat[StorageUsageCategoryKey.legacyChatData]!.add(bytes);
+              legacyChatSubs[name]!.add(bytes);
+            } else {
+              byCat[StorageUsageCategoryKey.other]!.add(bytes);
+              otherApp.add(bytes);
+            }
+            continue;
+          }
+
+          final top = parts.first.toLowerCase();
+          if (DatabaseFamilyPreserver.isCopyDirectory(top)) {
+            if (publicFiles) {
+              byCat[StorageUsageCategoryKey.other]!.add(bytes);
+              otherSubs['retained_data']!.add(bytes);
+            } else {
+              byCat[StorageUsageCategoryKey.displacedDatabases]!.add(bytes);
+            }
+            continue;
+          }
+          if (RecoveryFileDiscovery.isSnapshotDirectory(top)) {
             byCat[StorageUsageCategoryKey.localSnapshots]!.add(bytes);
-            break;
-          case 'upload':
-          case 'images':
-            final name = parts.last;
-            if (_isImageExt(name)) {
-              byCat[StorageUsageCategoryKey.images]!.add(bytes);
-            } else {
-              byCat[StorageUsageCategoryKey.files]!.add(bytes);
-            }
-            break;
-          case 'avatars':
-            byCat[StorageUsageCategoryKey.assistantData]!.add(bytes);
-            assistantSubs['avatars']!.add(bytes);
-            break;
-          case 'fonts':
-            byCat[StorageUsageCategoryKey.other]!.add(bytes);
-            otherSubs['fonts']!.add(bytes);
-            break;
-          case 'asr_models':
-            byCat[StorageUsageCategoryKey.other]!.add(bytes);
-            otherSubs['local_models']!.add(bytes);
-            break;
-          case 'cache':
-            byCat[StorageUsageCategoryKey.cache]!.add(bytes);
-            if (parts.length >= 2 && parts[1].toLowerCase() == 'avatars') {
-              cacheSubs['avatar_cache']!.add(bytes);
-            } else {
-              cacheSubs['other_cache']!.add(bytes);
-            }
-            break;
-          case 'logs':
-            byCat[StorageUsageCategoryKey.logs]!.add(bytes);
-            final name = parts.last.toLowerCase();
-            if (name.startsWith('context_logs')) {
-              logsSubs['context_logs']!.add(bytes);
-            } else if (name.startsWith('flutter_logs')) {
-              logsSubs['flutter_logs']!.add(bytes);
-            } else if (name.startsWith('logs')) {
-              logsSubs['request_logs']!.add(bytes);
-            } else {
-              logsSubs['other_logs']!.add(bytes);
-            }
-            break;
-          default:
-            byCat[StorageUsageCategoryKey.other]!.add(bytes);
-            otherSubs['app']!.add(bytes);
-            break;
+            continue;
+          }
+          if (!publicFiles &&
+              restoreTraces.visible &&
+              top == '.kelivo_restore' &&
+              parts.length >= 4 &&
+              parts[1] == 'completed' &&
+              RegExp(r'^run_[a-f0-9]{32}$').hasMatch(parts[2])) {
+            byCat[StorageUsageCategoryKey.restoreTraces]!.add(bytes);
+            continue;
+          }
+          switch (top) {
+            case LocalSnapshotPaths.directoryName:
+              byCat[StorageUsageCategoryKey.localSnapshots]!.add(bytes);
+              break;
+            case 'upload':
+            case 'images':
+              final name = parts.last;
+              if (_isImageExt(name)) {
+                byCat[StorageUsageCategoryKey.images]!.add(bytes);
+              } else {
+                byCat[StorageUsageCategoryKey.files]!.add(bytes);
+              }
+              break;
+            case 'avatars':
+              byCat[StorageUsageCategoryKey.assistantData]!.add(bytes);
+              assistantSubs['avatars']!.add(bytes);
+              break;
+            case 'fonts':
+              byCat[StorageUsageCategoryKey.other]!.add(bytes);
+              otherSubs['fonts']!.add(bytes);
+              break;
+            case 'asr_models':
+              byCat[StorageUsageCategoryKey.other]!.add(bytes);
+              otherSubs['local_models']!.add(bytes);
+              break;
+            case 'cache':
+              byCat[StorageUsageCategoryKey.cache]!.add(bytes);
+              if (parts.length >= 2 && parts[1].toLowerCase() == 'avatars') {
+                cacheSubs['avatar_cache']!.add(bytes);
+              } else {
+                cacheSubs['other_cache']!.add(bytes);
+              }
+              break;
+            case 'logs':
+              byCat[StorageUsageCategoryKey.logs]!.add(bytes);
+              final name = parts.last.toLowerCase();
+              if (name.startsWith('context_logs')) {
+                logsSubs['context_logs']!.add(bytes);
+              } else if (name.startsWith('flutter_logs')) {
+                logsSubs['flutter_logs']!.add(bytes);
+              } else if (name.startsWith('logs')) {
+                logsSubs['request_logs']!.add(bytes);
+              } else {
+                logsSubs['other_logs']!.add(bytes);
+              }
+              break;
+            default:
+              byCat[StorageUsageCategoryKey.other]!.add(bytes);
+              otherApp.add(bytes);
+              break;
+          }
         }
+      } catch (_) {
+        // Keep successfully measured files if a file disappears during the scan.
       }
-    } catch (_) {
-      // 扫描期间若有文件消失，保留已成功计量的部分。
     }
 
     final [
@@ -376,13 +418,13 @@ abstract final class StorageUsageService {
 
     final avatarsDir = await AppDirectories.getAvatarsDirectory();
     final fontsDir = await AppDirectories.getFontsDirectory();
-    final localModelsDir = Directory(p.join(root.path, 'asr_models'));
+    final localModelsDir = Directory(p.join(contentRoot.path, 'asr_models'));
     final cacheDir = await AppDirectories.getCacheDirectory();
     final systemCacheDir = await AppDirectories.getSystemCacheDirectory();
     final avatarCacheDir = await AppDirectories.getAvatarCacheDirectory();
-    final logsDir = Directory(p.join(root.path, 'logs'));
+    final logsDir = Directory(p.join(contentRoot.path, 'logs'));
 
-    // 平台缓存目录（例如 Android /data/user/0/<package>/cache）。
+    // Platform cache directory (e.g. Android /data/user/0/<package>/cache).
     try {
       if (await systemCacheDir.exists()) {
         await for (final ent in systemCacheDir.list(
@@ -404,10 +446,11 @@ abstract final class StorageUsageService {
       }
     } catch (_) {}
 
-    // 这里刻意不把“被挤掉的数据库副本”计入。这个总数是
-    // "可回收空间"的提示，而被挤掉的副本可能是用户数据唯一幸存的
-    // 版本 —— 诱导一键扫掉它，与当初保留它的理由正好相反。
-    // 它仍可从自己那一行单独清理，那里会说明它到底是什么。
+    // Displaced database copies are deliberately absent here. This total is
+    // the "space you can reclaim" prompt, and a displaced copy can be the only
+    // surviving version of the user's data — inviting a one-tap sweep of it is
+    // the opposite of why it was kept. It stays clearable from its own row,
+    // where the confirmation says what it is.
     final clearable = StorageUsageStats(
       fileCount:
           byCat[StorageUsageCategoryKey.cache]!.fileCount +
@@ -490,7 +533,7 @@ abstract final class StorageUsageService {
             StorageUsageSubcategory(
               id: 'local_snapshots',
               stats: byCat[StorageUsageCategoryKey.localSnapshots]!.toStats(),
-              path: LocalSnapshotPaths.directoryIn(root).path,
+              path: LocalSnapshotPaths.directoryIn(contentRoot).path,
             ),
           ],
         ),
@@ -572,6 +615,19 @@ abstract final class StorageUsageService {
               stats: otherSubs['local_models']!.toStats(),
               path: localModelsDir.path,
             ),
+          if (splitStorage && otherSubs['retained_data']!.fileCount > 0)
+            StorageUsageSubcategory(
+              id: 'retained_data',
+              stats: otherSubs['retained_data']!.toStats(),
+              path: contentRoot.path,
+              isDirectory: true,
+            ),
+          if (otherSubs['app_documents']!.fileCount > 0)
+            StorageUsageSubcategory(
+              id: 'app_documents',
+              stats: otherSubs['app_documents']!.toStats(),
+              path: contentRoot.path,
+            ),
           if (otherSubs['app']!.fileCount > 0)
             StorageUsageSubcategory(
               id: 'app',
@@ -602,7 +658,7 @@ abstract final class StorageUsageService {
       ),
     ];
 
-    // 确保一致的排序。
+    // Ensure consistent ordering.
     categories.sort(
       (a, b) => _categoryOrder
           .indexOf(a.key)
@@ -674,11 +730,11 @@ abstract final class StorageUsageService {
     } catch (_) {}
 
     try {
-      final root = await AppDirectories.getAppDataDirectory();
+      final root = await AppDirectories.getContentDirectory();
       final logsDir = Directory(p.join(root.path, 'logs'));
-      // 启动恢复记录是无人值守重建的唯一痕迹 —— 也是唯一会在
-      // 不询问的情况下破坏状态的启动结局。清理日志不能
-      // 连它一起抹掉。
+      // The startup-recovery record is the only trace of an unattended rebuild
+      // — the one startup outcome that destroys state without asking. Clearing
+      // logs must not erase the evidence of it along with the noise.
       await _deleteDirectoryContents(
         logsDir,
         keepFileNames: const {startupRecoveryLogFileName},
@@ -720,7 +776,7 @@ abstract final class StorageUsageService {
   }
 
   static Future<void> clearLocalModels() async {
-    final root = await AppDirectories.getAppDataDirectory();
+    final root = await AppDirectories.getContentDirectory();
     await _deleteDirectoryContents(Directory(p.join(root.path, 'asr_models')));
   }
 
@@ -765,11 +821,11 @@ abstract final class StorageUsageService {
           );
         }
       } catch (_) {
-        // 忽略列目录错误并返回部分结果。
+        // Ignore listing errors and return partial results.
       }
     }
 
-    // 聊天附件位于 upload/ 下。内联/生成的图片位于 images/ 下。
+    // Chat attachments live under upload/. Inline/generated images live under images/.
     await addFromDir(
       dir,
       includeImages: images,
@@ -812,8 +868,8 @@ abstract final class StorageUsageService {
         if (_isImageExt(abs) != images) continue;
         final allowed = roots.any((root) => p.isWithin(root, abs));
         if (!allowed) continue;
-        // 符号链接的子目录不得让存储清理逃出应用的 upload 根目录。
-        // 只有常规文件才有资格被删除。
+        // A symlinked child directory must not let storage cleanup escape the
+        // app's upload roots. Only regular files are eligible for deletion.
         final parent = await File(abs).parent.resolveSymbolicLinks();
         if (!realRoots.any(
           (root) => p.equals(root, parent) || p.isWithin(root, parent),
@@ -924,7 +980,7 @@ abstract final class StorageUsageService {
     Future<Directory> Function() directory,
   ) async {
     final path = (await directory()).path;
-    // 在同一次后台遍历里同时收集明细与总量。
+    // Collect the breakdown during the same background walk as the total.
     return Isolate.run(() {
       final entries = <StorageUsageSubcategory>[];
       try {
@@ -983,8 +1039,8 @@ abstract final class StorageUsageService {
     return _StorageContents(entries);
   }
 
-  /// 下探前先剪掉单独计量的子树；失败只影响那个不可读目录，
-  /// 不连带中止其余同级目录。
+  /// Prune separately measured trees before descending, and isolate failures
+  /// to the unreadable directory rather than aborting all remaining siblings.
   static Stream<File> _listFiles(
     Directory root, {
     Set<String> excludedTopDirectories = const {},
@@ -1007,7 +1063,7 @@ abstract final class StorageUsageService {
           }
         }
       } on FileSystemException {
-        // 其他目录仍可继续计量/列举。
+        // Other directories can still be measured/listed.
       }
     }
   }
@@ -1044,13 +1100,13 @@ abstract final class StorageUsageService {
             try {
               await ent.delete();
             } catch (_) {
-              // 部分平台会锁定活动日志文件；尝试截断。
+              // Some platforms lock active log files; try truncating.
               try {
                 await ent.writeAsBytes(const <int>[], flush: true);
               } catch (_) {}
             }
           } else if (ent is Directory) {
-            // 空目录将在第二轮中删除。
+            // We'll delete empty dirs in a second pass.
           } else {
             try {
               await ent.delete();
@@ -1059,7 +1115,7 @@ abstract final class StorageUsageService {
         } catch (_) {}
       }
 
-      // 自底向上删除空目录。
+      // Delete empty directories bottom-up.
       final dirs = <Directory>[];
       await for (final ent in dir.list(recursive: true, followLinks: false)) {
         if (ent is Directory) dirs.add(ent);

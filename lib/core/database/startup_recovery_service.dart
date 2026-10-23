@@ -4,12 +4,16 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:uuid/uuid.dart';
 
 import '../services/backup/restore_durability.dart';
 import '../services/backup/restore_business_lease.dart';
 import '../services/backup/restore_workspace_lock.dart';
+import '../../utils/app_directories.dart';
 import 'app_database.dart';
+import 'database_family_preserver.dart';
 import 'database_installation_gate.dart';
+import 'empty_database_recovery_guard.dart';
 
 /// 用户为预初始化失败屏幕发起的恢复操作。
 ///
@@ -40,15 +44,22 @@ final class StartupRecoveryService {
     required Directory appDataDirectory,
     required Directory destinationParent,
     DateTime Function()? clock,
+    List<Directory> additionalDataDirectories = const [],
   }) async {
-    if (!await appDataDirectory.exists()) {
+    final roots = await _exportRoots(
+      appDataDirectory,
+      additionalDataDirectories,
+    );
+    if (roots.isEmpty) {
       throw StateError('startup_recovery_source_missing');
     }
     // 目标位于数据目录内会导致复制递归到自身（列出源时目标会出现）。
-    final sourcePath = p.normalize(appDataDirectory.absolute.path);
     final destinationPath = p.normalize(destinationParent.absolute.path);
-    if (destinationPath == sourcePath ||
-        p.isWithin(sourcePath, destinationPath)) {
+    if (roots.any(
+      (root) =>
+          p.equals(root.absolute.path, destinationPath) ||
+          p.isWithin(root.absolute.path, destinationPath),
+    )) {
       throw StateError('startup_recovery_export_inside_source');
     }
     await destinationParent.create(recursive: true);
@@ -63,8 +74,38 @@ final class StartupRecoveryService {
       throw StateError('startup_recovery_export_collision');
     }
     await target.create(recursive: true);
-    await _copyDirectory(appDataDirectory, target);
+    for (var i = 0; i < roots.length; i++) {
+      final destination = additionalDataDirectories.isEmpty && roots.length == 1
+          ? target
+          : await Directory(p.join(target.path, 'data-$i')).create();
+      await _copyDirectory(roots[i], destination);
+    }
     return target;
+  }
+
+  static Future<List<Directory>> _exportRoots(
+    Directory root,
+    List<Directory> additional,
+  ) async {
+    final paths = <String>{};
+    final result = <Directory>[];
+    for (final directory in [
+      root,
+      await AppDirectories.contentDirectoryFor(root),
+      ...additional,
+    ]) {
+      if (!paths.add(p.normalize(directory.absolute.path))) continue;
+      final type = await FileSystemEntity.type(
+        directory.path,
+        followLinks: false,
+      );
+      if (type == FileSystemEntityType.notFound) continue;
+      if (type != FileSystemEntityType.directory) {
+        throw StateError('startup_recovery_source_type');
+      }
+      result.add(directory);
+    }
+    return result;
   }
 
   /// 修复会导致启动关闭且没有真实数据丢失的可恢复元数据损坏：残留的发布临时文件、
@@ -126,27 +167,73 @@ final class StartupRecoveryService {
         // 候选就无法在下次启动时替换掉刚建立的数据库。在数据库与安装回执双双
         // 落盘之前，准入始终保持阻断。
         await workspaceLock.beginSnapshotRecoveryWhileLocked();
-        // 先移除安装回执（以及所有临时文件）：rebuildFresh 只会重建数据库族，
-        // 而准入会拒绝数据库已被重建的回执。清除这些回执后，
-        // 新身份才能干净地签发。
+        // Hive 改名之间进程退出时，必须停在持久屏障之后。之后的显式重置会
+        // 先续跑退役，而不是去迁移剩下那一半不完整的旧盒子。
+        await _retainLegacyHiveFiles(appDataDirectory, resolvedDurability);
+        await DatabaseFamilyPreserver.prepareExplicitRecovery(
+          appDataDirectory,
+          recoveryBarrier: File(
+            p.join(
+              appDataDirectory.path,
+              RestoreWorkspaceLock.snapshotRecoveryMarkerName,
+            ),
+          ),
+          durability: resolvedDurability,
+          retireExistingFamilies: true,
+        );
         await _sweepReceiptTemporaries(appDataDirectory);
+        // 回执不清除，转移到带时间戳的目录里保留，避免与新身份互相矛盾。
+        final receipts = Directory(
+          p.join(
+            appDataDirectory.path,
+            '.kelivo_retained_receipts_${DateTime.now().microsecondsSinceEpoch}',
+          ),
+        );
         await for (final entity in appDataDirectory.list(followLinks: false)) {
           final name = p.basename(entity.path);
-          if (name.startsWith(_receiptPrefix) &&
+          if (entity is File &&
+              name.startsWith(_receiptPrefix) &&
               name.endsWith(_receiptSuffix)) {
-            await _deleteFileIfPresent(entity.path);
+            await receipts.create(recursive: true);
+            await resolvedDurability.renameAndSync(
+              source: entity,
+              targetPath: p.join(receipts.path, name),
+            );
           }
         }
+        // 显式重新开始仍然保留旧数据库族，同时签发“空库启动”授权。
         await DatabaseInstallationGate.rebuildFresh(
           appDataDirectory: appDataDirectory,
           durability: resolvedDurability,
-          // 确认对话框承诺数据已经永久消失：这是唯一不能留下副本的调用方。
-          preserveDisplacedCopy: false,
+          preserveDisplacedCopy: true,
         );
+        await EmptyDatabaseRecoveryGuard.acknowledge(appDataDirectory);
         await workspaceLock.finishSnapshotRecoveryWhileLocked();
       });
     } finally {
       await ownedLease?.close();
+    }
+  }
+
+  static Future<void> _retainLegacyHiveFiles(
+    Directory root,
+    RestoreDurability durability,
+  ) async {
+    for (final name in ['conversations', 'messages', 'tool_events_v1']) {
+      for (final extension in ['hive', 'lock']) {
+        final file = File(p.join(root.path, '$name.$extension'));
+        final type = await FileSystemEntity.type(file.path, followLinks: false);
+        if (type == FileSystemEntityType.notFound) continue;
+        if (type != FileSystemEntityType.file) {
+          throw StateError('startup_recovery_hive_type');
+        }
+        var destination = '${file.path}.retired';
+        if (await FileSystemEntity.type(destination, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          destination = '$destination-${const Uuid().v4()}';
+        }
+        await durability.renameAndSync(source: file, targetPath: destination);
+      }
     }
   }
 
@@ -308,13 +395,21 @@ final class StartupDiagnosticsService {
     required Directory appDataDirectory,
     required Directory workingDirectory,
     DateTime Function()? clock,
+    List<Directory> additionalDataDirectories = const [],
   }) async {
-    if (!await appDataDirectory.exists()) {
+    final roots = await StartupRecoveryService._exportRoots(
+      appDataDirectory,
+      additionalDataDirectories,
+    );
+    if (roots.isEmpty) {
       throw StateError('startup_recovery_source_missing');
     }
-    final sourcePath = p.normalize(appDataDirectory.absolute.path);
     final workingPath = p.normalize(workingDirectory.absolute.path);
-    if (workingPath == sourcePath || p.isWithin(sourcePath, workingPath)) {
+    if (roots.any(
+      (root) =>
+          p.equals(root.absolute.path, workingPath) ||
+          p.isWithin(root.absolute.path, workingPath),
+    )) {
       throw StateError('startup_recovery_export_inside_source');
     }
     await workingDirectory.create(recursive: true);
@@ -329,11 +424,32 @@ final class StartupDiagnosticsService {
       throw StateError('startup_recovery_export_collision');
     }
     final encoder = ZipFileEncoder();
-    await encoder.zipDirectory(
-      appDataDirectory,
-      filename: archive.path,
-      followLinks: false,
-    );
+    if (additionalDataDirectories.isEmpty && roots.length == 1) {
+      await encoder.zipDirectory(
+        roots.single,
+        filename: archive.path,
+        followLinks: false,
+      );
+    } else {
+      encoder.create(archive.path);
+      try {
+        for (var i = 0; i < roots.length; i++) {
+          await for (final file in roots[i].list(
+            recursive: true,
+            followLinks: false,
+          )) {
+            if (file is File) {
+              await encoder.addFile(
+                file,
+                'data-$i/${p.relative(file.path, from: roots[i].path)}',
+              );
+            }
+          }
+        }
+      } finally {
+        await encoder.close();
+      }
+    }
     return archive;
   }
 
@@ -355,11 +471,22 @@ final class StartupDiagnosticsService {
         foreignKeyViolations: null,
       );
     }
-    final database = sqlite.sqlite3.open(
-      file.absolute.path,
-      mode: sqlite.OpenMode.readOnly,
+    final temporary = await Directory.systemTemp.createTemp(
+      'kelivo-integrity-',
     );
+    sqlite.Database? database;
     try {
+      // 只检查副本：直接打开实库可能回流 WAL、改动 SHM，
+      // 破坏正在等待恢复的保留现场。
+      final copied = File(p.join(temporary.path, AppDatabase.databaseFileName));
+      for (final suffix in ['', '-wal', '-shm', '-journal']) {
+        final member = File('${file.path}$suffix');
+        if (await FileSystemEntity.type(member.path, followLinks: false) ==
+            FileSystemEntityType.file) {
+          await member.copy('${copied.path}$suffix');
+        }
+      }
+      database = sqlite.sqlite3.open(copied.path);
       final quickCheck = database
           .select('PRAGMA quick_check;')
           .map((row) => row.values.first?.toString() ?? '')
@@ -372,7 +499,8 @@ final class StartupDiagnosticsService {
         foreignKeyViolations: foreignKeys,
       );
     } finally {
-      database.close();
+      database?.close();
+      await temporary.delete(recursive: true);
     }
   }
 }

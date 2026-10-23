@@ -2,34 +2,45 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'windows_explorer_arguments.dart';
 
-/// 平台相关的应用数据目录工具。
+/// Platform-specific application data directory utilities.
 ///
-/// - Windows/macOS/Linux：使用 `path_provider` 提供的 Application Support
-///   （应用数据）目录。
-/// - Android/iOS：继续使用 Application Documents 目录。
+/// - Windows/macOS/Linux: use the Application Support (app data) directory
+///   provided by `path_provider`.
+/// - iOS: database state in Application Support; user files in Documents.
+/// - Android: Application Documents directory.
 class AppDirectories {
   AppDirectories._();
 
-  /// 获取应用数据存储的根目录。
+  /// Gets the root directory for application data storage.
   ///
-  /// - Windows/macOS/Linux：Application Support 目录
-  /// - Android/iOS：Application Documents 目录
+  /// - Windows/macOS/Linux: Application Support directory
+  /// - iOS: private Application Support storage
+  /// - Android: Application Documents directory
   static Future<Directory> getAppDataDirectory() async {
     switch (defaultTargetPlatform) {
       case TargetPlatform.windows:
       case TargetPlatform.macOS:
       case TargetPlatform.linux:
         return await getApplicationSupportDirectory();
-      case TargetPlatform.android:
       case TargetPlatform.iOS:
+        return Directory(
+          p.join(
+            (await getApplicationSupportDirectory()).path,
+            privateDataDirectoryName,
+          ),
+        );
+      case TargetPlatform.android:
       case TargetPlatform.fuchsia:
         return await getApplicationDocumentsDirectory();
     }
   }
+
+  static const privateDataDirectoryName = 'kelivo-data';
 
   /// 在平台文件管理器中打开目录。
   static Future<bool> openDirectory(Directory directory) async {
@@ -68,56 +79,80 @@ class AppDirectories {
     );
   }
 
-  /// 获取上传文件的目录。
+  /// Public iOS files, including the retained original database family.
+  static Future<Directory?> documentsDirectoryFor(Directory active) async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+    final support = await getApplicationSupportDirectory();
+    if (!p.equals(
+      active.path,
+      p.join(support.path, privateDataDirectoryName),
+    )) {
+      return null;
+    }
+    return getApplicationDocumentsDirectory();
+  }
+
+  /// Files users may access in Files: snapshots, attachments and other assets.
+  static Future<Directory> getContentDirectory() async =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? getApplicationDocumentsDirectory()
+      : getAppDataDirectory();
+
+  /// Resolve live assets for a database root without redirecting temporary
+  /// restore candidates or test directories to the real app container.
+  static Future<Directory> contentDirectoryFor(Directory databaseRoot) async =>
+      await documentsDirectoryFor(databaseRoot) ?? databaseRoot;
+
+  /// Gets the directory for uploaded files.
   static Future<Directory> getUploadDirectory() async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     return Directory('${root.path}/upload');
   }
 
-  /// 获取图片文件的目录。
+  /// Gets the directory for image files.
   static Future<Directory> getImagesDirectory() async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     return Directory('${root.path}/images');
   }
 
-  /// 获取头像文件的目录。
+  /// Gets the directory for avatar files.
   static Future<Directory> getAvatarsDirectory() async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     return Directory('${root.path}/avatars');
   }
 
-  /// 获取用户导入字体文件的目录。
+  /// Gets the directory for user-imported font files.
   static Future<Directory> getFontsDirectory() async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     return Directory('${root.path}/fonts');
   }
 
-  /// 获取缓存文件的目录。
+  /// Gets the directory for cache files.
   static Future<Directory> getCacheDirectory() async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     return Directory('${root.path}/cache');
   }
 
-  /// 受管工作区根目录：`<appData>/workspaces`。
+  /// Managed workspace roots: `<appData>/workspaces`.
   static Future<Directory> getWorkspacesDirectory() =>
       _ensureSubdir('workspaces');
 
-  /// 按会话划分的会话根目录：`<appData>/sessions`。
+  /// Per-conversation session roots: `<appData>/sessions`.
   static Future<Directory> getSessionsDirectory() => _ensureSubdir('sessions');
 
-  /// 已安装技能的主体目录：`<appData>/skills`。
+  /// Installed skill bodies: `<appData>/skills`.
   static Future<Directory> getSkillsDirectory() => _ensureSubdir('skills');
 
-  /// 沙盒环境安装根目录：`<appData>/environment`。
+  /// Sandbox environment install root: `<appData>/environment`.
   static Future<Directory> getEnvironmentDirectory() =>
       _ensureSubdir('environment');
 
-  /// 受管工作区的文件根目录：`<appData>/workspaces/<id>/files`。
+  /// Files root for a managed workspace: `<appData>/workspaces/<id>/files`.
   static Future<Directory> workspaceFilesDir(String workspaceId) {
     return _ensurePath('workspaces/$workspaceId/files');
   }
 
-  /// 会话根目录，含 `attachments/` 与 `outputs/` 两个子目录。
+  /// Session root for a conversation, with `attachments/` and `outputs/`.
   static Future<Directory> sessionDir(String conversationId) async {
     final dir = await _ensurePath('sessions/$conversationId');
     await Directory('${dir.path}/attachments').create(recursive: true);
@@ -125,7 +160,7 @@ class AppDirectories {
     return dir;
   }
 
-  /// 技能主体目录：`<appData>/skills/<id>`。
+  /// Skill body directory: `<appData>/skills/<id>`.
   static Future<Directory> skillDir(String skillId) {
     return _ensurePath('skills/$skillId');
   }
@@ -133,7 +168,7 @@ class AppDirectories {
   static Future<Directory> _ensureSubdir(String name) => _ensurePath(name);
 
   static Future<Directory> _ensurePath(String relativePath) async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     final dir = Directory('${root.path}/$relativePath');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -141,22 +176,22 @@ class AppDirectories {
     return dir;
   }
 
-  /// 获取平台提供的应用缓存目录。
+  /// Gets the platform-provided application cache directory.
   ///
-  /// - Android：/data/user/0/`<package>`/cache
-  /// - iOS/macOS：Caches 目录
-  /// - Windows/Linux：平台缓存目录（Linux 上通过 XDG 指定为应用专属目录）
+  /// - Android: /data/user/0/`<package>`/cache
+  /// - iOS/macOS: Caches directory
+  /// - Windows/Linux: platform cache directory (app-specific on Linux via XDG)
   static Future<Directory> getSystemCacheDirectory() async {
     return await getApplicationCacheDirectory();
   }
 
-  /// 获取头像缓存文件的目录。
+  /// Gets the directory for avatar cache files.
   static Future<Directory> getAvatarCacheDirectory() async {
-    final root = await getAppDataDirectory();
+    final root = await getContentDirectory();
     return Directory('${root.path}/cache/avatars');
   }
 
-  /// 根据 MIME 类型获取文件扩展名。
+  /// Get file extension from MIME type
   static String extFromMime(String mime) {
     switch (mime.toLowerCase()) {
       case 'image/jpeg':
@@ -171,9 +206,9 @@ class AppDirectories {
     }
   }
 
-  /// 将 base64 图片数据保存到 images 目录。
-  /// [prefix] 用于文件名（例如 'img'、'mcp_img'）。
-  /// 返回保存后的文件路径；失败时返回 null。
+  /// Save base64 image data to images directory.
+  /// [prefix] is used for filename (e.g. 'img', 'mcp_img').
+  /// Returns the saved file path, or null if failed.
   static Future<String?> saveBase64Image(
     String mime,
     String base64Data, {
@@ -186,7 +221,7 @@ class AppDirectories {
       }
       final cleaned = base64Data.replaceAll(RegExp(r'\s'), '');
       List<int> bytes;
-      // 同时支持标准 base64 和 URL 安全 base64
+      // Support both standard base64 and URL-safe base64
       if (cleaned.contains('-') || cleaned.contains('_')) {
         bytes = base64Url.decode(cleaned);
       } else {

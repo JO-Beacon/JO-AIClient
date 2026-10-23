@@ -6325,5 +6325,43 @@
         "type": "int"
       }
     }
-  }
+  },
+  "recoveryMissingDataTitle": "Previous data detected",
+  "recoveryMissingDataBody": "The current database is missing, but this device still contains previous data. JO-AIClient has paused startup and has not created an empty database. Your remaining files and copies are being preserved.",
+  "recoveryEmptyDataTitle": "Current chat history is empty",
+  "recoveryEmptyDataBody": "The current database has no conversations, but previous copies were found. JO-AIClient has paused startup so you can recover a copy or explicitly keep the current data. Nothing will be overwritten automatically.",
+  "recoveryKeepCurrent": "Keep current data and continue",
+  "recoveryKeepCurrentConfirm": "Continue with the current empty database? Previous copies will remain available for recovery later.",
+  "recoverySearchingCopies": "Finding and validating local data copies…",
+  "recoveryFoundCopies": "Found {count} validated copies. Choose one to recover your chats and settings. The original files will be kept.",
+  "@recoveryFoundCopies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryInvalidCopy": "{name}: validation failed. The original file has been kept.",
+  "@recoveryInvalidCopy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "recoverySearchFailed": "Some data locations could not be read. Your files have been kept; export a data copy before trying other recovery actions.",
+  "recoveryDiscoveredCopyBody": "Found outside the managed copy folder. This original is preserved and will be fully validated before recovery.",
+  "recoveryStorageFailureTitle": "Data storage needs attention",
+  "recoveryStorageFailureBody": "JO-AIClient could not activate its protected data storage. Startup has stopped and the original data has been kept. Export a copy of your data or retry; no empty database will be created.",
+  "recoveryProtectingTitle": "Protecting the chat database",
+  "recoveryProtectingData": "Copying and verifying the database. Images, attachments and snapshots stay in Documents and are not copied again. The original database will be kept.",
+  "recoveryStorageReadyTitle": "Chat database moved to internal storage",
+  "recoveryStorageReadyBody": "The database containing chats, assistants and settings now uses internal app storage. Snapshots, images and attachments remain accessible in the Files app under Documents. The original database is retained. If older chats are missing, open Settings → Backup → Local Copies.",
+  "recoveryRetainedData": "Retained original data",
+  "recoveryNoValidCopies": "Copies were found, but none passed validation. The originals have been kept. You can export your data for further diagnosis.",
+  "recoveryStorageInsufficientSpaceBody": "There is not enough free space to keep the original database and create its verified internal copy. Existing data and snapshots are unchanged. Free some space, then retry.",
+  "migrationFreshStartTitle": "Fresh start is ready",
+  "migrationFreshStartSubtitle": "A new empty database is ready, and your previous data has been retained. Restart the app to continue.",
+  "migrationFreshStartFailedTitle": "Fresh start could not be completed",
+  "migrationFreshStartFailedSubtitle": "Your previous data has been retained. Retry starting fresh, or close and reopen the app."
 }

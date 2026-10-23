@@ -27,7 +27,7 @@ class SandboxPathResolver {
   static Future<void> init() async {
     try {
       // 使用平台特定的应用数据目录
-      final dir = await AppDirectories.getAppDataDirectory();
+      final dir = await AppDirectories.getContentDirectory();
       _docsDir = dir.path;
       try {
         final sup = await getApplicationSupportDirectory();
