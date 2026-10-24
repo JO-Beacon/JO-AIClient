@@ -1745,6 +1745,51 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mcpAssistantSheetSelectAll => '全选';
 
   @override
+  String get mcpPageStatusFailed => '连接失败';
+
+  @override
+  String mcpPageCardToolsShort(int enabled, int total) {
+    return '工具 $enabled/$total';
+  }
+
+  @override
+  String mcpPageSelectServer(String name) {
+    return '选择 $name';
+  }
+
+  @override
+  String get mcpIconTitle => '服务器图标';
+
+  @override
+  String get mcpIconInvalid => '无法使用此图片，请选择不超过 10 MB 的有效图片。';
+
+  @override
+  String get mcpSelectServers => '选择服务器';
+
+  @override
+  String get mcpMoveToGroup => '移到分组';
+
+  @override
+  String get mcpRenameGroup => '重命名分组';
+
+  @override
+  String get mcpDeleteGroupConfirm => '组内服务器将移至“其他”，不会删除服务器。';
+
+  @override
+  String get mcpGroupNameInvalid => '请输入非空且不重复的分组名称。';
+
+  @override
+  String get mcpEnableSelected => '启用';
+
+  @override
+  String get mcpDisableSelected => '停用';
+
+  @override
+  String mcpDeleteSelectedConfirm(int count) {
+    return '删除选中的 $count 个服务器？';
+  }
+
+  @override
   String get mcpAssistantSheetClearAll => '全不选';
 
   @override
@@ -1810,6 +1855,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backupRestoreFailureTitle => '恢复需要处理';
+
+  @override
+  String get backupRestoreDirectoryBlockedTitle => '恢复正在等待目录释放';
+
+  @override
+  String get backupRestoreDirectoryBlockedContent =>
+      'Windows 无法移动下方目录。请关闭正在使用该目录的终端、编辑器或其他程序，然后继续恢复。如果仍然受阻，请检查当前账户是否有移动该目录的权限。此前的恢复进度已保留。';
+
+  @override
+  String get backupRestoreContinueButton => '继续恢复';
 
   @override
   String get backupRestoreFailureContent =>
@@ -1880,6 +1935,78 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get startupRecoveryBusy => '处理中…';
+
+  @override
+  String get databaseConflictTitle => '检测到两个数据库';
+
+  @override
+  String databaseConflictBody(String directory) {
+    return '应用发现 jo_aiclient.db 和 kelivo.db 同时存在。请选择要继续使用的一个。另一个数据库不会被删除，会整体移动到 $directory 保留。';
+  }
+
+  @override
+  String get databaseConflictUse => '使用这个';
+
+  @override
+  String get databaseConflictExit => '退出软件';
+
+  @override
+  String get databaseConflictModified => '修改时间';
+
+  @override
+  String get databaseConflictSize => '文件大小';
+
+  @override
+  String get databaseConflictQuarantineFailed =>
+      '无法移动另一个数据库，未做任何更改。请检查文件权限后重试。';
+
+  @override
+  String get databaseConflictUnreadable => '无法读取';
+
+  @override
+  String get backupEncryptionTitle => '加密备份';
+
+  @override
+  String get backupEncryptionOffHint => '未加密的备份可被直接读取。';
+
+  @override
+  String get backupEncryptionOnHint => '当前页面内的备份均会加密。';
+
+  @override
+  String get backupEncryptionPassword => '口令';
+
+  @override
+  String get backupEncryptionConfirmPassword => '确认口令';
+
+  @override
+  String get backupEncryptionPasswordHint => '请妥善保存口令，遗忘后无法恢复备份。口令仅在当前页面保留。';
+
+  @override
+  String get backupEncryptionMismatch => '两次输入的口令不一致。';
+
+  @override
+  String get backupEncryptionShowPassword => '显示口令';
+
+  @override
+  String get backupEncryptionHidePassword => '隐藏口令';
+
+  @override
+  String get backupEncryptionUnlockTitle => '加密备份';
+
+  @override
+  String get backupEncryptionUnlockHint => '请输入创建这份备份时使用的口令。';
+
+  @override
+  String get backupEncryptionUnlock => '解锁';
+
+  @override
+  String get backupEncryptionFailed => '口令错误或备份已损坏，请重试或取消。';
+
+  @override
+  String get backupProgressEncrypting => '正在加密备份';
+
+  @override
+  String get backupProgressDecrypting => '正在解密备份';
 
   @override
   String get startupRecoveryExportSucceeded => '已保存一份数据副本。';
@@ -15442,6 +15569,51 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get mcpAssistantSheetSelectAll => '全选';
 
   @override
+  String get mcpPageStatusFailed => '连接失败';
+
+  @override
+  String mcpPageCardToolsShort(int enabled, int total) {
+    return '工具 $enabled/$total';
+  }
+
+  @override
+  String mcpPageSelectServer(String name) {
+    return '选择 $name';
+  }
+
+  @override
+  String get mcpIconTitle => '服务器图标';
+
+  @override
+  String get mcpIconInvalid => '无法使用此图片，请选择不超过 10 MB 的有效图片。';
+
+  @override
+  String get mcpSelectServers => '选择服务器';
+
+  @override
+  String get mcpMoveToGroup => '移到分组';
+
+  @override
+  String get mcpRenameGroup => '重命名分组';
+
+  @override
+  String get mcpDeleteGroupConfirm => '组内服务器将移至“其他”，不会删除服务器。';
+
+  @override
+  String get mcpGroupNameInvalid => '请输入非空且不重复的分组名称。';
+
+  @override
+  String get mcpEnableSelected => '启用';
+
+  @override
+  String get mcpDisableSelected => '停用';
+
+  @override
+  String mcpDeleteSelectedConfirm(int count) {
+    return '删除选中的 $count 个服务器？';
+  }
+
+  @override
   String get mcpAssistantSheetClearAll => '全不选';
 
   @override
@@ -15507,6 +15679,16 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get backupRestoreFailureTitle => '恢复需要处理';
+
+  @override
+  String get backupRestoreDirectoryBlockedTitle => '恢复正在等待目录释放';
+
+  @override
+  String get backupRestoreDirectoryBlockedContent =>
+      'Windows 无法移动下方目录。请关闭正在使用该目录的终端、编辑器或其他程序，然后继续恢复。如果仍然受阻，请检查当前账户是否有移动该目录的权限。此前的恢复进度已保留。';
+
+  @override
+  String get backupRestoreContinueButton => '继续恢复';
 
   @override
   String get backupRestoreFailureContent =>
@@ -15577,6 +15759,78 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get startupRecoveryBusy => '处理中…';
+
+  @override
+  String get databaseConflictTitle => '检测到两个数据库';
+
+  @override
+  String databaseConflictBody(String directory) {
+    return '应用发现 jo_aiclient.db 和 kelivo.db 同时存在。请选择要继续使用的一个。另一个数据库不会被删除，会整体移动到 $directory 保留。';
+  }
+
+  @override
+  String get databaseConflictUse => '使用这个';
+
+  @override
+  String get databaseConflictExit => '退出软件';
+
+  @override
+  String get databaseConflictModified => '修改时间';
+
+  @override
+  String get databaseConflictSize => '文件大小';
+
+  @override
+  String get databaseConflictQuarantineFailed =>
+      '无法移动另一个数据库，未做任何更改。请检查文件权限后重试。';
+
+  @override
+  String get databaseConflictUnreadable => '无法读取';
+
+  @override
+  String get backupEncryptionTitle => '加密备份';
+
+  @override
+  String get backupEncryptionOffHint => '未加密的备份可被直接读取。';
+
+  @override
+  String get backupEncryptionOnHint => '当前页面内的备份均会加密。';
+
+  @override
+  String get backupEncryptionPassword => '口令';
+
+  @override
+  String get backupEncryptionConfirmPassword => '确认口令';
+
+  @override
+  String get backupEncryptionPasswordHint => '请妥善保存口令，遗忘后无法恢复备份。口令仅在当前页面保留。';
+
+  @override
+  String get backupEncryptionMismatch => '两次输入的口令不一致。';
+
+  @override
+  String get backupEncryptionShowPassword => '显示口令';
+
+  @override
+  String get backupEncryptionHidePassword => '隐藏口令';
+
+  @override
+  String get backupEncryptionUnlockTitle => '加密备份';
+
+  @override
+  String get backupEncryptionUnlockHint => '请输入创建这份备份时使用的口令。';
+
+  @override
+  String get backupEncryptionUnlock => '解锁';
+
+  @override
+  String get backupEncryptionFailed => '口令错误或备份已损坏，请重试或取消。';
+
+  @override
+  String get backupProgressEncrypting => '正在加密备份';
+
+  @override
+  String get backupProgressDecrypting => '正在解密备份';
 
   @override
   String get startupRecoveryExportSucceeded => '已保存一份数据副本。';
@@ -29139,6 +29393,51 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get mcpAssistantSheetSelectAll => '全選';
 
   @override
+  String get mcpPageStatusFailed => '連線失敗';
+
+  @override
+  String mcpPageCardToolsShort(int enabled, int total) {
+    return '工具 $enabled/$total';
+  }
+
+  @override
+  String mcpPageSelectServer(String name) {
+    return '選擇 $name';
+  }
+
+  @override
+  String get mcpIconTitle => '伺服器圖示';
+
+  @override
+  String get mcpIconInvalid => '無法使用此圖片，請選擇不超過 10 MB 的有效圖片。';
+
+  @override
+  String get mcpSelectServers => '選擇伺服器';
+
+  @override
+  String get mcpMoveToGroup => '移到群組';
+
+  @override
+  String get mcpRenameGroup => '重新命名群組';
+
+  @override
+  String get mcpDeleteGroupConfirm => '群組內的伺服器將移至“其他”，不會刪除伺服器。';
+
+  @override
+  String get mcpGroupNameInvalid => '請輸入非空且不重複的群組名稱。';
+
+  @override
+  String get mcpEnableSelected => '啟用';
+
+  @override
+  String get mcpDisableSelected => '停用';
+
+  @override
+  String mcpDeleteSelectedConfirm(int count) {
+    return '刪除選取的 $count 個伺服器？';
+  }
+
+  @override
   String get mcpAssistantSheetClearAll => '全不選';
 
   @override
@@ -29205,6 +29504,16 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get backupRestoreFailureTitle => '還原需要處理';
+
+  @override
+  String get backupRestoreDirectoryBlockedTitle => '還原正在等待資料夾釋放';
+
+  @override
+  String get backupRestoreDirectoryBlockedContent =>
+      'Windows 無法移動下方資料夾。請關閉正在使用該資料夾的終端機、編輯器或其他程式，然後繼續還原。如果仍然受阻，請檢查目前帳戶是否有移動該資料夾的權限。先前的還原進度已保留。';
+
+  @override
+  String get backupRestoreContinueButton => '繼續還原';
 
   @override
   String get backupRestoreFailureContent =>
@@ -29275,6 +29584,78 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get startupRecoveryBusy => '處理中…';
+
+  @override
+  String get databaseConflictTitle => '偵測到兩個資料庫';
+
+  @override
+  String databaseConflictBody(String directory) {
+    return '應用程式發現 jo_aiclient.db 和 kelivo.db 同時存在。請選擇要繼續使用的一個。另一個資料庫不會被刪除，會整體移動到 $directory 保留。';
+  }
+
+  @override
+  String get databaseConflictUse => '使用這個';
+
+  @override
+  String get databaseConflictExit => '結束應用程式';
+
+  @override
+  String get databaseConflictModified => '修改時間';
+
+  @override
+  String get databaseConflictSize => '檔案大小';
+
+  @override
+  String get databaseConflictQuarantineFailed =>
+      '無法移動另一個資料庫，未做任何變更。請檢查檔案權限後再試一次。';
+
+  @override
+  String get databaseConflictUnreadable => '無法讀取';
+
+  @override
+  String get backupEncryptionTitle => '加密備份';
+
+  @override
+  String get backupEncryptionOffHint => '未加密的備份可被直接讀取。';
+
+  @override
+  String get backupEncryptionOnHint => '目前頁面內的備份均會加密。';
+
+  @override
+  String get backupEncryptionPassword => '口令';
+
+  @override
+  String get backupEncryptionConfirmPassword => '確認口令';
+
+  @override
+  String get backupEncryptionPasswordHint => '請妥善保存口令，遺忘後無法還原備份。口令僅在目前頁面保留。';
+
+  @override
+  String get backupEncryptionMismatch => '兩次輸入的口令不一致。';
+
+  @override
+  String get backupEncryptionShowPassword => '顯示口令';
+
+  @override
+  String get backupEncryptionHidePassword => '隱藏口令';
+
+  @override
+  String get backupEncryptionUnlockTitle => '加密備份';
+
+  @override
+  String get backupEncryptionUnlockHint => '請輸入建立這份備份時使用的口令。';
+
+  @override
+  String get backupEncryptionUnlock => '解鎖';
+
+  @override
+  String get backupEncryptionFailed => '口令錯誤或備份已損壞，請重試或取消。';
+
+  @override
+  String get backupProgressEncrypting => '正在加密備份';
+
+  @override
+  String get backupProgressDecrypting => '正在解密備份';
 
   @override
   String get startupRecoveryExportSucceeded => '已儲存一份資料副本。';

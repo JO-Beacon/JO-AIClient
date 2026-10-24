@@ -754,20 +754,10 @@ class HomeViewModel extends ChangeNotifier {
       _streamController.clearMessageState(id);
     }
 
-    if (targetConversationId == currentConversation?.id) {
-      _conversationTreeReloadSerial++;
-      _conversationTree = await _chatService.loadConversationTree(
-        targetConversationId,
-      );
-      _conversationTreeIntegrityError = null;
-      _chatController.updateCurrentConversation(
-        _chatService.getConversation(targetConversationId),
-      );
-      await _chatController.refreshTimelineAfterMutation(
-        removedRevisionIds: deletedIds,
-        activePathIds: _conversationTree?.activePath(),
-      );
-    }
+    await _refreshAfterTreeDeletion(
+      conversationId: targetConversationId,
+      deletedIds: deletedIds,
+    );
     notifyListeners();
   }
 
@@ -791,20 +781,10 @@ class HomeViewModel extends ChangeNotifier {
       _streamController.clearMessageState(id);
     }
 
-    if (targetConversationId == currentConversation?.id) {
-      _conversationTreeReloadSerial++;
-      _conversationTree = await _chatService.loadConversationTree(
-        targetConversationId,
-      );
-      _conversationTreeIntegrityError = null;
-      _chatController.updateCurrentConversation(
-        _chatService.getConversation(targetConversationId),
-      );
-      await _chatController.refreshTimelineAfterMutation(
-        removedRevisionIds: deletedIds,
-        activePathIds: _conversationTree?.activePath(),
-      );
-    }
+    await _refreshAfterTreeDeletion(
+      conversationId: targetConversationId,
+      deletedIds: deletedIds,
+    );
     notifyListeners();
   }
 
@@ -828,20 +808,10 @@ class HomeViewModel extends ChangeNotifier {
       _streamController.clearMessageState(id);
     }
 
-    if (targetConversationId == currentConversation?.id) {
-      _conversationTreeReloadSerial++;
-      _conversationTree = await _chatService.loadConversationTree(
-        targetConversationId,
-      );
-      _conversationTreeIntegrityError = null;
-      _chatController.updateCurrentConversation(
-        _chatService.getConversation(targetConversationId),
-      );
-      await _chatController.refreshTimelineAfterMutation(
-        removedRevisionIds: deletedIds,
-        activePathIds: _conversationTree?.activePath(),
-      );
-    }
+    await _refreshAfterTreeDeletion(
+      conversationId: targetConversationId,
+      deletedIds: deletedIds,
+    );
     notifyListeners();
   }
 
@@ -864,20 +834,10 @@ class HomeViewModel extends ChangeNotifier {
       _streamController.clearMessageState(id);
     }
 
-    if (targetConversationId == currentConversation?.id) {
-      _conversationTreeReloadSerial++;
-      _conversationTree = await _chatService.loadConversationTree(
-        targetConversationId,
-      );
-      _conversationTreeIntegrityError = null;
-      _chatController.updateCurrentConversation(
-        _chatService.getConversation(targetConversationId),
-      );
-      await _chatController.refreshTimelineAfterMutation(
-        removedRevisionIds: deletedIds,
-        activePathIds: _conversationTree?.activePath(),
-      );
-    }
+    await _refreshAfterTreeDeletion(
+      conversationId: targetConversationId,
+      deletedIds: deletedIds,
+    );
     notifyListeners();
   }
 
@@ -903,20 +863,10 @@ class HomeViewModel extends ChangeNotifier {
       _streamController.clearMessageState(id);
     }
 
-    if (targetConversationId == currentConversation?.id) {
-      _conversationTreeReloadSerial++;
-      _conversationTree = await _chatService.loadConversationTree(
-        targetConversationId,
-      );
-      _conversationTreeIntegrityError = null;
-      _chatController.updateCurrentConversation(
-        _chatService.getConversation(targetConversationId),
-      );
-      await _chatController.refreshTimelineAfterMutation(
-        removedRevisionIds: deletedIds,
-        activePathIds: _conversationTree?.activePath(),
-      );
-    }
+    await _refreshAfterTreeDeletion(
+      conversationId: targetConversationId,
+      deletedIds: deletedIds,
+    );
     notifyListeners();
     return deletedIds;
   }
@@ -924,6 +874,37 @@ class HomeViewModel extends ChangeNotifier {
   Set<String> _siblingMessageIds(ConversationTree tree, String messageId) {
     final parentId = tree.edges[messageId]?.parentMessageId;
     return tree.childrenOf(parentId).toSet();
+  }
+
+  /// 删除后同步树与时间线。
+  ///
+  /// 若删除改变了活动分支（删除的是当前分支，或降级合并换了分支），
+  /// 必须整窗重载：原地剪窗口只能得到新分支的公共前缀，会把分支自身
+  /// 的消息留到“以后滚动时再加载”，看起来像分支没显示。
+  Future<void> _refreshAfterTreeDeletion({
+    required String conversationId,
+    required Set<String> deletedIds,
+  }) async {
+    if (conversationId != currentConversation?.id) return;
+    final previousBranchId = _conversationTree?.activeBranchId;
+    _conversationTreeReloadSerial++;
+    _conversationTree = await _chatService.loadConversationTree(conversationId);
+    _conversationTreeIntegrityError = null;
+    debugPrint(
+      'conversation_tree_after_delete: conv=$conversationId '
+      'deleted=${deletedIds.length} branch=$previousBranchId->'
+      '${_conversationTree?.activeBranchId} '
+      'branches=${_conversationTree?.branches.length} '
+      'path=${_conversationTree?.activePath().length}',
+    );
+    _chatController.updateCurrentConversation(
+      _chatService.getConversation(conversationId),
+    );
+    await _chatController.refreshTimelineAfterMutation(
+      removedRevisionIds: deletedIds,
+      activePathIds: _conversationTree?.activePath(),
+      forceReload: previousBranchId != _conversationTree?.activeBranchId,
+    );
   }
 
   Future<void> deleteMessages({
@@ -940,7 +921,6 @@ class HomeViewModel extends ChangeNotifier {
     // 可能已切换会话。已加载修订知道自己属于哪个会话；
     // 对当前会话执行删除会静默地不生效。
     final conversationId = selected.first.conversationId;
-    bool isCurrentConversation() => currentConversation?.id == conversationId;
     final deletedCandidates = messageIds;
 
     // 删除活动生成写入检查点的行会使下一次流式写入命中
@@ -967,21 +947,10 @@ class HomeViewModel extends ChangeNotifier {
     for (final id in deletedMessageIds) {
       _streamController.clearMessageState(id);
     }
-    if (isCurrentConversation()) {
-      _chatController.updateCurrentConversation(
-        _chatService.getConversation(conversationId),
-      );
-      _conversationTreeReloadSerial++;
-      _conversationTree = await _chatService.loadConversationTree(
-        conversationId,
-      );
-      _conversationTreeIntegrityError = null;
-
-      await _chatController.refreshTimelineAfterMutation(
-        removedRevisionIds: deletedMessageIds,
-        activePathIds: _conversationTree?.activePath(),
-      );
-    }
+    await _refreshAfterTreeDeletion(
+      conversationId: conversationId,
+      deletedIds: deletedMessageIds,
+    );
     notifyListeners();
   }
 

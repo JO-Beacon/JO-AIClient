@@ -10,9 +10,13 @@ import java.io.IOException
 
 /** Read the same workspace registry as ExtensionEntityStore, without a Flutter engine. */
 internal class WorkspaceDocumentsStore(private val appData: File) {
+    private val database: File? =
+        sequenceOf("jo_aiclient.db", "kelivo.db")
+            .map { File(appData, it) }
+            .firstOrNull { it.isFile }
+
     fun list(): List<WorkspaceDocumentRoot> {
-        val database = File(appData, "kelivo.db")
-        if (!database.isFile) return emptyList()
+        val database = database ?: return emptyList()
         try {
             // Never create, migrate, or repair the live database from this provider.
             // In particular, Android's default corruption handler deletes files.

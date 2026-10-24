@@ -8159,6 +8159,37 @@ class ChatDatabaseRepository {
           '-> ${treeAfterDelete.activeBranchId}',
         );
       }
+      final operation = deleteMessageNode
+          ? 'messageNode'
+          : deleteCurrentBranch
+          ? 'currentBranch'
+          : validateMessageOnly
+          ? 'messageOnly'
+          : validateMessageAndFollowing
+          ? 'messageAndFollowing'
+          : preserveDescendants
+          ? 'messageNodes'
+          : 'messages';
+      String describeBranch(String id, ConversationBranch? branch) =>
+          '$id:${branch?.tipMessageId ?? '-'}';
+      debugPrint(
+        'conversation_tree_delete: conv=$conversationId op=$operation '
+        'targets=${requestedRows.length} deleted=${effectiveMessageIds.length} '
+        'active=${treeBeforeDelete.activeBranchId}->${treeAfterDelete.activeBranchId} '
+        'branches=${treeBeforeDelete.branches.length}->${treeAfterDelete.branches.length} '
+        'path=${treeBeforeDelete.activePath().length}->${treeAfterDelete.activePath().length}',
+      );
+      debugPrint(
+        'conversation_tree_delete_branches: '
+        '${treeAfterDelete.branches.values.map((branch) => describeBranch(branch.id, branch)).join(',')}',
+      );
+      final issues = treeAfterDelete.integrityIssues();
+      if (issues.isNotEmpty) {
+        debugPrint(
+          'conversation_tree_delete_integrity: '
+          '${issues.map((issue) => issue.code).join(',')}',
+        );
+      }
 
       final deletedRows = rows
           .where((row) => effectiveMessageIds.contains(row.id))

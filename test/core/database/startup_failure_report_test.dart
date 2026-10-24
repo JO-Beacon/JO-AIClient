@@ -22,6 +22,47 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
+  test('only resumes blocked directory moves while preserving old data', () {
+    StartupFailureReport report({
+      String operation = 'MoveFileExW',
+      String type = 'directory',
+      String code = '5',
+      String stage = 'preservingCurrentData',
+      String receipt = 'prepared',
+      StartupFailureStage gate = StartupFailureStage.restoreGate,
+    }) => StartupFailureReport.capture(
+      stage: gate,
+      error: RestoreFileSystemException(
+        const FileSystemException('blocked', r'C:\app\workspaces'),
+        {
+          'operation': operation,
+          'source type': type,
+          'Windows error code': code,
+          'source path': r'C:\app\workspaces',
+        },
+      ),
+      restoreDetails: {
+        'restore stage': stage,
+        'last observed receipt state': receipt,
+      },
+    );
+
+    for (final code in ['5', '32', '33']) {
+      expect(report(code: code).blockedRestoreDirectory, r'C:\app\workspaces');
+    }
+    for (final other in [
+      report(operation: 'FlushFileBuffers'),
+      report(type: 'file'),
+      report(code: '87'),
+      report(stage: 'installingBackup'),
+      report(stage: 'rollingBack'),
+      report(receipt: 'oldRenamed'),
+      report(gate: StartupFailureStage.databaseAdmission),
+    ]) {
+      expect(other.blockedRestoreDirectory, isNull);
+    }
+  });
+
   File databaseFile(Directory root) =>
       File(p.join(root.path, AppDatabase.databaseFileName));
 

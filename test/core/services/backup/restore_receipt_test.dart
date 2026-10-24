@@ -43,7 +43,7 @@ Future<String> _writeCandidateManifest(RestoreReceiptStore store) async {
   await File(
     p.join(store.workspaceRoot.path, RestoreWorkspaceLock.activeRunFileName),
   ).writeAsString(_runId, flush: true);
-  final database = File(p.join(candidate.path, 'database', 'kelivo.db'));
+  final database = File(p.join(candidate.path, 'database', 'jo_aiclient.db'));
   await database.parent.create(recursive: true);
   final repository = ChatDatabaseRepository.open(file: database);
   try {
@@ -73,13 +73,13 @@ Future<String> _writeCandidateManifest(RestoreReceiptStore store) async {
       'includeChats': true,
       'includeFiles': false,
       'database': {
-        'entry': 'database/kelivo.db',
+        'entry': 'database/jo_aiclient.db',
         'schemaVersion': databaseInfo.schemaVersion,
         'conversationCount': databaseInfo.conversationCount,
         'messageCount': databaseInfo.messageCount,
       },
       'entries': {
-        'database/kelivo.db': {
+        'database/jo_aiclient.db': {
           'bytes': await database.length(),
           'sha256': (await sha256.bind(database.openRead()).first).toString(),
         },
@@ -579,7 +579,12 @@ void main() {
       'rejects an incomplete candidate with a valid manifest hash',
       () async {
         await File(
-          p.join(store.runDirectory.path, 'candidate', 'database', 'kelivo.db'),
+          p.join(
+            store.runDirectory.path,
+            'candidate',
+            'database',
+            'jo_aiclient.db',
+          ),
         ).delete();
 
         await expectLater(

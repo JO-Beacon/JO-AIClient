@@ -37,7 +37,7 @@ void main() {
     });
 
     test('describes selected database and all declared asset roots', () async {
-      final database = File(p.join(root.path, 'kelivo.db'));
+      final database = File(p.join(root.path, 'jo_aiclient.db'));
       await database.writeAsBytes([1, 2, 3, 4], flush: true);
       final upload = File(p.join(root.path, 'upload', 'nested', 'note.txt'));
       await upload.parent.create(recursive: true);
@@ -105,8 +105,8 @@ void main() {
     });
 
     test('rejects database sidecars before describing the main file', () async {
-      await File(p.join(root.path, 'kelivo.db')).writeAsBytes([1]);
-      await File(p.join(root.path, 'kelivo.db-shm')).writeAsBytes([2]);
+      await File(p.join(root.path, 'jo_aiclient.db')).writeAsBytes([1]);
+      await File(p.join(root.path, 'jo_aiclient.db-shm')).writeAsBytes([2]);
 
       await expectLater(
         RestorePreviousBuilder.build(

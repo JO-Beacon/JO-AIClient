@@ -696,7 +696,9 @@ class S3BackupClient {
         final mtime = _parseDateTime(mtimeStr);
         final name = _displayNameFromKey(key);
         final lowerName = name.toLowerCase();
-        if (!lowerName.endsWith('.zip') && !lowerName.endsWith('.joaiclient')) {
+        if (!lowerName.endsWith('.zip') &&
+            !lowerName.endsWith('.joaiclient') &&
+            !lowerName.endsWith('.kbackup')) {
           continue;
         }
 

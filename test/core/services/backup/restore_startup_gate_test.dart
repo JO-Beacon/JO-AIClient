@@ -11,6 +11,7 @@ import 'package:Kelivo/core/database/chat_database_repository.dart';
 import 'package:Kelivo/core/database/startup_failure_report.dart';
 import 'package:Kelivo/core/models/conversation.dart';
 import 'package:Kelivo/core/services/backup/restore_bundle_preparation.dart';
+import 'package:Kelivo/core/services/backup/restore_business_lease.dart';
 import 'package:Kelivo/core/services/backup/restore_cutover_executor.dart';
 import 'package:Kelivo/core/services/backup/restore_durability.dart';
 import 'package:Kelivo/core/services/backup/restore_diagnostic_exception.dart';
@@ -18,6 +19,7 @@ import 'package:Kelivo/core/services/backup/restore_previous_store.dart';
 import 'package:Kelivo/core/services/backup/restore_receipt.dart';
 import 'package:Kelivo/core/services/backup/restore_startup_gate.dart';
 import 'package:Kelivo/core/services/backup/restore_workspace_lock.dart';
+import '../../../support/windows_directory_holder.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +39,136 @@ void main() {
     tearDown(() async {
       if (await root.exists()) await root.delete(recursive: true);
     });
+
+    test(
+      'Windows occupied workspace resumes the same partially preserved restore',
+      () async {
+        final database = File(p.join(appData.path, 'jo_aiclient.db'));
+        await _createDatabase(database, conversationId: 'old');
+        final oldSkill = File(p.join(appData.path, 'skills', 'old.txt'));
+        final oldWorkspace = File(
+          p.join(appData.path, 'workspaces', 'project', 'files', 'old.txt'),
+        );
+        for (final file in [oldSkill, oldWorkspace]) {
+          await file.parent.create(recursive: true);
+          await file.writeAsString(
+            'retained ${p.basename(p.dirname(file.path))}',
+            flush: true,
+          );
+        }
+        final prepared = await _prepareBundle(
+          root: root,
+          appData: appData,
+          directoryName: 'windows_occupied_source',
+          includeFiles: true,
+        );
+        final holder = await WindowsDirectoryHolder.start(
+          directory: oldWorkspace.parent,
+          controls: Directory(p.join(root.path, 'holder')),
+        );
+        final lease = await RestoreBusinessLease.acquire(
+          appDataDirectory: appData,
+        );
+        try {
+          final diagnostics = RestoreStartupDiagnostics();
+          final pending = Directory(
+            p.join(prepared.workspace.path, 'previous.pending'),
+          );
+          final plan = File(p.join(pending.path, 'manifest.json'));
+          List<int>? originalPlan;
+          for (var attempt = 0; attempt < 2; attempt++) {
+            try {
+              await RestoreStartupGate.recoverAndRequireBusinessReady(
+                appDataDirectory: appData,
+                businessLease: lease,
+                diagnostics: diagnostics,
+              );
+              fail('A real occupied directory must block the move');
+            } on FileSystemException catch (error, stack) {
+              final report = StartupFailureReport.capture(
+                stage: StartupFailureStage.restoreGate,
+                error: error,
+                stackTrace: stack,
+                restoreDetails: diagnostics.details,
+              );
+              expect(
+                report.blockedRestoreDirectory,
+                p.join(appData.path, 'workspaces'),
+              );
+              expect(report.restoreDetails['run id'], prepared.runId);
+              expect(report.toText(), contains('Windows error code: 5'));
+            }
+            final bytes = await plan.readAsBytes();
+            originalPlan ??= bytes;
+            expect(bytes, originalPlan);
+            expect(await _conversationIds(database), ['old']);
+            expect(await oldWorkspace.readAsString(), 'retained files');
+            expect(
+              await File(
+                p.join(pending.path, 'skills', 'old.txt'),
+              ).readAsString(),
+              'retained skills',
+            );
+            expect(
+              await Directory(p.join(pending.path, 'workspaces')).exists(),
+              isFalse,
+            );
+            expect(
+              (await RestoreReceiptStore(
+                appDataDirectory: appData,
+                runId: prepared.runId,
+              ).readLatest())!.checksum,
+              prepared.receipt.checksum,
+            );
+          }
+          await holder.close();
+          final result =
+              await RestoreStartupGate.recoverAndRequireBusinessReady(
+                appDataDirectory: appData,
+                businessLease: lease,
+                diagnostics: diagnostics,
+              );
+          expect(result!.runId, prepared.runId);
+          expect(result.state, RestoreReceiptState.committed);
+          expect(await _conversationIds(database), ['new']);
+          expect(
+            await File(
+              p.join(appData.path, 'upload', 'new.txt'),
+            ).readAsString(),
+            'new asset',
+          );
+          final previous = Directory(
+            p.join(
+              appData.path,
+              RestoreWorkspaceLock.workspaceRootName,
+              RestoreWorkspaceLock.completedRunsDirectoryName,
+              'run_${prepared.runId}',
+              'previous',
+            ),
+          );
+          expect(
+            await File(p.join(previous.path, 'manifest.json')).readAsBytes(),
+            originalPlan,
+          );
+          expect(
+            await File(
+              p.join(
+                previous.path,
+                'workspaces',
+                'project',
+                'files',
+                'old.txt',
+              ),
+            ).readAsString(),
+            'retained files',
+          );
+        } finally {
+          await holder.close();
+          await lease.close();
+        }
+      },
+      skip: !Platform.isWindows,
+    );
 
     test('allows startup when no restore run exists', () async {
       expect(
@@ -70,7 +202,7 @@ void main() {
     test(
       'captures the failing run before validation and clears stale context',
       () async {
-        final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+        final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
         await _createDatabase(liveDatabase, conversationId: 'old');
         final prepared = await _prepareBundle(
           root: root,
@@ -167,7 +299,7 @@ void main() {
     test(
       'reports a partial preservation failure and still resumes it',
       () async {
-        final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+        final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
         await _createDatabase(liveDatabase, conversationId: 'old');
         for (final name in ['skills', 'workspaces', 'sessions']) {
           final file = File(p.join(appData.path, name, 'old.txt'));
@@ -245,7 +377,7 @@ void main() {
     );
 
     test('commits, revalidates, and archives in one startup pass', () async {
-      final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+      final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
       await _createDatabase(liveDatabase, conversationId: 'old');
       final oldUpload = File(p.join(appData.path, 'upload', 'old.txt'));
       await oldUpload.parent.create();
@@ -301,7 +433,7 @@ void main() {
       test(
         'resumes a v1.3.0 prepared restore with a local link ($includeFiles)',
         () async {
-          final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+          final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
           await _createDatabase(liveDatabase, conversationId: 'old');
           final external = File(p.join(root.path, 'external.txt'));
           await external.writeAsString('untouched');
@@ -360,7 +492,7 @@ void main() {
       'rolledBack',
     ]) {
       test('resumes v1.3.0 evidence interrupted while $phase', () async {
-        final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+        final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
         await _createDatabase(liveDatabase, conversationId: 'old');
         final oldUpload = File(p.join(appData.path, 'upload', 'old.txt'));
         await oldUpload.parent.create();
@@ -437,7 +569,7 @@ void main() {
     }
 
     test('reports every cutover stage in order for a pending run', () async {
-      final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+      final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
       await _createDatabase(liveDatabase, conversationId: 'old');
       final oldUpload = File(p.join(appData.path, 'upload', 'old.txt'));
       await oldUpload.parent.create();
@@ -474,7 +606,7 @@ void main() {
     });
 
     test('rolls back and archives in the same startup pass', () async {
-      final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+      final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
       await _createDatabase(liveDatabase, conversationId: 'old');
       final oldUpload = File(p.join(appData.path, 'upload', 'old.txt'));
       await oldUpload.parent.create();
@@ -521,7 +653,7 @@ void main() {
           'run_${prepared.runId}',
           'candidate',
           'database',
-          'kelivo.db',
+          'jo_aiclient.db',
         ),
       );
       expect(await _conversationIds(archivedCandidate), ['new']);
@@ -533,7 +665,7 @@ void main() {
 
     test('revalidates and archives an already-terminal active run', () async {
       await _createDatabase(
-        File(p.join(appData.path, 'kelivo.db')),
+        File(p.join(appData.path, 'jo_aiclient.db')),
         conversationId: 'old',
       );
       final prepared = await _prepareBundle(
@@ -574,7 +706,7 @@ void main() {
 
     test('resumes an interrupted terminal archive', () async {
       await _createDatabase(
-        File(p.join(appData.path, 'kelivo.db')),
+        File(p.join(appData.path, 'jo_aiclient.db')),
         conversationId: 'old',
       );
       final prepared = await _prepareBundle(
@@ -792,7 +924,7 @@ Future<List<int>> _interruptV130Cutover({
   required Directory appData,
   required String phase,
 }) async {
-  final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+  final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
   final liveUpload = Directory(p.join(appData.path, 'upload'));
   final previous = Directory(
     p.join(
@@ -812,7 +944,7 @@ Future<List<int>> _interruptV130Cutover({
     'createdAtUtc': prepared.receipt.createdAtUtc.toIso8601String(),
     'database': {
       'state': 'file',
-      'path': 'database/kelivo.db',
+      'path': 'database/jo_aiclient.db',
       'descriptor': await _descriptor(liveDatabase),
     },
     'assets': {
@@ -838,7 +970,7 @@ Future<List<int>> _interruptV130Cutover({
   ).writeAsBytes(bytes, flush: true);
   await liveUpload.rename(p.join(previous.path, 'upload'));
   if (phase == 'preserving') return bytes;
-  final oldDatabase = File(p.join(previous.path, 'database', 'kelivo.db'));
+  final oldDatabase = File(p.join(previous.path, 'database', 'jo_aiclient.db'));
   await liveDatabase.rename(oldDatabase.path);
   if (phase == 'preserved') return bytes;
   var receipt = prepared.receipt.advance(
@@ -847,7 +979,7 @@ Future<List<int>> _interruptV130Cutover({
   );
   await _writeFixtureReceipt(prepared.workspace, receipt);
   final newDatabase = File(
-    p.join(prepared.candidateDirectory.path, 'database', 'kelivo.db'),
+    p.join(prepared.candidateDirectory.path, 'database', 'jo_aiclient.db'),
   );
   await newDatabase.rename(liveDatabase.path);
   if (phase == 'installing') return bytes;
@@ -892,7 +1024,7 @@ Future<PreparedRestoreBundle> _prepareBundle({
   await extracted.create();
   final settings = File(p.join(extracted.path, 'settings.json'));
   await settings.writeAsString('{"theme":"new"}', flush: true);
-  final database = File(p.join(extracted.path, 'database', 'kelivo.db'));
+  final database = File(p.join(extracted.path, 'database', 'jo_aiclient.db'));
   await database.parent.create(recursive: true);
   await _createDatabase(database, conversationId: 'new');
   final databaseInfo = await ChatDatabaseRepository.prepareSnapshotForRestore(
@@ -900,7 +1032,7 @@ Future<PreparedRestoreBundle> _prepareBundle({
   );
   final entries = <String, dynamic>{
     'settings.json': await _descriptor(settings),
-    'database/kelivo.db': await _descriptor(database),
+    'database/jo_aiclient.db': await _descriptor(database),
   };
   if (includeFiles) {
     final upload = File(p.join(extracted.path, 'upload', 'new.txt'));
@@ -920,7 +1052,7 @@ Future<PreparedRestoreBundle> _prepareBundle({
       'includeFiles': includeFiles,
       'secretsIncluded': true,
       'database': {
-        'entry': 'database/kelivo.db',
+        'entry': 'database/jo_aiclient.db',
         'schemaVersion': databaseInfo.schemaVersion,
         'conversationCount': databaseInfo.conversationCount,
         'messageCount': databaseInfo.messageCount,
@@ -999,9 +1131,9 @@ final class _ThrowAfterCandidateDatabaseRename implements RestoreDurability {
   }) async {
     await delegate.renameAndSync(source: source, targetPath: targetPath);
     if (!_didThrow &&
-        p.basename(source.path) == 'kelivo.db' &&
+        p.basename(source.path) == 'jo_aiclient.db' &&
         p.basename(p.dirname(source.path)) == 'database' &&
-        p.equals(targetPath, p.join(appDataDirectory.path, 'kelivo.db')) &&
+        p.equals(targetPath, p.join(appDataDirectory.path, 'jo_aiclient.db')) &&
         source.path.contains('${p.separator}candidate${p.separator}')) {
       _didThrow = true;
       throw StateError('injected_after_candidate_database_rename');

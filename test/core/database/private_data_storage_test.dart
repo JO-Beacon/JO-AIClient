@@ -20,10 +20,10 @@ void main() {
     source = await Directory(p.join(root.path, 'Documents')).create();
     target = Directory(p.join(root.path, 'Support', 'kelivo-data'));
     await File(
-      p.join(source.path, 'kelivo.db'),
+      p.join(source.path, 'jo_aiclient.db'),
     ).writeAsString('original database');
     await File(
-      p.join(source.path, 'kelivo.db-wal'),
+      p.join(source.path, 'jo_aiclient.db-wal'),
     ).writeAsString('committed WAL');
     await Directory(p.join(source.path, 'snapshots 2')).create();
     await File(
@@ -35,7 +35,7 @@ void main() {
     'copies only database state and leaves snapshots and assets in Documents',
     () async {
       await PrivateDataStorage.prepare(source: source, target: target);
-      for (final path in ['kelivo.db', 'kelivo.db-wal']) {
+      for (final path in ['jo_aiclient.db', 'jo_aiclient.db-wal']) {
         expect(
           await File(p.join(target.path, path)).readAsBytes(),
           await File(p.join(source.path, path)).readAsBytes(),
@@ -50,15 +50,15 @@ void main() {
         'old snapshot',
       );
       await File(
-        p.join(target.path, 'kelivo.db'),
+        p.join(target.path, 'jo_aiclient.db'),
       ).writeAsString('new conversations');
       await PrivateDataStorage.prepare(source: source, target: target);
       expect(
-        await File(p.join(target.path, 'kelivo.db')).readAsString(),
+        await File(p.join(target.path, 'jo_aiclient.db')).readAsString(),
         'new conversations',
       );
       expect(
-        await File(p.join(source.path, 'kelivo.db')).readAsString(),
+        await File(p.join(source.path, 'jo_aiclient.db')).readAsString(),
         'original database',
       );
       expect(
@@ -127,8 +127,8 @@ void main() {
     },
   );
   test('copies the family needed to resume interrupted preservation', () async {
-    const family = 'kelivo.db.displaced-1792600000000000';
-    final copy = File(p.join(source.path, family, 'kelivo.db-wal'));
+    const family = 'jo_aiclient.db.displaced-1792600000000000';
+    final copy = File(p.join(source.path, family, 'jo_aiclient.db-wal'));
     await copy.parent.create();
     await copy.writeAsString('retained WAL');
     await File(
@@ -136,7 +136,9 @@ void main() {
     ).writeAsString('{"version":1,"directory":"$family"}');
     await PrivateDataStorage.prepare(source: source, target: target);
     expect(
-      await File(p.join(target.path, family, 'kelivo.db-wal')).readAsString(),
+      await File(
+        p.join(target.path, family, 'jo_aiclient.db-wal'),
+      ).readAsString(),
       'retained WAL',
     );
     expect(await copy.readAsString(), 'retained WAL');
@@ -155,10 +157,13 @@ void main() {
       expect(await target.exists(), isFalse);
       await PrivateDataStorage.prepare(source: source, target: target);
       expect(
-        await File(p.join(target.path, 'kelivo.db-wal')).readAsString(),
+        await File(p.join(target.path, 'jo_aiclient.db-wal')).readAsString(),
         'committed WAL',
       );
-      expect(await File(p.join(source.path, 'kelivo.db-wal')).exists(), isTrue);
+      expect(
+        await File(p.join(source.path, 'jo_aiclient.db-wal')).exists(),
+        isTrue,
+      );
     },
   );
   test(
@@ -177,7 +182,10 @@ void main() {
         ),
       );
       expect(await target.exists(), isFalse);
-      expect(await File(p.join(source.path, 'kelivo.db')).exists(), isTrue);
+      expect(
+        await File(p.join(source.path, 'jo_aiclient.db')).exists(),
+        isTrue,
+      );
     },
   );
   test(
@@ -189,7 +197,7 @@ void main() {
         if (!changed && file.path.contains('.kelivo-data-staging-')) {
           changed = true;
           await File(
-            p.join(source.path, 'kelivo.db'),
+            p.join(source.path, 'jo_aiclient.db'),
           ).writeAsString('new source data');
         }
       };
@@ -203,7 +211,7 @@ void main() {
       );
       expect(await target.exists(), isFalse);
       expect(
-        await File(p.join(source.path, 'kelivo.db')).readAsString(),
+        await File(p.join(source.path, 'jo_aiclient.db')).readAsString(),
         'new source data',
       );
       expect(
@@ -216,7 +224,7 @@ void main() {
     'rejects an existing untracked target without merging or overwriting it',
     () async {
       await target.create(recursive: true);
-      final existing = File(p.join(target.path, 'kelivo.db'));
+      final existing = File(p.join(target.path, 'jo_aiclient.db'));
       await existing.writeAsString('untracked newer database');
       await expectLater(
         PrivateDataStorage.prepare(source: source, target: target),
@@ -242,7 +250,7 @@ void main() {
       );
       expect(await target.exists(), isFalse);
       expect(
-        await File(p.join(source.path, 'kelivo.db')).readAsString(),
+        await File(p.join(source.path, 'jo_aiclient.db')).readAsString(),
         'original database',
       );
     },
@@ -252,7 +260,7 @@ void main() {
     () async {
       final fault = FaultDurability();
       fault.onSync = (file) async {
-        if (p.basename(file.path) == 'kelivo.db') {
+        if (p.basename(file.path) == 'jo_aiclient.db') {
           throw const FileSystemException('injected interruption');
         }
       };
@@ -277,7 +285,7 @@ void main() {
         isEmpty,
       );
       expect(
-        await File(p.join(target.path, 'kelivo.db-wal')).readAsString(),
+        await File(p.join(target.path, 'jo_aiclient.db-wal')).readAsString(),
         'committed WAL',
       );
     },
@@ -360,7 +368,9 @@ void main() {
           appDataDirectory: target,
           allowDatabaseIdentityChange: true,
         );
-        final restored = sqlite.sqlite3.open(p.join(target.path, 'kelivo.db'));
+        final restored = sqlite.sqlite3.open(
+          p.join(target.path, 'jo_aiclient.db'),
+        );
         try {
           expect(
             restored
@@ -379,11 +389,11 @@ void main() {
         }
         expect(await snapshot.readAsBytes(), before);
         expect(
-          await File(p.join(source.path, 'kelivo.db')).readAsString(),
+          await File(p.join(source.path, 'jo_aiclient.db')).readAsString(),
           'original database',
         );
         expect(
-          await File(p.join(source.path, 'kelivo.db-wal')).readAsString(),
+          await File(p.join(source.path, 'jo_aiclient.db-wal')).readAsString(),
           'committed WAL',
         );
         expect(
@@ -485,10 +495,10 @@ void main() {
         p.join(target.parent.path, '.kelivo-data-staging-partial'),
       ).create();
       await File(
-        p.join(partial.path, 'kelivo.db'),
+        p.join(partial.path, 'jo_aiclient.db'),
       ).writeAsString('partial evidence');
       await File(
-        p.join(target.path, 'kelivo.db'),
+        p.join(target.path, 'jo_aiclient.db'),
       ).writeAsString('current database');
       final archive = await StartupDiagnosticsService.createDataArchive(
         appDataDirectory: target.parent,
@@ -498,16 +508,16 @@ void main() {
       final input = InputFileStream(archive.path);
       try {
         final zip = ZipDecoder().decodeStream(input);
-        expect(zip.findFile('data-0/kelivo-data/kelivo.db'), isNotNull);
+        expect(zip.findFile('data-0/kelivo-data/jo_aiclient.db'), isNotNull);
         expect(
-          zip.findFile('data-0/.kelivo-data-staging-partial/kelivo.db'),
+          zip.findFile('data-0/.kelivo-data-staging-partial/jo_aiclient.db'),
           isNotNull,
         );
         expect(
           zip.findFile('data-0/${PrivateDataStorage.recordName}'),
           isNotNull,
         );
-        expect(zip.findFile('data-1/kelivo.db-wal'), isNotNull);
+        expect(zip.findFile('data-1/jo_aiclient.db-wal'), isNotNull);
         expect(zip.findFile('data-1/snapshots 2/kept.zip'), isNotNull);
       } finally {
         await input.close();

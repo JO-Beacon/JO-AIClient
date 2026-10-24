@@ -12,6 +12,7 @@ import '../../core/models/backup.dart';
 import '../../core/models/backup_scope.dart';
 import '../../core/services/backup/backup_cancel_token.dart';
 import '../../features/backup/widgets/backup_scope_tile.dart';
+import '../../features/backup/widgets/backup_encryption_tile.dart';
 import '../../core/providers/backup_provider.dart';
 import '../../core/providers/backup_reminder_provider.dart';
 import '../../core/providers/assistant_group_provider.dart';
@@ -71,6 +72,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
   late TextEditingController _s3UserAgent;
   BackupScope _scope = BackupScope.all;
   bool _includeLocalSettings = false;
+  String? _backupPassword;
   bool _s3PathStyle = true;
 
   @override
@@ -300,6 +302,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
               : await backupProvider.exportToFile(
                   onProgress: onProgress,
                   includeLedger: _includeLocalSettings,
+                  password: _backupPassword,
                 );
           if (!context.mounted) return;
           final exportFile = file!;
@@ -309,7 +312,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                 : l10n.backupPageLocalBackupAction,
             fileName: exportFile.uri.pathSegments.last,
             type: FileType.custom,
-            allowedExtensions: [kelivoCompatible ? 'zip' : 'joaiclient'],
+            allowedExtensions: ['joaiclient', 'kbackup', 'zip'],
           );
           if (savePath == null) return;
 
@@ -370,6 +373,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
           file,
           mode: mode,
           onProgress: onProgress,
+          onPassword: backupPasswordPrompt(context),
         ),
       );
     });
@@ -728,6 +732,13 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                             },
                     ),
                     const SizedBox(height: 8),
+                    BackupEncryptionTile(
+                      password: _backupPassword,
+                      onChanged: busy
+                          ? null
+                          : (value) =>
+                                setState(() => _backupPassword = value),
+                    ),
                     _rowDivider(context),
                     // 本机设置随包开关同时影响本地文件、WebDAV 与 S3。
                     _ItemRow(
@@ -953,6 +964,9 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                                         await backupProvider.restoreFromItem(
                                           it,
                                           mode: mode,
+                                          onPassword: backupPasswordPrompt(
+                                            context,
+                                          ),
                                         );
                                         final msg = backupProvider.message;
                                         if (msg != null && msg != 'Restored') {
@@ -981,7 +995,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                                         .read<BackupReminderProvider>();
                                     await _saveConfig();
                                     final success = await backupProvider
-                                        .backup();
+                                        .backup(password: _backupPassword);
                                     if (!context.mounted) return;
                                     final rawMessage = backupProvider.message;
                                     if (success) {
@@ -1223,6 +1237,9 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                                         await s3BackupProvider.restoreFromItem(
                                           it,
                                           mode: mode,
+                                          onPassword: backupPasswordPrompt(
+                                            context,
+                                          ),
                                         );
                                         final msg = s3BackupProvider.message;
                                         if (msg != null && msg != 'Restored') {
@@ -1251,7 +1268,7 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
                                         .read<BackupReminderProvider>();
                                     await _saveS3Config();
                                     final success = await s3BackupProvider
-                                        .backup();
+                                        .backup(password: _backupPassword);
                                     if (!context.mounted) return;
                                     final rawMessage = s3BackupProvider.message;
                                     if (success) {

@@ -10,6 +10,7 @@ import 'package:Kelivo/core/models/workspace_binding.dart';
 import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/core/services/chat/chat_service.dart';
 import 'package:Kelivo/core/services/workspace/shell_output_buffer.dart';
+import 'package:Kelivo/core/services/workspace/workspace_binding_actions.dart';
 import 'package:Kelivo/core/services/workspace/tool_run_registry.dart';
 import 'package:Kelivo/core/services/workspace/workspace_tools_service.dart';
 import 'package:Kelivo/features/home/services/tool_approval_service.dart';
@@ -1121,15 +1122,17 @@ Future<void> allowAllWorkspaceToolsInChat(
       final conversation = chat.getConversation(id);
       if (conversation != null) {
         final binding = WorkspaceBinding.fromExtras(conversation.extras);
-        if (binding.isBound) {
-          await chat.updateConversationExtras(id, (extras) {
-            return WorkspaceBinding(
-              workspaceId: binding.workspaceId,
-              cwd: binding.cwd,
-              toolsUsed: binding.toolsUsed,
-              allowAll: true,
-            ).applyTo(extras);
-          });
+        final workspaceId = request.workspaceId ?? binding.workspaceId;
+        if (binding.isBound &&
+            workspaceId != null &&
+            binding.workspaceId == workspaceId) {
+          await setConversationWorkspaceAllowAll(
+            chat,
+            conversationId: id,
+            workspaceId: workspaceId,
+            allowAll: true,
+            approvals: approval,
+          );
         }
       }
     } catch (_) {}

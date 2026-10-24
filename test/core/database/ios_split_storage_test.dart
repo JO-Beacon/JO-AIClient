@@ -57,7 +57,7 @@ void main() {
     );
     databaseRoot = await AppDirectories.getAppDataDirectory();
     final repository = ChatDatabaseRepository.open(
-      file: File(p.join(documents.path, 'kelivo.db')),
+      file: File(p.join(documents.path, 'jo_aiclient.db')),
     );
     try {
       await repository.ensureReady();
@@ -102,16 +102,16 @@ void main() {
       );
       final retiredDatabase = await _write(
         documents,
-        'kelivo.db.displaced-1792600000000000/kelivo.db',
+        'jo_aiclient.db.displaced-1792600000000000/jo_aiclient.db',
         [9, 8, 7],
       );
-      final database = File(p.join(documents.path, 'kelivo.db'));
+      final database = File(p.join(documents.path, 'jo_aiclient.db'));
       final before = await database.readAsBytes();
       DeviceStorageProbe.debugOverride = () async =>
           64 * 1024 * 1024 + before.length + 1024;
       await PrivateDataStorage.prepare(source: documents, target: databaseRoot);
       expect(
-        await File(p.join(databaseRoot.path, 'kelivo.db')).readAsBytes(),
+        await File(p.join(databaseRoot.path, 'jo_aiclient.db')).readAsBytes(),
         before,
       );
       expect(await database.readAsBytes(), before);
@@ -134,7 +134,10 @@ void main() {
       );
       expect(
         await Directory(
-          p.join(databaseRoot.path, 'kelivo.db.displaced-1792600000000000'),
+          p.join(
+            databaseRoot.path,
+            'jo_aiclient.db.displaced-1792600000000000',
+          ),
         ).exists(),
         isFalse,
       );
@@ -183,14 +186,14 @@ void main() {
       expect(snapshot.file.parent.path, p.join(documents.path, 'snapshots 2'));
       expect(await snapshot.file.readAsBytes(), before);
       await File(
-        p.join(databaseRoot.path, 'kelivo.db'),
+        p.join(databaseRoot.path, 'jo_aiclient.db'),
       ).rename(p.join(root.path, 'removed-db'));
       await expectLater(
         DatabaseInstallationGate.ensureReady(appDataDirectory: databaseRoot),
         throwsA(isA<StateError>()),
       );
       expect(
-        await File(p.join(databaseRoot.path, 'kelivo.db')).exists(),
+        await File(p.join(databaseRoot.path, 'jo_aiclient.db')).exists(),
         isFalse,
       );
       expect(await snapshot.file.readAsBytes(), before);
@@ -207,9 +210,9 @@ void main() {
         workingDirectory: Directory(p.join(root.path, 'export')),
       );
       final zip = ZipDecoder().decodeBytes(await archive.readAsBytes());
-      expect(zip.findFile('data-0/kelivo.db'), isNotNull);
+      expect(zip.findFile('data-0/jo_aiclient.db'), isNotNull);
       expect(zip.findFile('data-1/images/retained.png')!.content, [1, 2, 3]);
-      expect(zip.findFile('data-1/kelivo.db'), isNotNull);
+      expect(zip.findFile('data-1/jo_aiclient.db'), isNotNull);
     },
   );
 
@@ -222,15 +225,16 @@ void main() {
         'snapshots 2/kelivo-snapshot-1.zip',
         List.filled(203, 2),
       );
-      final oldDatabase = await _write(documents, 'kelivo.db.displaced-123', [
-        1,
-        2,
-      ]);
-      final oldWal = await _write(documents, 'kelivo.db.displaced-123-wal', [
-        3,
-        4,
-        5,
-      ]);
+      final oldDatabase = await _write(
+        documents,
+        'jo_aiclient.db.displaced-123',
+        [1, 2],
+      );
+      final oldWal = await _write(
+        documents,
+        'jo_aiclient.db.displaced-123-wal',
+        [3, 4, 5],
+      );
       await PrivateDataStorage.prepare(source: documents, target: databaseRoot);
       final report = await StorageUsageService.computeReport();
       expect(
@@ -258,7 +262,7 @@ void main() {
       expect(await oldWal.readAsBytes(), [3, 4, 5]);
       var databaseBytes = 0;
       for (final suffix in ['', '-wal', '-shm']) {
-        final file = File(p.join(databaseRoot.path, 'kelivo.db$suffix'));
+        final file = File(p.join(databaseRoot.path, 'jo_aiclient.db$suffix'));
         if (await file.exists()) databaseBytes += await file.length();
       }
       expect(
@@ -277,7 +281,7 @@ void main() {
       final oldImage = await _write(documents, 'images/old.png', [1, 2, 3]);
       await PrivateDataStorage.prepare(source: documents, target: databaseRoot);
       final originalDatabase = await File(
-        p.join(documents.path, 'kelivo.db'),
+        p.join(documents.path, 'jo_aiclient.db'),
       ).readAsBytes();
       final archive = await writeRecoverySnapshot(
         File(p.join(root.path, 'source.zip')),
@@ -344,7 +348,7 @@ void main() {
         isFalse,
       );
       expect(
-        await File(p.join(documents.path, 'kelivo.db')).readAsBytes(),
+        await File(p.join(documents.path, 'jo_aiclient.db')).readAsBytes(),
         originalDatabase,
       );
       expect(await archive.readAsBytes(), sourceArchive);
@@ -365,7 +369,7 @@ Future<File> _write(Directory root, String relative, List<int> bytes) async {
 }
 
 List<String> _ids(Directory root) {
-  final db = sqlite.sqlite3.open(p.join(root.path, 'kelivo.db'));
+  final db = sqlite.sqlite3.open(p.join(root.path, 'jo_aiclient.db'));
   try {
     return db
         .select('SELECT id FROM conversation_rows ORDER BY id')

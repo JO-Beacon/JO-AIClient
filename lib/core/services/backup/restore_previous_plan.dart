@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../../database/database_names.dart';
 import 'restore_receipt.dart';
 
 const _componentOrder = [RestoreComponent.database, RestoreComponent.assets];
@@ -107,7 +108,8 @@ final class RestorePreviousDatabasePlan {
     required this.descriptor,
   });
 
-  static const databasePath = 'database/kelivo.db';
+  static const databasePath = 'database/${DatabaseNames.current}';
+  static const legacyDatabasePath = 'database/${DatabaseNames.legacy}';
 
   final RestorePreviousDatabaseState state;
   final RestoreFileDescriptor? descriptor;
@@ -139,7 +141,8 @@ final class RestorePreviousDatabasePlan {
       'path',
       'descriptor',
     }, 'restore_previous_database');
-    if (json['state'] is! String || json['path'] != databasePath) {
+    if (json['state'] is! String ||
+        (json['path'] != databasePath && json['path'] != legacyDatabasePath)) {
       throw const FormatException('restore_previous_database');
     }
     return switch (json['state']) {

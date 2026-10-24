@@ -30,6 +30,7 @@ import '../../../core/services/backup/data_sync.dart';
 import '../../../core/services/backup/backup_progress_timeline.dart';
 import '../widgets/backup_progress_dialog.dart';
 import '../widgets/backup_scope_tile.dart';
+import '../widgets/backup_encryption_tile.dart';
 import '../widgets/storage_migration_notice_button.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../shared/widgets/ios_switch.dart';
@@ -61,6 +62,7 @@ class _BackupPageState extends State<BackupPage> {
   List<BackupFileItem> _remote = const <BackupFileItem>[];
   List<BackupFileItem> _remoteS3 = const <BackupFileItem>[];
   bool _includeLocalSettings = false;
+  String? _backupPassword;
 
   @override
   void initState() {
@@ -346,6 +348,12 @@ class _BackupPageState extends State<BackupPage> {
                         await settings.setS3Config(newS3Cfg);
                         s3Vm.updateConfig(newS3Cfg);
                       },
+                    ),
+                    _iosDivider(context),
+                    BackupEncryptionTile(
+                      password: _backupPassword,
+                      onChanged: (value) =>
+                          setState(() => _backupPassword = value),
                     ),
                     _iosDivider(context),
                     // 本机设置随包开关同时影响本地文件、WebDAV 与 S3。
@@ -667,6 +675,10 @@ class _BackupPageState extends State<BackupPage> {
                                                       item,
                                                       mode: mode,
                                                       onProgress: onProgress,
+                                                      onPassword:
+                                                          backupPasswordPrompt(
+                                                            context,
+                                                          ),
                                                     ),
                                               );
                                             } catch (e) {
@@ -743,6 +755,9 @@ class _BackupPageState extends State<BackupPage> {
                                           item,
                                           mode: mode,
                                           onProgress: onProgress,
+                                          onPassword: backupPasswordPrompt(
+                                            context,
+                                          ),
                                         ),
                                       );
                                     } catch (e) {
@@ -789,8 +804,10 @@ class _BackupPageState extends State<BackupPage> {
                                   .read<BackupReminderProvider>();
                               final success = await _runWithExportingOverlay(
                                 context,
-                                (onProgress) =>
-                                    vm.backup(onProgress: onProgress),
+                                (onProgress) => vm.backup(
+                                  onProgress: onProgress,
+                                  password: _backupPassword,
+                                ),
                               );
                               if (!context.mounted) return;
                               final rawMessage = vm.message;
@@ -1082,6 +1099,10 @@ class _BackupPageState extends State<BackupPage> {
                                                       item,
                                                       mode: mode,
                                                       onProgress: onProgress,
+                                                      onPassword:
+                                                          backupPasswordPrompt(
+                                                            context,
+                                                          ),
                                                     ),
                                               );
                                             } catch (e) {
@@ -1155,6 +1176,9 @@ class _BackupPageState extends State<BackupPage> {
                                           item,
                                           mode: mode,
                                           onProgress: onProgress,
+                                          onPassword: backupPasswordPrompt(
+                                            context,
+                                          ),
                                         ),
                                       );
                                     } catch (e) {
@@ -1201,7 +1225,10 @@ class _BackupPageState extends State<BackupPage> {
                               final success = await _runWithExportingOverlay(
                                 context,
                                 (onProgress) =>
-                                    s3Vm.backup(onProgress: onProgress),
+                                    s3Vm.backup(
+                                      onProgress: onProgress,
+                                      password: _backupPassword,
+                                    ),
                               );
                               if (!context.mounted) return;
                               final rawMessage = s3Vm.message;
@@ -1411,12 +1438,14 @@ class _BackupPageState extends State<BackupPage> {
         (onProgress) => vm.exportToFile(
           onProgress: onProgress,
           includeLedger: _includeLocalSettings,
+          password: _backupPassword,
         ),
         cancellableTask: (onProgress, cancelToken) async {
           file = await vm.exportToFile(
             onProgress: onProgress,
             cancelToken: cancelToken,
             includeLedger: _includeLocalSettings,
+            password: _backupPassword,
           );
           if (!context.mounted) return;
           final exportFile = file!;
@@ -1483,7 +1512,7 @@ class _BackupPageState extends State<BackupPage> {
     final l10n = AppLocalizations.of(context)!;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: [joaiclient ? 'joaiclient' : 'zip'],
+      allowedExtensions: ['joaiclient', 'kbackup', 'zip'],
     );
     final path = result?.files.single.path;
     if (path == null) return;
@@ -1500,12 +1529,14 @@ class _BackupPageState extends State<BackupPage> {
           File(path),
           mode: mode,
           onProgress: onProgress,
+          onPassword: backupPasswordPrompt(context),
         ),
         cancellableTask: (onProgress, cancelToken) => vm.restoreFromLocalFile(
           File(path),
           mode: mode,
           onProgress: onProgress,
           cancelToken: cancelToken,
+          onPassword: backupPasswordPrompt(context),
         ),
       );
     } catch (error) {

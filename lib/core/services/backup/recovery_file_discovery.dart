@@ -1,5 +1,6 @@
 import 'dart:io';
 import '../../database/database_family_preserver.dart';
+import '../../database/database_names.dart';
 import 'dart:convert';
 import 'dart:isolate';
 import 'package:archive/archive_io.dart';
@@ -25,7 +26,7 @@ abstract final class RecoveryFileDiscovery {
   static bool isDatabaseCopy(String name) =>
       !_databaseSidecars.any(name.endsWith) &&
       RegExp(
-        r'^kelivo(?:[ _-][0-9]+| \([0-9]+\))?\.db(?:\.displaced-[^/]+|\.premigrate-[^/]+|\.previous)?$',
+        r'^(?:jo_aiclient|kelivo)(?:[ _-][0-9]+| \([0-9]+\))?\.db(?:\.displaced-[^/]+|\.premigrate-[^/]+|\.previous)?$',
         caseSensitive: false,
       ).hasMatch(name);
 
@@ -105,22 +106,34 @@ abstract final class RecoveryFileDiscovery {
       await for (final entry in _children(directory, onError)) {
         if (entry is Directory &&
             DatabaseFamilyPreserver.isCopyDirectory(p.basename(entry.path))) {
-          final database = File(p.join(entry.path, 'kelivo.db'));
-          if (await FileSystemEntity.type(database.path, followLinks: false) ==
-              FileSystemEntityType.file) {
-            files.add(database);
-          }
+          final database = await _mainFile(entry);
+          if (database != null) files.add(database);
           continue;
         }
         if (entry is! File || !isDatabaseCopy(p.basename(entry.path))) continue;
         if (!includeActiveDatabase &&
-            p.equals(entry.path, p.join(root.path, 'kelivo.db'))) {
+            (p.equals(entry.path, p.join(root.path, DatabaseNames.current)) ||
+                p.equals(
+                  entry.path,
+                  p.join(root.path, DatabaseNames.legacy),
+                ))) {
           continue;
         }
         files.add(entry);
       }
     }
     return files;
+  }
+
+  static Future<File?> _mainFile(Directory directory) async {
+    for (final base in [DatabaseNames.current, DatabaseNames.legacy]) {
+      final file = File(p.join(directory.path, base));
+      if (await FileSystemEntity.type(file.path, followLinks: false) ==
+          FileSystemEntityType.file) {
+        return file;
+      }
+    }
+    return null;
   }
 
   static Stream<FileSystemEntity> _children(
@@ -147,7 +160,8 @@ abstract final class RecoveryFileDiscovery {
       }
       final value = jsonDecode(utf8.decode(entry.readBytes()!));
       if (value is! Map ||
-          value['format'] != 'kelivo-backup' ||
+          (value['format'] != 'jo-aiclient-backup' &&
+              value['format'] != 'kelivo-backup') ||
           value['database'] is! Map) {
         return null;
       }
@@ -178,7 +192,8 @@ abstract final class RecoveryFileDiscovery {
           final name = p.basename(entry.path);
           if (entry is File &&
               (isDatabaseFamilyFile(name) ||
-                  name.startsWith('kelivo.db-') ||
+                  name.startsWith('${DatabaseNames.current}-') ||
+                  name.startsWith('${DatabaseNames.legacy}-') ||
                   name == DatabaseFamilyPreserver.pendingName ||
                   isSnapshotArchive(name) ||
                   name.startsWith('database_installation_receipt_') ||

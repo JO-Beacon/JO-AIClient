@@ -209,7 +209,8 @@ void main() {
         done = true;
       },
     );
-    for (var i = 0; i < 200 && !done; i++) {
+    // 文件导入使用真实时钟。保留完成断言，但允许整套测试并发时的文件系统争用。
+    for (var i = 0; i < 1000 && !done; i++) {
       await tester.pump(const Duration(milliseconds: 10));
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 5)),

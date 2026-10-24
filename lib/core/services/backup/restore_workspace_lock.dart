@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../database/database_names.dart';
 import 'restore_durability.dart';
 
 final class RestoreWorkspaceLock {
@@ -512,7 +513,8 @@ final class RestoreWorkspaceLock {
         await for (final databaseEntry in Directory(
           entity.path,
         ).list(followLinks: false)) {
-          if (p.basename(databaseEntry.path) != 'kelivo.db' ||
+          if ((p.basename(databaseEntry.path) != DatabaseNames.current &&
+                  p.basename(databaseEntry.path) != DatabaseNames.legacy) ||
               await FileSystemEntity.type(
                     databaseEntry.path,
                     followLinks: false,

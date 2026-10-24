@@ -30,4 +30,4 @@ tool/proot_checksums.txt text eol=lf
 
 # dependencies/ 下的第三方 fork 保持上游原样：不做换行转换，
 # 也不纳入本仓库的换行约定。
-dependencies/** -text
+dependencies/** -text -eol

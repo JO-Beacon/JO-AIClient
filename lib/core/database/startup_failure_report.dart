@@ -332,6 +332,26 @@ final class StartupFailureReport {
   final StartupFailureEnvironment? environment;
   final Map<String, String> restoreDetails;
 
+  /// 旧目录移动被挡住时，可以在释放目录后继续同一次已准备好的还原。
+  /// 只对还原启动阶段、准备已提交、且确实是 Windows 目录移动失败的情况开放。
+  String? get blockedRestoreDirectory {
+    if (stage != StartupFailureStage.restoreGate ||
+        restoreDetails['restore stage'] != 'preservingCurrentData' ||
+        restoreDetails['last observed receipt state'] != 'prepared') {
+      return null;
+    }
+    for (final cause in causes) {
+      final details = cause.details;
+      if (details['operation'] == 'MoveFileExW' &&
+          details['source type'] == 'directory' &&
+          const {'5', '32', '33'}.contains(details['Windows error code'])) {
+        final path = details['source path'];
+        if (path != null && path.isNotEmpty) return path;
+      }
+    }
+    return null;
+  }
+
   StartupFailureReport withEnvironment(StartupFailureEnvironment value) =>
       StartupFailureReport(
         stage: stage,

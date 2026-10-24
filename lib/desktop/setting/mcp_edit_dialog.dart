@@ -1,3 +1,5 @@
+import '../../features/mcp/widgets/mcp_presentation_fields.dart';
+import '../../core/models/mcp_presentation.dart';
 import 'dart:math' as math;
 import '../../core/services/mcp/stdio_arguments.dart';
 import '../../features/mcp/widgets/mcp_environment_picker.dart';
@@ -55,6 +57,8 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
 
   late final McpOAuthFormController _oauth;
   bool _enabled = true;
+  McpServerIcon? _icon;
+  String? _groupId;
   final _nameCtrl = TextEditingController();
   McpTransportType _transport = McpTransportType.http;
   final _urlCtrl = TextEditingController();
@@ -76,6 +80,11 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
     );
     if (isEdit) {
       final server = context.read<McpProvider>().getById(widget.serverId!)!;
+      final presentation = context.read<McpProvider>().presentationFor(
+        server.id,
+      );
+      _icon = presentation.icon;
+      _groupId = presentation.groupId;
       _enabled = server.enabled;
       _nameCtrl.text = server.name;
       _transport = server.transport;
@@ -123,13 +132,21 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
     super.dispose();
   }
 
+  Future<void> _savePresentation(McpProvider mcp, String id) async {
+    await mcp.setServerIcon(id, _icon);
+    final groupId = mcp.groups.any((g) => g.id == _groupId) ? _groupId : null;
+    await mcp.moveServersToGroup({id}, groupId);
+  }
+
   Future<void> _save() async {
+    var savedId = widget.serverId;
     final l10n = AppLocalizations.of(context)!;
     final mcp = context.read<McpProvider>();
     // 内置服务器：只允许切换启用状态，不允许其他修改
     if (isEdit && _transport == McpTransportType.inmemory) {
       final old = mcp.getById(widget.serverId!)!;
       await mcp.updateServerMetadata(old.copyWith(enabled: _enabled));
+      await _savePresentation(mcp, savedId!);
       if (mounted) Navigator.of(context).maybePop();
       return;
     }
@@ -197,7 +214,7 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
           ),
         );
       } else {
-        await mcp.addServer(
+        savedId = await mcp.addServer(
           enabled: _enabled,
           name: name,
           transport: McpTransportType.stdio,
@@ -249,7 +266,7 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
           replaceOAuthSettings: true,
         );
       } else {
-        await mcp.addServer(
+        savedId = await mcp.addServer(
           enabled: _enabled,
           name: name,
           transport: _transport,
@@ -260,6 +277,7 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
         );
       }
     }
+    await _savePresentation(mcp, savedId!);
     if (mounted) Navigator.of(context).maybePop();
   }
 
@@ -335,6 +353,17 @@ class _DesktopMcpEditDialogState extends State<_DesktopMcpEditDialog>
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 10),
+        McpPresentationFields(
+          desktop: true,
+          server: isEdit
+              ? context.read<McpProvider>().getById(widget.serverId!)
+              : null,
+          icon: _icon,
+          groupId: _groupId,
+          onIconChanged: (value) => setState(() => _icon = value),
+          onGroupChanged: (value) => setState(() => _groupId = value),
         ),
         const SizedBox(height: 10),
         // 名称行：内置服务器为只读文本，其他可编辑

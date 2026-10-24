@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../services/backup/restore_durability.dart';
+import 'database_names.dart';
 
 /// Keeps a complete, immutable SQLite family before retiring any live member.
 /// Callers hold the business lease. The pending record is replayed before any
@@ -13,12 +14,14 @@ import '../services/backup/restore_durability.dart';
 abstract final class DatabaseFamilyPreserver {
   static const pendingName = '.kelivo_database_preservation.json';
   static const manifestName = '.kelivo_database_family.json';
-  static const directoryPrefix = 'kelivo.db.displaced-';
+  static const directoryPrefix = '${DatabaseNames.current}.displaced-';
+  static const legacyDirectoryPrefix = '${DatabaseNames.legacy}.displaced-';
   static const suffixes = ['', '-wal', '-shm', '-journal'];
   static const failedRecoveryPhase = 'retiring failed database preservation';
 
-  static bool isCopyDirectory(String name) =>
-      RegExp(r'^kelivo\.db\.displaced-[0-9]+$').hasMatch(name);
+  static bool isCopyDirectory(String name) => RegExp(
+    '^(?:${RegExp.escape(DatabaseNames.current)}|${RegExp.escape(DatabaseNames.legacy)})\\.displaced-[0-9]+\$',
+  ).hasMatch(name);
 
   static Future<String?> preserve(
     File source, {
@@ -47,7 +50,7 @@ abstract final class DatabaseFamilyPreserver {
     for (final suffix in entries.keys) {
       final copy = await File(
         '${source.path}$suffix',
-      ).copy(p.join(staged.path, 'kelivo.db$suffix'));
+      ).copy(p.join(staged.path, '${DatabaseNames.current}$suffix'));
       await durability.restrictFile(copy);
       await durability.syncFile(copy, fullBarrier: true);
       await _requireMatch(copy, entries[suffix]);
@@ -73,7 +76,7 @@ abstract final class DatabaseFamilyPreserver {
       'directory': p.basename(destination.path),
     }, durability);
     await resume(root, durability: durability);
-    return p.join(destination.path, 'kelivo.db');
+    return p.join(destination.path, DatabaseNames.current);
   }
 
   static Future<void> resume(
@@ -95,7 +98,7 @@ abstract final class DatabaseFamilyPreserver {
     for (final suffix in entries.keys.cast<String>()) {
       final source = File(p.join(root.path, '$sourceName$suffix'));
       final original = File(
-        p.join(directory.path, 'original-kelivo.db$suffix'),
+        p.join(directory.path, 'original-$sourceName$suffix'),
       );
       final sourceType = await FileSystemEntity.type(
         source.path,
@@ -174,7 +177,7 @@ abstract final class DatabaseFamilyPreserver {
     if (!retiring) return;
     final names = <String>{};
     final pattern = RegExp(
-      r'^(kelivo\.db(?:\.previous|\.premigrate-v[0-9]+)?)(?:-(?:wal|shm|journal))?$',
+      r'^((?:jo_aiclient|kelivo)\.db(?:\.previous|\.premigrate-v[0-9]+)?)(?:-(?:wal|shm|journal))?$',
     );
     await for (final entry in root.list(followLinks: false)) {
       final match = pattern.firstMatch(p.basename(entry.path));
@@ -188,7 +191,8 @@ abstract final class DatabaseFamilyPreserver {
   /// Every reader of a published family checks all journals against its
   /// manifest, rather than accepting a readable main file with a missing WAL.
   static Future<void> validateSource(File source) async {
-    if (p.basename(source.path) == 'kelivo.db' &&
+    final name = p.basename(source.path);
+    if ((name == DatabaseNames.current || name == DatabaseNames.legacy) &&
         isCopyDirectory(p.basename(source.parent.path))) {
       await _validate(source.parent);
     }
@@ -204,7 +208,7 @@ abstract final class DatabaseFamilyPreserver {
     final entries = manifest['entries'];
     if (name is! String ||
         !RegExp(
-          r'^kelivo\.db(?:\.previous|\.premigrate-v[0-9]+)?$',
+          r'^(?:jo_aiclient|kelivo)\.db(?:\.previous|\.premigrate-v[0-9]+)?$',
         ).hasMatch(name) ||
         entries is! Map ||
         entries.isEmpty ||
@@ -213,11 +217,22 @@ abstract final class DatabaseFamilyPreserver {
     }
     for (final suffix in entries.keys.cast<String>()) {
       await _requireMatch(
-        File(p.join(directory.path, 'kelivo.db$suffix')),
+        await _familyFile(directory, suffix),
         entries[suffix],
       );
     }
     return manifest;
+  }
+
+  static Future<File> _familyFile(Directory directory, String suffix) async {
+    for (final base in [DatabaseNames.current, DatabaseNames.legacy]) {
+      final file = File(p.join(directory.path, '$base$suffix'));
+      if (await FileSystemEntity.type(file.path, followLinks: false) ==
+          FileSystemEntityType.file) {
+        return file;
+      }
+    }
+    return File(p.join(directory.path, '${DatabaseNames.current}$suffix'));
   }
 
   static Future<Map<String, Object>> _fingerprint(File file) async => {

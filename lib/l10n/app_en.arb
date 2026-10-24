@@ -755,6 +755,43 @@
   "mcpAssistantSheetTitle": "MCP Servers",
   "mcpAssistantSheetSubtitle": "Servers enabled for this assistant",
   "mcpAssistantSheetSelectAll": "Select All",
+  "mcpPageStatusFailed": "Connection failed",
+  "mcpPageCardToolsShort": "Tools {enabled}/{total}",
+  "@mcpPageCardToolsShort": {
+    "placeholders": {
+      "enabled": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mcpPageSelectServer": "Select {name}",
+  "@mcpPageSelectServer": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpIconTitle": "Server icon",
+  "mcpIconInvalid": "Unable to use this image. Choose a valid image up to 10 MB.",
+  "mcpSelectServers": "Select servers",
+  "mcpMoveToGroup": "Move to group",
+  "mcpRenameGroup": "Rename group",
+  "mcpDeleteGroupConfirm": "Servers in this group will be moved to Other. The servers will not be deleted.",
+  "mcpGroupNameInvalid": "Use a nonempty, unique group name.",
+  "mcpEnableSelected": "Enable",
+  "mcpDisableSelected": "Disable",
+  "mcpDeleteSelectedConfirm": "Delete {count} selected servers?",
+  "@mcpDeleteSelectedConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mcpAssistantSheetClearAll": "Clear",
   "backupPageTitle": "Backup & Restore",
   "backupPageWebDavTab": "WebDAV",
@@ -790,6 +827,9 @@
     }
   },
   "backupRestoreFailureTitle": "Restore requires attention",
+  "backupRestoreDirectoryBlockedTitle": "Restore is waiting for a folder",
+  "backupRestoreDirectoryBlockedContent": "Windows could not move the folder below. Close terminals, editors, or other programs using it, then continue restoring. If it is still blocked, check that your account can move the folder. Your restore progress has been kept.",
+  "backupRestoreContinueButton": "Continue restore",
   "backupRestoreFailureContent": "JO-AIClient could not verify a complete old or new data set, so chat data was not opened. Close JO-AIClient and try again. If this repeats, keep the diagnostic code for support.",
   "backupRestoreBusinessLeaseUnavailableTitle": "JO-AIClient is already running",
   "backupRestoreBusinessLeaseUnavailableContent": "JO-AIClient's data is still in use by another app process. Close any other JO-AIClient window, then restart. Your chat data has not been opened by this process.",
@@ -825,6 +865,36 @@
   "startupRecoveryExportButton": "Export a copy of my data",
   "startupRecoveryResetButton": "Reset data",
   "startupRecoveryBusy": "Working…",
+  "databaseConflictTitle": "Two databases found",
+  "databaseConflictBody": "Both jo_aiclient.db and kelivo.db exist. Choose the one to keep. The other database will not be deleted; it will be moved as a whole to {directory}.",
+  "@databaseConflictBody": {
+    "placeholders": {
+      "directory": {
+        "type": "String"
+      }
+    }
+  },
+  "databaseConflictUse": "Use this",
+  "databaseConflictExit": "Quit app",
+  "databaseConflictModified": "Modified",
+  "databaseConflictSize": "Size",
+  "databaseConflictQuarantineFailed": "Could not move the other database. Nothing was changed. Check file permissions and try again.",
+  "databaseConflictUnreadable": "Unreadable",
+  "backupEncryptionTitle": "Encrypt backups",
+  "backupEncryptionOffHint": "Unencrypted backups can be read by anyone with the file.",
+  "backupEncryptionOnHint": "Backups are encrypted while this page stays open.",
+  "backupEncryptionPassword": "Password",
+  "backupEncryptionConfirmPassword": "Confirm password",
+  "backupEncryptionPasswordHint": "Keep this password safe. If you lose it, the backup cannot be restored. It is kept only while this page is open.",
+  "backupEncryptionMismatch": "Passwords do not match.",
+  "backupEncryptionShowPassword": "Show password",
+  "backupEncryptionHidePassword": "Hide password",
+  "backupEncryptionUnlockTitle": "Encrypted backup",
+  "backupEncryptionUnlockHint": "Enter the password used to create this backup.",
+  "backupEncryptionUnlock": "Unlock",
+  "backupEncryptionFailed": "The password is incorrect, or the backup is damaged. Try again or cancel.",
+  "backupProgressEncrypting": "Encrypting backup",
+  "backupProgressDecrypting": "Decrypting backup",
   "startupRecoveryExportSucceeded": "A copy of your data was saved.",
   "startupRecoveryExportFailed": "Could not export a copy of your data.",
   "startupRecoveryRepairFailed": "Repair could not fix this. Export a copy of your data, then reset.",

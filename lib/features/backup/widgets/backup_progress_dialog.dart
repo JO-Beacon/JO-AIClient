@@ -269,6 +269,8 @@ IconData backupPhaseIcon(BackupPhase phase) {
     // JO-AIClient 独有的阶段：封装 .joaiclient 容器与恢复写回。
     BackupPhase.wrapping => Lucide.Box,
     BackupPhase.restoring => Lucide.RotateCcw,
+    BackupPhase.encrypting => Lucide.Lock,
+    BackupPhase.decrypting => Lucide.KeyRound,
   };
 }
 
@@ -293,6 +295,8 @@ String backupPhaseLabel(AppLocalizations l10n, BackupPhase phase) {
     // JO-AIClient 独有的阶段：封装 .joaiclient 容器与恢复写回。
     BackupPhase.wrapping => l10n.backupProgressWrapping,
     BackupPhase.restoring => l10n.backupProgressRestoring,
+    BackupPhase.encrypting => l10n.backupProgressEncrypting,
+    BackupPhase.decrypting => l10n.backupProgressDecrypting,
   };
 }
 

@@ -566,12 +566,26 @@ class ChatController extends ChangeNotifier {
   Future<bool> refreshTimelineAfterMutation({
     Set<String> removedRevisionIds = const <String>{},
     List<String>? activePathIds,
+    bool forceReload = false,
   }) async {
     final conversation = _currentConversation;
     if (conversation == null) return false;
-    if (activePathIds != null &&
+    debugPrint(
+      'conversation_tree_timeline_refresh: force=$forceReload '
+      'removed=${removedRevisionIds.length} '
+      'activePath=${activePathIds?.length} window=${_messages.length} '
+      'start=$_loadedStartIndex moreBefore=$hasMoreBefore '
+      'moreAfter=$hasMoreAfter',
+    );
+    if (!forceReload &&
+        activePathIds != null &&
         _removeMessagesFromWindow(removedRevisionIds, activePathIds)) {
       if (_currentConversation?.id != conversation.id) return false;
+      debugPrint(
+        'conversation_tree_timeline_refresh: inPlace=true '
+        'window=${_messages.length} start=$_loadedStartIndex '
+        'moreBefore=$hasMoreBefore moreAfter=$hasMoreAfter',
+      );
       notifyListeners();
       return true;
     }
@@ -595,6 +609,11 @@ class ChatController extends ChangeNotifier {
         : await _fetchCompleteTimeline(conversation.id);
     if (_currentConversation?.id != conversation.id) return false;
     _replaceWindow(_withoutBackfilledHead(page, previousSlotIds));
+    debugPrint(
+      'conversation_tree_timeline_refresh: inPlace=false '
+      'window=${_messages.length} start=$_loadedStartIndex '
+      'moreBefore=$hasMoreBefore moreAfter=$hasMoreAfter',
+    );
     notifyListeners();
     return page != null;
   }

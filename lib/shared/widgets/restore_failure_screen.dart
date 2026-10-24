@@ -37,6 +37,7 @@ class RestoreFailureScreen extends StatefulWidget {
     super.key,
     required this.report,
     required this.restart,
+    this.retryRestore,
     this.appDataDirectory,
     this.businessLease,
     this.appVersionLoader,
@@ -45,6 +46,9 @@ class RestoreFailureScreen extends StatefulWidget {
 
   final StartupFailureReport report;
   final Future<void> Function() restart;
+
+  /// 旧目录被占用时重新尝试同一次已准备好的还原。
+  final Future<void> Function()? retryRestore;
 
   /// 当提供该参数且失败不是租约冲突时，屏幕会提供文件级恢复操作，
   /// 确保失败关闭的启动不会变成永久性锁死。
@@ -95,6 +99,12 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
   bool get _isEmptyDatabase =>
       _report.diagnosticCode == 'database_empty_with_recovery_copies';
 
+  /// Windows 移动旧目录被占用时，报告里会带上被挡住的路径。
+  String? get _blockedDirectory => _report.blockedRestoreDirectory;
+
+  bool get _canContinueRestore =>
+      _blockedDirectory != null && widget.retryRestore != null;
+
   @override
   void initState() {
     super.initState();
@@ -112,6 +122,7 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
         appDataDirectory: widget.appDataDirectory,
         appVersion: loaded.version,
         buildNumber: loaded.build,
+        inspectDatabase: _blockedDirectory == null,
       );
       report = _report.withEnvironment(environment);
     } catch (_) {
@@ -148,7 +159,7 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
 
   Future<void> _loadLocalCopies() async {
     final directory = widget.appDataDirectory;
-    if (directory == null) return;
+    if (directory == null || _blockedDirectory != null) return;
     try {
       final copies = await LocalCopyCatalog(
         appDataDirectory: directory,
@@ -617,7 +628,7 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
       _restartFailed = false;
     });
     try {
-      await widget.restart();
+      await (_canContinueRestore ? widget.retryRestore! : widget.restart)();
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -673,7 +684,9 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        _databaseTooNew
+                        _blockedDirectory != null
+                            ? l10n.backupRestoreDirectoryBlockedTitle
+                            : _databaseTooNew
                             ? l10n.startupDatabaseUpdateRequiredTitle
                             : isLeaseUnavailable
                             ? l10n.backupRestoreBusinessLeaseUnavailableTitle
@@ -684,7 +697,9 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        _databaseTooNew
+                        _blockedDirectory != null
+                            ? l10n.backupRestoreDirectoryBlockedContent
+                            : _databaseTooNew
                             ? l10n.startupDatabaseUpdateRequiredContent
                             : isLeaseUnavailable
                             ? l10n.backupRestoreBusinessLeaseUnavailableContent
@@ -694,6 +709,10 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
                           height: 1.45,
                         ),
                       ),
+                      if (_blockedDirectory != null) ...[
+                        const SizedBox(height: 12),
+                        SelectableText(_blockedDirectory!),
+                      ],
                       const SizedBox(height: 20),
                       _DiagnosticsCard(
                         report: _report,
@@ -734,12 +753,17 @@ class _RestoreFailureScreenState extends State<RestoreFailureScreen> {
                                     ),
                                   )
                                 : const Icon(Icons.restart_alt_rounded),
-                            label: Text(l10n.backupRestoreFailureRestartButton),
+                            label: Text(
+                              _canContinueRestore
+                                  ? l10n.backupRestoreContinueButton
+                                  : l10n.backupRestoreFailureRestartButton,
+                            ),
                           ),
                         ),
                       ],
                       if (widget.appDataDirectory != null &&
-                          !isLeaseUnavailable) ...[
+                          !isLeaseUnavailable &&
+                          _blockedDirectory == null) ...[
                         const SizedBox(height: 8),
                         Divider(color: colors.outlineVariant),
                         const SizedBox(height: 8),

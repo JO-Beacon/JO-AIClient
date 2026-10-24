@@ -41,7 +41,8 @@ void main() {
   test('在压缩输入读完之前就已经写出，并且能中途停下', () {
     final data = Uint8List(16 * 1024 * 1024);
     final bytes = ZipEncoder().encode(
-      Archive()..addFile(ArchiveFile('database/kelivo.db', data.length, data)),
+      Archive()
+        ..addFile(ArchiveFile('database/jo_aiclient.db', data.length, data)),
     );
     final decoder = ZipDecoder();
     final archive = decoder.decodeBytes(bytes);

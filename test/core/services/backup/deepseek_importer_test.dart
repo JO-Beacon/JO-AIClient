@@ -112,7 +112,7 @@ void main() {
   setUp(() async {
     root = await Directory.systemTemp.createTemp('kelivo_deepseek_');
     PathProviderPlatform.instance = _FakePathProvider(root.path);
-    final databaseFile = File('${root.path}/kelivo.db');
+    final databaseFile = File('${root.path}/jo_aiclient.db');
     database = AppDatabase.open(file: databaseFile);
     businessRepository = BusinessRepository(database);
     preferences = BusinessPreferences(businessRepository);

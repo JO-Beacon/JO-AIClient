@@ -3406,6 +3406,84 @@ abstract class AppLocalizations {
   /// **'Select All'**
   String get mcpAssistantSheetSelectAll;
 
+  /// No description provided for @mcpPageStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed'**
+  String get mcpPageStatusFailed;
+
+  /// No description provided for @mcpPageCardToolsShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools {enabled}/{total}'**
+  String mcpPageCardToolsShort(int enabled, int total);
+
+  /// No description provided for @mcpPageSelectServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Select {name}'**
+  String mcpPageSelectServer(String name);
+
+  /// No description provided for @mcpIconTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Server icon'**
+  String get mcpIconTitle;
+
+  /// No description provided for @mcpIconInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to use this image. Choose a valid image up to 10 MB.'**
+  String get mcpIconInvalid;
+
+  /// No description provided for @mcpSelectServers.
+  ///
+  /// In en, this message translates to:
+  /// **'Select servers'**
+  String get mcpSelectServers;
+
+  /// No description provided for @mcpMoveToGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to group'**
+  String get mcpMoveToGroup;
+
+  /// No description provided for @mcpRenameGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get mcpRenameGroup;
+
+  /// No description provided for @mcpDeleteGroupConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers in this group will be moved to Other. The servers will not be deleted.'**
+  String get mcpDeleteGroupConfirm;
+
+  /// No description provided for @mcpGroupNameInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a nonempty, unique group name.'**
+  String get mcpGroupNameInvalid;
+
+  /// No description provided for @mcpEnableSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get mcpEnableSelected;
+
+  /// No description provided for @mcpDisableSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get mcpDisableSelected;
+
+  /// No description provided for @mcpDeleteSelectedConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {count} selected servers?'**
+  String mcpDeleteSelectedConfirm(int count);
+
   /// No description provided for @mcpAssistantSheetClearAll.
   ///
   /// In en, this message translates to:
@@ -3532,6 +3610,24 @@ abstract class AppLocalizations {
   /// **'Restore requires attention'**
   String get backupRestoreFailureTitle;
 
+  /// No description provided for @backupRestoreDirectoryBlockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore is waiting for a folder'**
+  String get backupRestoreDirectoryBlockedTitle;
+
+  /// No description provided for @backupRestoreDirectoryBlockedContent.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows could not move the folder below. Close terminals, editors, or other programs using it, then continue restoring. If it is still blocked, check that your account can move the folder. Your restore progress has been kept.'**
+  String get backupRestoreDirectoryBlockedContent;
+
+  /// No description provided for @backupRestoreContinueButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue restore'**
+  String get backupRestoreContinueButton;
+
   /// No description provided for @backupRestoreFailureContent.
   ///
   /// In en, this message translates to:
@@ -3657,6 +3753,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Working…'**
   String get startupRecoveryBusy;
+
+  /// No description provided for @databaseConflictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two databases found'**
+  String get databaseConflictTitle;
+
+  /// No description provided for @databaseConflictBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Both jo_aiclient.db and kelivo.db exist. Choose the one to keep. The other database will not be deleted; it will be moved as a whole to {directory}.'**
+  String databaseConflictBody(String directory);
+
+  /// No description provided for @databaseConflictUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this'**
+  String get databaseConflictUse;
+
+  /// No description provided for @databaseConflictExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit app'**
+  String get databaseConflictExit;
+
+  /// No description provided for @databaseConflictModified.
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get databaseConflictModified;
+
+  /// No description provided for @databaseConflictSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get databaseConflictSize;
+
+  /// No description provided for @databaseConflictQuarantineFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not move the other database. Nothing was changed. Check file permissions and try again.'**
+  String get databaseConflictQuarantineFailed;
+
+  /// No description provided for @databaseConflictUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unreadable'**
+  String get databaseConflictUnreadable;
+
+  /// No description provided for @backupEncryptionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Encrypt backups'**
+  String get backupEncryptionTitle;
+
+  /// No description provided for @backupEncryptionOffHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Unencrypted backups can be read by anyone with the file.'**
+  String get backupEncryptionOffHint;
+
+  /// No description provided for @backupEncryptionOnHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Backups are encrypted while this page stays open.'**
+  String get backupEncryptionOnHint;
+
+  /// No description provided for @backupEncryptionPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get backupEncryptionPassword;
+
+  /// No description provided for @backupEncryptionConfirmPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get backupEncryptionConfirmPassword;
+
+  /// No description provided for @backupEncryptionPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this password safe. If you lose it, the backup cannot be restored. It is kept only while this page is open.'**
+  String get backupEncryptionPasswordHint;
+
+  /// No description provided for @backupEncryptionMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match.'**
+  String get backupEncryptionMismatch;
+
+  /// No description provided for @backupEncryptionShowPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get backupEncryptionShowPassword;
+
+  /// No description provided for @backupEncryptionHidePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get backupEncryptionHidePassword;
+
+  /// No description provided for @backupEncryptionUnlockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Encrypted backup'**
+  String get backupEncryptionUnlockTitle;
+
+  /// No description provided for @backupEncryptionUnlockHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the password used to create this backup.'**
+  String get backupEncryptionUnlockHint;
+
+  /// No description provided for @backupEncryptionUnlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get backupEncryptionUnlock;
+
+  /// No description provided for @backupEncryptionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The password is incorrect, or the backup is damaged. Try again or cancel.'**
+  String get backupEncryptionFailed;
+
+  /// No description provided for @backupProgressEncrypting.
+  ///
+  /// In en, this message translates to:
+  /// **'Encrypting backup'**
+  String get backupProgressEncrypting;
+
+  /// No description provided for @backupProgressDecrypting.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrypting backup'**
+  String get backupProgressDecrypting;
 
   /// No description provided for @startupRecoveryExportSucceeded.
   ///

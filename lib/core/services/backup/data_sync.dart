@@ -21,6 +21,7 @@ import '../../database/business_preferences.dart';
 import '../../database/business_restore_service.dart';
 import '../../database/business_settings_router.dart';
 import '../../database/app_database.dart';
+import '../../database/database_names.dart';
 import '../../database/chat_database_repository.dart';
 import '../../database/message_timeline_index.dart';
 import '../../database/schema_migrations.dart';
@@ -42,6 +43,7 @@ import '../../database/backup_portability.dart';
 import 'backup_settings_validator.dart';
 import 'device_local_settings_writer.dart';
 import 'joaiclient_archive.dart';
+import 'kelivo_backup_encryption.dart';
 import 'kelivo_schema3_payload.dart';
 import 'local_device_settings_ledger.dart';
 import 'streaming_zip_entry.dart';
@@ -299,8 +301,10 @@ ProgressCallback? adaptBackupProgressSink(BackupProgressSink? sink) {
 }
 
 class DataSync {
-  static const _backupFormat = 'kelivo-backup';
-  static const _backupFormatVersion = 2;
+  static const _backupFormat = 'jo-aiclient-backup';
+  static const _backupFormatVersion = 1;
+  static const _legacyBackupFormat = 'kelivo-backup';
+  static const _legacyBackupFormatVersion = 2;
 
   /// 清单键：声明还能读取本构建所写备份的最旧归档格式。
   ///
@@ -319,9 +323,10 @@ class DataSync {
   ///（而不只是认不出来）的东西。纯新增时保持原值不动，
   /// 正是这样才能让明天的备份仍能恢复到今天的构建里。
   ///
-  static const _minimumReadableFormatVersion = 2;
+  static const _minimumReadableFormatVersion = 1;
   static const _manifestEntryName = 'manifest.json';
-  static const _databaseEntryName = 'database/kelivo.db';
+  static const _databaseEntryName = 'database/${DatabaseNames.current}';
+  static const legacyDatabaseEntryName = 'database/${DatabaseNames.legacy}';
 
   /// 本机设置册子在备份包内的目录前缀。每台设备一个独立 JSON 文件。
   static const ledgerEntryPrefix = 'device_local_settings/';
@@ -742,8 +747,10 @@ class DataSync {
     Map<String, String>? ledgerEntries,
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
+    bool ownFormat = false,
   }) async => (await _prepareBackupArchive(
     chatService: chatService,
+    ownFormat: ownFormat,
     includeChats: cfg.includeChats,
     includeFiles: cfg.includeFiles,
     scope: cfg.scope,
@@ -770,18 +777,20 @@ class DataSync {
     ProgressCallback? onProgress,
     BackupCancelToken? cancelToken,
     Map<String, String>? ledgerEntries,
+    String? password,
   }) async {
     final zipFile = await prepareBackupFile(
       cfg.copyWith(includeChats: true, includeFiles: true),
       onProgress: adaptProgressCallbackToSink(onProgress),
       cancelToken: cancelToken,
       ledgerEntries: ledgerEntries,
+      ownFormat: true,
     );
     cancelToken?.throwIfCancelled();
     final zipLength = await zipFile.length();
     onProgress?.call(
       ProgressUpdate(
-        phase: BackupPhase.wrapping,
+        phase: password == null ? BackupPhase.wrapping : BackupPhase.encrypting,
         processed: 0,
         total: zipLength > 0 ? zipLength : null,
       ),
@@ -802,6 +811,7 @@ class DataSync {
       await JoaiclientArchive.wrapZipPayload(
         zipFile: zipFile,
         outputFile: stagingFile,
+        password: password,
         onProgress: (update) => onProgress?.call(
           ProgressUpdate(
             phase: BackupPhase.wrapping,
@@ -934,6 +944,7 @@ class DataSync {
 
   static Future<PreparedBackupArchive> _prepareBackupArchive({
     ChatService? chatService,
+    bool ownFormat = false,
     required bool includeChats,
     required bool includeFiles,
     BackupScope scope = BackupScope.all,
@@ -982,7 +993,7 @@ class DataSync {
       ChatDatabaseSnapshotInfo? snapshotInfo;
       var publishedDraftFiles = <String>{};
       if (includeChats) {
-        final databaseFile = File(p.join(workDir.path, '_bk_kelivo.db'));
+        final databaseFile = File(p.join(workDir.path, '_bk_jo_aiclient.db'));
         databaseTmp = databaseFile;
         onProgress?.call(
           const BackupProgress(
@@ -1004,7 +1015,7 @@ class DataSync {
                 File(
                   p.join(
                     (await AppDirectories.getAppDataDirectory()).path,
-                    'kelivo.db',
+                    AppDatabase.databaseFileName,
                   ),
                 ),
               );
@@ -1069,6 +1080,7 @@ class DataSync {
           scope: scope,
           ledgerDirectoryPath: ledgerDirectoryPath,
           publishedDraftFiles: publishedDraftFiles,
+          ownFormat: ownFormat,
         ),
         cancelToken: cancelToken,
         onProgress: onProgress,
@@ -1348,7 +1360,7 @@ class DataSync {
                 name == '_bk_settings.json' ||
                 name == '_bk_chats.json' ||
                 name == '_bk_manifest.json' ||
-                name == '_bk_kelivo.db')) {
+                name == '_bk_jo_aiclient.db')) {
           if (await isStale(ent, name)) await _deleteFileQuietly(ent);
         }
       }
@@ -1374,6 +1386,7 @@ class DataSync {
       scope: args.scope,
       ledgerDirectoryPath: args.ledgerDirectoryPath,
       publishedDraftFiles: args.publishedDraftFiles,
+      ownFormat: args.ownFormat,
       ctx: ctx,
     );
     _verifyPackedBackupSync(
@@ -1412,6 +1425,7 @@ class DataSync {
     BackupScope scope = BackupScope.all,
     String? ledgerDirectoryPath,
     Set<String> publishedDraftFiles = const {},
+    bool ownFormat = false,
     BackupIsolateContext? ctx,
   }) {
     if (includeChats != (databasePath != null && snapshotInfo != null)) {
@@ -1507,6 +1521,7 @@ class DataSync {
       }
 
       final manifestJson = _buildBackupManifestJson(
+        ownFormat: ownFormat,
         entries: entries,
         snapshotInfo: snapshotInfo,
         includeChats: includeChats,
@@ -1768,7 +1783,8 @@ class DataSync {
               throw FormatException('manifest_entry_size:${declaredEntry.key}');
             }
           }
-        } else if (archiveFiles.containsKey(_databaseEntryName)) {
+        } else if (archiveFiles.containsKey(_databaseEntryName) ||
+            archiveFiles.containsKey(legacyDatabaseEntryName)) {
           throw const FormatException('database_manifest');
         }
 
@@ -1887,7 +1903,7 @@ class DataSync {
       throw const FormatException('manifest.json');
     }
     final manifest = decoded.cast<String, dynamic>();
-    if (manifest['format'] != _backupFormat ||
+    if (!_isKnownArchiveFormat(manifest) ||
         !_acceptsArchiveFormat(manifest)) {
       throw const FormatException('manifest_version');
     }
@@ -1924,6 +1940,7 @@ class DataSync {
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
     Map<String, String>? ledgerEntries,
+    String? password,
   }) async {
     // 云备份与其他导出口径一致：上传 .joaiclient 容器，用户把它下载回来
     // 就能直接导入，不必再关心 zip 边界。
@@ -1932,6 +1949,7 @@ class DataSync {
       onProgress: adaptBackupProgressSink(onProgress),
       cancelToken: cancelToken,
       ledgerEntries: ledgerEntries,
+      password: password,
     );
     try {
       await _ensureCollection(cfg, cancelToken: cancelToken);
@@ -2139,11 +2157,22 @@ class DataSync {
   /// 因为凡能写出更新格式的构建都会同时写下该声明，
   /// 所以拒绝不付代价，还能保住
   /// 严格默认。
+  static bool _isKnownArchiveFormat(Map<String, dynamic> manifest) =>
+      manifest['format'] == _backupFormat ||
+      manifest['format'] == _legacyBackupFormat;
+
   static bool _acceptsArchiveFormat(Map<String, dynamic> manifest) {
+    final format = manifest['format'];
     final formatVersion = manifest['formatVersion'];
-    if (formatVersion is! int) return false;
+    if (format is! String || formatVersion is! int) return false;
+    if (format == _legacyBackupFormat) {
+      // 旧 JO 包与上游 v2 共用这个格式号；上游 v3 也在这里读入，
+      // 数据库仍必须是上游 schema 3。
+      return formatVersion == _legacyBackupFormatVersion ||
+          formatVersion == 3;
+    }
+    if (format != _backupFormat) return false;
     if (formatVersion == _backupFormatVersion) return true;
-    // 更旧的归档格式从未支持，现在依然不支持。
     if (formatVersion < _backupFormatVersion) return false;
     final declared = manifest[backupMinimumReadableFormatKey];
     return declared is int && declared >= 1 && declared <= _backupFormatVersion;
@@ -2161,9 +2190,11 @@ class DataSync {
   /// 走到这里的更新格式版本，已经通过了
   /// [_acceptsArchiveFormat]，也就是说它是为我们背过书的那一类。
   static bool _declaresNewerBuild(Map<String, dynamic> manifest) {
-    final formatVersion = manifest['formatVersion'];
-    if (formatVersion is int && formatVersion > _backupFormatVersion) {
-      return true;
+    if (manifest['format'] == _backupFormat) {
+      final formatVersion = manifest['formatVersion'];
+      if (formatVersion is int && formatVersion > _backupFormatVersion) {
+        return true;
+      }
     }
     final database = manifest['database'];
     if (database is! Map) return false;
@@ -2206,6 +2237,7 @@ class DataSync {
   /// 每个校验器。同版本或更旧的备份不动，因此其中出现的意外字段
   /// 仍然会失败。
   static void _stripUnknownManifestKeys(Map<String, dynamic> manifest) {
+    if (manifest['format'] != _backupFormat) return;
     if (!_declaresNewerBuild(manifest)) return;
     manifest.removeWhere((key, _) => !_knownManifestKeys.contains(key));
     final database = manifest['database'];
@@ -2253,6 +2285,7 @@ class DataSync {
     BackupCancelToken? cancelToken,
     bool allowUnverifiedForwardCompatible = false,
     ForwardCompatibilityPrompt? onForwardCompatibility,
+    JoaiclientPasswordPrompt? onPassword,
   }) async {
     // 把下载流写入文件，不在内存里缓冲。
     final client = http.Client();
@@ -2296,18 +2329,15 @@ class DataSync {
       }
       // 归档此刻才存在于本地，所以这是最早能向用户
       // 提出该问题的时机。
-      final allowUnverified = await _askForwardCompatibility(
-        file,
-        prompt: onForwardCompatibility,
-        allowUnverifiedForwardCompatible: allowUnverifiedForwardCompatible,
-      );
-      await _restoreFromBackupFile(
+      await restoreFromLocalFile(
         file,
         cfg,
         mode: mode,
         onProgress: onProgress,
         cancelToken: cancelToken,
-        allowUnverifiedForwardCompatible: allowUnverified,
+        allowUnverifiedForwardCompatible: allowUnverifiedForwardCompatible,
+        onForwardCompatibility: onForwardCompatibility,
+        onPassword: onPassword,
       );
     } catch (error) {
       if (error is BackupCancelledException ||
@@ -2371,8 +2401,96 @@ class DataSync {
     BackupCancelToken? cancelToken,
     bool allowUnverifiedForwardCompatible = false,
     ForwardCompatibilityPrompt? onForwardCompatibility,
+    JoaiclientPasswordPrompt? onPassword,
   }) async {
     if (!await file.exists()) throw Exception('备份文件不存在');
+    if (await KelivoBackupEncryption.isEncrypted(file)) {
+      if (onPassword == null) {
+        throw const FormatException('kelivo_backup_password_required');
+      }
+      final tmp = await _ensureTempDir();
+      final decrypted = File(
+        p.join(
+          tmp.path,
+          'kelivo_decrypted_${DateTime.now().microsecondsSinceEpoch}.zip',
+        ),
+      );
+      registerLiveTempPath(decrypted.path);
+      var retry = false;
+      try {
+        while (true) {
+          final password = await onPassword(retry: retry);
+          if (password == null || password.isEmpty) {
+            throw const BackupCancelledException();
+          }
+          try {
+            onProgress?.call(
+              const BackupProgress(
+                phase: BackupPhase.decrypting,
+                processed: 0,
+              ),
+            );
+            await KelivoBackupEncryption.decryptFile(
+              source: file,
+              destination: decrypted,
+              password: password,
+              cancelToken: cancelToken,
+            );
+            break;
+          } on FormatException catch (error) {
+            if (error.message == 'kelivo_backup_decryption_failed') {
+              retry = true;
+              continue;
+            }
+            rethrow;
+          }
+        }
+        await _restoreFromBackupFile(
+          decrypted,
+          cfg.copyWith(includeChats: true, includeFiles: true),
+          mode: mode,
+          onProgress: onProgress,
+          cancelToken: cancelToken,
+          allowUnverifiedForwardCompatible:
+              allowUnverifiedForwardCompatible,
+        );
+        return;
+      } finally {
+        await _deleteFileQuietly(decrypted);
+      }
+    }
+    final encrypted = await JoaiclientArchive.isEncrypted(file);
+    if (encrypted) {
+      if (onPassword == null) {
+        throw const FormatException('joaiclient_password_required');
+      }
+      var retry = false;
+      while (true) {
+        final password = await onPassword(retry: retry);
+        if (password == null || password.isEmpty) {
+          throw const BackupCancelledException();
+        }
+        try {
+          await _restoreFromBackupFile(
+            file,
+            cfg,
+            mode: mode,
+            onProgress: onProgress,
+            cancelToken: cancelToken,
+            allowUnverifiedForwardCompatible:
+                allowUnverifiedForwardCompatible,
+            password: password,
+          );
+          return;
+        } on FormatException catch (error) {
+          if (error.message == 'joaiclient_decryption_failed') {
+            retry = true;
+            continue;
+          }
+          rethrow;
+        }
+      }
+    }
     // 通常调用方早就问过了（文件一直在它手里）；
     // 这里的弹窗是为 S3 准备的，它从这个入口下载。
     final allowUnverified = await _askForwardCompatibility(
@@ -2465,6 +2583,7 @@ class DataSync {
   }
 
   static String _buildBackupManifestJson({
+    required bool ownFormat,
     required Map<String, _BackupEntryMetadata> entries,
     required ChatDatabaseSnapshotInfo? snapshotInfo,
     required bool includeChats,
@@ -2473,11 +2592,18 @@ class DataSync {
     required String appVersion,
     required Map<String, List<String>> businessEntityRowIds,
   }) {
+    final format = ownFormat ? _backupFormat : _legacyBackupFormat;
+    final formatVersion = ownFormat
+        ? _backupFormatVersion
+        : _legacyBackupFormatVersion;
+    final minimumReadable = ownFormat
+        ? _minimumReadableFormatVersion
+        : _legacyBackupFormatVersion;
     return jsonEncode({
-      'format': _backupFormat,
-      'formatVersion': _backupFormatVersion,
+      'format': format,
+      'formatVersion': formatVersion,
       'scope': scope.toJson(),
-      backupMinimumReadableFormatKey: _minimumReadableFormatVersion,
+      backupMinimumReadableFormatKey: minimumReadable,
       'payloadKind': includeChats ? 'sqlite' : 'settings-only',
       'createdAtUtc': DateTime.now().toUtc().toIso8601String(),
       'appVersion': appVersion,
@@ -2555,7 +2681,7 @@ class DataSync {
       throw const FormatException('manifest.json');
     }
     final manifest = decoded.cast<String, dynamic>();
-    if (manifest['format'] != _backupFormat ||
+    if (!_isKnownArchiveFormat(manifest) ||
         !_acceptsArchiveFormat(manifest)) {
       throw const FormatException('manifest_version');
     }
@@ -2622,6 +2748,7 @@ class DataSync {
       final knownEntry =
           name == 'settings.json' ||
           name == _databaseEntryName ||
+          name == legacyDatabaseEntryName ||
           isFileEntry ||
           name.startsWith(ledgerEntryPrefix);
       if (!knownEntry) {
@@ -2684,9 +2811,19 @@ class DataSync {
     ChatDatabaseSnapshotInfo? validatedDatabase;
     final rawDatabase = manifest['database'];
     if (payloadKind == 'sqlite') {
-      if (!includeChats ||
-          !entries.containsKey(_databaseEntryName) ||
-          rawDatabase is! Map) {
+      final declaredEntry = rawDatabase is Map ? rawDatabase['entry'] : null;
+      final databaseEntry = switch (declaredEntry) {
+        final String name
+            when (name == _databaseEntryName ||
+                    name == legacyDatabaseEntryName) &&
+                entries.containsKey(name) =>
+          name,
+        _ when entries.containsKey(_databaseEntryName) => _databaseEntryName,
+        _ when entries.containsKey(legacyDatabaseEntryName) =>
+          legacyDatabaseEntryName,
+        _ => null,
+      };
+      if (!includeChats || databaseEntry == null || rawDatabase is! Map) {
         throw const FormatException('manifest_database');
       }
       final database = rawDatabase.cast<String, dynamic>();
@@ -2695,7 +2832,8 @@ class DataSync {
           database[SchemaMigrations.minimumReadableManifestKey];
       final conversationCount = database['conversationCount'];
       final messageCount = database['messageCount'];
-      if (database['entry'] != _databaseEntryName ||
+      if ((database['entry'] != _databaseEntryName &&
+              database['entry'] != legacyDatabaseEntryName) ||
           schemaVersion is! int ||
           schemaVersion < 1 ||
           (declaredMinimumReadable != null &&
@@ -2732,7 +2870,7 @@ class DataSync {
         throw const FormatException('kelivo_schema2_unsupported');
       }
       final databaseFile = File(
-        p.joinAll([extractDirPath, ..._databaseEntryName.split('/')]),
+        p.joinAll([extractDirPath, ...databaseEntry.split('/')]),
       );
       // Kelivo-compatible ZIP 的 schema 3 只代表上游 Kelivo schema 3。
       // 必须匹配完整表结构；不匹配则明确拒绝，绝不落回本仓库历史迁移链。
@@ -2765,9 +2903,16 @@ class DataSync {
         throw const FormatException('manifest_database_metadata');
       }
       validatedDatabase = databaseInfo;
+      final canonicalDatabaseFile = File(
+        p.joinAll([extractDirPath, ..._databaseEntryName.split('/')]),
+      );
+      if (databaseEntry != _databaseEntryName) {
+        await databaseFile.rename(canonicalDatabaseFile.path);
+        entries.remove(databaseEntry);
+      }
       entries[_databaseEntryName] = (
-        bytes: databaseFile.lengthSync(),
-        sha256: _sha256FileSync(databaseFile, ctx: ctx),
+        bytes: canonicalDatabaseFile.lengthSync(),
+        sha256: _sha256FileSync(canonicalDatabaseFile, ctx: ctx),
       );
     } else if (payloadKind == 'settings-only') {
       if (includeChats ||
@@ -3591,6 +3736,7 @@ class DataSync {
     BackupProgressSink? onProgress,
     BackupCancelToken? cancelToken,
     bool allowUnverifiedForwardCompatible = false,
+    String? password,
   }) async {
     _lastMergeReport = null;
     // 本机设置册子的三项结果每次恢复都重新计数，避免上一轮的值残留。
@@ -3625,9 +3771,16 @@ class DataSync {
       if (isJoaiclient) {
         payloadFile = File(p.join(extractDir.path, '_payload.zip'));
         registerLiveTempPath(payloadFile.path);
+        onProgress?.call(
+          const BackupProgress(
+            phase: BackupPhase.decrypting,
+            processed: 0,
+          ),
+        );
         await JoaiclientArchive.unwrapToZip(
           sourceFile: file,
           zipFile: payloadFile,
+          password: password,
           cancelToken: cancelToken,
         );
       }
@@ -4151,6 +4304,7 @@ class _BackupPackArgs {
     this.scope = BackupScope.all,
     this.ledgerDirectoryPath,
     this.publishedDraftFiles = const {},
+    this.ownFormat = false,
   });
 
   final String outPath;
@@ -4176,6 +4330,10 @@ class _BackupPackArgs {
   /// 注意：这条路径与 [includeFiles] 完全无关。册子不是附件，
   /// 不能并入 [assetRootPaths]，否则 cutover 会把它当附件搬走。
   final String? ledgerDirectoryPath;
+
+  /// 新 `.joaiclient` 容器使用 JO 自有归档格式；旧 ZIP 导出保持
+  /// `kelivo-backup` v2 兼容格式。
+  final bool ownFormat;
 }
 
 class _BackupByteMeter {

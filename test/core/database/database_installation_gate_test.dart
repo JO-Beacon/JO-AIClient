@@ -658,12 +658,14 @@ void main() {
           (name) => !name.endsWith('-wal') && !name.endsWith('-shm'),
         );
         expect(
-          await File(p.join(directory.path, base, 'kelivo.db')).readAsString(),
+          await File(
+            p.join(directory.path, base, 'jo_aiclient.db'),
+          ).readAsString(),
           'not a sqlite database',
         );
         expect(
           await File(
-            p.join(directory.path, base, 'kelivo.db-wal'),
+            p.join(directory.path, base, 'jo_aiclient.db-wal'),
           ).readAsString(),
           'stale wal',
         );
@@ -714,7 +716,7 @@ void main() {
         final contents = <String>[
           for (final base in bases)
             await File(
-              p.join(directory.path, base, 'kelivo.db'),
+              p.join(directory.path, base, 'jo_aiclient.db'),
             ).readAsString(),
         ];
         expect(contents, contains('generation 0'));
@@ -925,7 +927,7 @@ void main() {
         expect(displaced, isNotEmpty);
         expect(
           await File(
-            p.join(directory.path, displaced.single, 'kelivo.db'),
+            p.join(directory.path, displaced.single, 'jo_aiclient.db'),
           ).readAsString(),
           'not a sqlite database',
         );
@@ -954,7 +956,7 @@ void main() {
                   '${AppDatabase.databaseFileName}'
                   '${DatabaseInstallationGate.displacedDatabasePrefix}',
                 ))
-              await File(p.join(entity.path, 'kelivo.db')).readAsString(),
+              await File(p.join(entity.path, 'jo_aiclient.db')).readAsString(),
         ];
         expect(surviving, contains('ORIGINAL USER DATA'));
       });

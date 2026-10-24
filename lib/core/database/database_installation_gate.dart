@@ -409,13 +409,33 @@ final class DatabaseInstallationGate {
   static Future<bool> hasDisplacedDatabases({
     required Directory appDataDirectory,
   }) async {
-    final prefix = '${AppDatabase.databaseFileName}$displacedDatabasePrefix';
+    final prefixes = _displacedPrefixes();
     try {
       await for (final entity in appDataDirectory.list(followLinks: false)) {
-        if (p.basename(entity.path).startsWith(prefix)) return true;
+        final name = p.basename(entity.path);
+        if (prefixes.any(name.startsWith)) return true;
       }
     } catch (_) {}
     return false;
+  }
+
+  static List<String> _displacedPrefixes() => [
+    '${AppDatabase.databaseFileName}$displacedDatabasePrefix',
+    '${AppDatabase.legacyDatabaseFileName}$displacedDatabasePrefix',
+  ];
+
+  static File _displacedMain(String directoryPath) {
+    for (final name in [
+      AppDatabase.databaseFileName,
+      AppDatabase.legacyDatabaseFileName,
+    ]) {
+      final file = File(p.join(directoryPath, name));
+      if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+          FileSystemEntityType.file) {
+        return file;
+      }
+    }
+    return File(p.join(directoryPath, AppDatabase.databaseFileName));
   }
 
   /// The database families set aside by [rebuildFresh], newest first.
@@ -427,16 +447,20 @@ final class DatabaseInstallationGate {
   static Future<List<DisplacedDatabaseCopy>> listDisplacedDatabases({
     required Directory appDataDirectory,
   }) async {
-    final prefix = '${AppDatabase.databaseFileName}$displacedDatabasePrefix';
+    final prefixes = _displacedPrefixes();
     final bytesByStamp = <String, int>{};
+    final stampPrefix = <String, String>{};
     final directoryCopies = <String>{};
     try {
       await for (final entity in appDataDirectory.list(followLinks: false)) {
         final name = p.basename(entity.path);
+        final prefix = prefixes.firstWhere(name.startsWith, orElse: () => '');
+        if (prefix.isEmpty) continue;
         if (entity is Directory &&
             DatabaseFamilyPreserver.isCopyDirectory(name)) {
           final stamp = name.substring(prefix.length);
           directoryCopies.add(stamp);
+          stampPrefix[stamp] = prefix;
           bytesByStamp[stamp] = 0;
           await for (final member in entity.list(followLinks: false)) {
             if (member is File) {
@@ -456,6 +480,7 @@ final class DatabaseInstallationGate {
           }
         }
         if (stamp.isEmpty) continue;
+        stampPrefix[stamp] ??= prefix;
         try {
           bytesByStamp[stamp] =
               (bytesByStamp[stamp] ?? 0) + await entity.length();
@@ -469,11 +494,10 @@ final class DatabaseInstallationGate {
 
     final copies = <DisplacedDatabaseCopy>[];
     for (final entry in bytesByStamp.entries) {
-      final base = File(
-        directoryCopies.contains(entry.key)
-            ? p.join(appDataDirectory.path, '$prefix${entry.key}', 'kelivo.db')
-            : p.join(appDataDirectory.path, '$prefix${entry.key}'),
-      );
+      final prefix = stampPrefix[entry.key]!;
+      final base = directoryCopies.contains(entry.key)
+          ? _displacedMain(p.join(appDataDirectory.path, '$prefix${entry.key}'))
+          : File(p.join(appDataDirectory.path, '$prefix${entry.key}'));
       if (await FileSystemEntity.type(base.path, followLinks: false) !=
           FileSystemEntityType.file) {
         // The family exists but its database does not; there is nothing a

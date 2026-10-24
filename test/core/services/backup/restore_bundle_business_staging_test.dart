@@ -34,7 +34,7 @@ void main() {
       () async {
         final extracted = Directory(p.join(root.path, 'extracted'));
         final databaseFile = File(
-          p.join(extracted.path, 'database', 'kelivo.db'),
+          p.join(extracted.path, 'database', 'jo_aiclient.db'),
         );
         await databaseFile.parent.create(recursive: true);
         final database = AppDatabase.open(file: databaseFile);
@@ -93,7 +93,7 @@ void main() {
             'includeFiles': false,
             'secretsIncluded': true,
             'database': {
-              'entry': 'database/kelivo.db',
+              'entry': 'database/jo_aiclient.db',
               'schemaVersion': databaseInfo.schemaVersion,
               'conversationCount': databaseInfo.conversationCount,
               'messageCount': databaseInfo.messageCount,
@@ -103,7 +103,7 @@ void main() {
                 'bytes': await settingsFile.length(),
                 'sha256': await _sha256(settingsFile),
               },
-              'database/kelivo.db': {
+              'database/jo_aiclient.db': {
                 'bytes': await databaseFile.length(),
                 'sha256': sourceDatabaseHash,
               },
@@ -135,10 +135,10 @@ void main() {
                 as Map<String, dynamic>;
         expect(candidateManifest, isNot(contains('secretsIncluded')));
         expect((candidateManifest['entries'] as Map).keys, [
-          'database/kelivo.db',
+          'database/jo_aiclient.db',
         ]);
         expect(
-          ((candidateManifest['entries'] as Map)['database/kelivo.db']
+          ((candidateManifest['entries'] as Map)['database/jo_aiclient.db']
               as Map)['sha256'],
           isNot(sourceDatabaseHash),
         );
@@ -150,7 +150,7 @@ void main() {
         expect(validated.databaseInfo?.conversationCount, 1);
 
         final inspectionFile = await File(
-          p.join(staged.payloadDirectory.path, 'database', 'kelivo.db'),
+          p.join(staged.payloadDirectory.path, 'database', 'jo_aiclient.db'),
         ).copy(p.join(root.path, 'inspection.sqlite'));
         final inspectionDatabase = AppDatabase.open(file: inspectionFile);
         try {
@@ -185,7 +185,7 @@ void main() {
       () async {
         final extracted = Directory(p.join(root.path, 'idless-extracted'));
         final databaseFile = File(
-          p.join(extracted.path, 'database', 'kelivo.db'),
+          p.join(extracted.path, 'database', 'jo_aiclient.db'),
         );
         await databaseFile.parent.create(recursive: true);
         final database = AppDatabase.open(file: databaseFile);
@@ -231,7 +231,7 @@ void main() {
                       : <String>[],
             },
             'database': {
-              'entry': 'database/kelivo.db',
+              'entry': 'database/jo_aiclient.db',
               'schemaVersion': databaseInfo.schemaVersion,
               'conversationCount': databaseInfo.conversationCount,
               'messageCount': databaseInfo.messageCount,
@@ -241,7 +241,7 @@ void main() {
                 'bytes': await settingsFile.length(),
                 'sha256': await _sha256(settingsFile),
               },
-              'database/kelivo.db': {
+              'database/jo_aiclient.db': {
                 'bytes': await databaseFile.length(),
                 'sha256': await _sha256(databaseFile),
               },
@@ -267,7 +267,7 @@ void main() {
         expect(candidateManifest, isNot(contains('businessEntityRowIds')));
 
         final inspectionFile = await File(
-          p.join(staged.payloadDirectory.path, 'database', 'kelivo.db'),
+          p.join(staged.payloadDirectory.path, 'database', 'jo_aiclient.db'),
         ).copy(p.join(root.path, 'idless-inspection.sqlite'));
         final inspectionDatabase = AppDatabase.open(file: inspectionFile);
         try {

@@ -5,6 +5,7 @@ import '../services/backup/restore_startup_gate.dart';
 import 'startup_recovery_service.dart';
 import 'database_installation_gate.dart';
 import 'database_family_preserver.dart';
+import 'database_names.dart';
 import '../services/backup/restore_workspace_lock.dart';
 import '../services/legacy_data_retirement_service.dart';
 
@@ -418,7 +419,7 @@ abstract final class PrivateDataStorage {
   // Images, uploads, snapshots, models and workspaces remain public and are
   // neither copied nor hashed during activation.
   static bool _isDatabaseState(String name) =>
-      DatabaseFamilyPreserver.suffixes.any((s) => name == 'kelivo.db$s') ||
+      DatabaseNames.isFamilyMember(name) ||
       name.startsWith('database_installation_receipt_') ||
       name == DatabaseInstallationGate.historyFileName ||
       name == RestoreWorkspaceLock.workspaceRootName ||

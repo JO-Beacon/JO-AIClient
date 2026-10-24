@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../database/app_database.dart';
+import '../../database/database_names.dart';
 import '../../../utils/app_directories.dart';
 import '../../database/chat_database_repository.dart';
 import 'restore_bundle_staging.dart';
@@ -21,7 +22,13 @@ final class RestoreBundleMover {
     RestoreDurability? durability,
   }) : durability = durability ?? RestorePlatformDurability();
 
-  static const _databaseEntry = 'database/kelivo.db';
+  static const _databaseEntry = 'database/${DatabaseNames.current}';
+  static const _legacyDatabaseEntry = 'database/${DatabaseNames.legacy}';
+
+  static String _entryFor(ValidatedRestoreCandidate candidate) =>
+      candidate.entries.containsKey(_databaseEntry)
+      ? _databaseEntry
+      : _legacyDatabaseEntry;
 
   final Directory appDataDirectory;
   final Directory candidateDirectory;
@@ -51,14 +58,13 @@ final class RestoreBundleMover {
   }) async {
     _requireCandidateBinding(receipt, candidate);
     if (receipt.selectedComponents.contains(RestoreComponent.database)) {
-      final descriptor = candidate.entries[_databaseEntry];
+      final entry = _entryFor(candidate);
+      final descriptor = candidate.entries[entry];
       if (descriptor == null || candidate.databaseInfo == null) {
         throw StateError('restore_mover_candidate_database');
       }
       await _moveExactFile(
-        source: File(
-          p.joinAll([candidateDirectory.path, ..._databaseEntry.split('/')]),
-        ),
+        source: File(p.joinAll([candidateDirectory.path, ...entry.split('/')])),
         target: File(
           p.join(appDataDirectory.path, AppDatabase.databaseFileName),
         ),
@@ -92,9 +98,10 @@ final class RestoreBundleMover {
   }) async {
     _requireCandidateBinding(receipt, candidate);
     if (receipt.selectedComponents.contains(RestoreComponent.database)) {
-      final descriptor = candidate.entries[_databaseEntry]!;
+      final entry = _entryFor(candidate);
+      final descriptor = candidate.entries[entry]!;
       final source = File(
-        p.joinAll([candidateDirectory.path, ..._databaseEntry.split('/')]),
+        p.joinAll([candidateDirectory.path, ...entry.split('/')]),
       );
       final target = File(
         p.join(appDataDirectory.path, AppDatabase.databaseFileName),

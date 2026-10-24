@@ -30,7 +30,7 @@ void main() {
             await directory.delete(recursive: true);
           }
         });
-        final file = File('${directory.path}/kelivo.db');
+        final file = File('${directory.path}/jo_aiclient.db');
         final repository = ChatDatabaseRepository.open(file: file);
         addTearDown(repository.close);
 
@@ -717,7 +717,7 @@ void main() {
           await directory.delete(recursive: true);
         }
       });
-      final file = File('${directory.path}/kelivo.db');
+      final file = File('${directory.path}/jo_aiclient.db');
       final repository = ChatDatabaseRepository.open(file: file);
       await repository.ensureReady();
 

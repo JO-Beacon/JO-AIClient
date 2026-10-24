@@ -46,6 +46,7 @@ class WorkspaceToolsService {
     ToolRunRegistry? registry,
     WorkspaceRuntimeProvider? runtimeProvider,
     this.updateConversationExtras,
+    this.readWorkspaceBinding,
     this.touchLastUsed,
     this.onSkillRead,
     this.onShellCompleted,
@@ -80,6 +81,7 @@ class WorkspaceToolsService {
   final ToolRunRegistry registry;
   final WorkspaceRuntimeProvider runtimeProvider;
   final ConversationExtrasUpdater? updateConversationExtras;
+  final WorkspaceBinding? Function(String conversationId)? readWorkspaceBinding;
   final Future<void> Function(String workspaceId)? touchLastUsed;
   final Future<void> Function(String skillId)? onSkillRead;
   final Future<void> Function()? onShellCompleted;
@@ -698,16 +700,24 @@ class WorkspaceToolsService {
     }
 
     final sandboxed = status.sandboxed;
+    final id = conversationId ?? ctx.conversationId;
+    // 一次生成会保留工作区上下文，但用户可能在生成期间改了授权。
+    // 审批判定以会话里最新的绑定为准，而不是创建生成时的快照。
+    final binding = readWorkspaceBinding != null && id != null
+        ? readWorkspaceBinding!(id)
+        : ctx.binding;
+    final allowAll =
+        binding?.workspaceId == ctx.workspace.id && binding?.allowAll == true;
     final needsApproval =
-        (ctx.workspace.shellNeedsApproval || !sandboxed) &&
-        !ctx.binding.allowAll;
+        (ctx.workspace.shellNeedsApproval || !sandboxed) && !allowAll;
     final denied = await _maybeApprove(
       approvalService,
       needed: needsApproval,
       toolCallId: toolCallId,
       toolName: tool,
       args: args,
-      conversationId: conversationId ?? ctx.conversationId,
+      conversationId: id,
+      workspaceId: ctx.workspace.id,
     );
     if (denied != null) return denied;
 
@@ -1406,6 +1416,7 @@ class WorkspaceToolsService {
         toolName: tool,
         args: args,
         conversationId: conversationId ?? ctx.conversationId,
+        workspaceId: ctx.workspace.id,
         path: resolved.modelPath,
       );
     }
@@ -1419,6 +1430,7 @@ class WorkspaceToolsService {
     required String toolName,
     required Map<String, dynamic> args,
     String? conversationId,
+    String? workspaceId,
     String? path,
   }) async {
     ToolCallCancellation.current?.throwIfCancelled();
@@ -1439,6 +1451,7 @@ class WorkspaceToolsService {
       toolName: toolName,
       arguments: args,
       conversationId: conversationId,
+      workspaceId: workspaceId,
     );
     if (result.approved) return null;
     return _deniedResult(

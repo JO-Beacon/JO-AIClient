@@ -39,7 +39,7 @@ void main() {
     previousPathProvider = PathProviderPlatform.instance;
     PathProviderPlatform.instance = _FakePathProviderPlatform(directory.path);
     repository = ChatDatabaseRepository.open(
-      file: File('${directory.path}/kelivo.db'),
+      file: File('${directory.path}/jo_aiclient.db'),
     );
     await repository.ensureReady();
   });

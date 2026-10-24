@@ -501,6 +501,43 @@
   "mcpAssistantSheetTitle": "MCP伺服器",
   "mcpAssistantSheetSubtitle": "為該助理啟用的服務",
   "mcpAssistantSheetSelectAll": "全選",
+  "mcpPageStatusFailed": "連線失敗",
+  "mcpPageCardToolsShort": "工具 {enabled}/{total}",
+  "@mcpPageCardToolsShort": {
+    "placeholders": {
+      "enabled": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mcpPageSelectServer": "選擇 {name}",
+  "@mcpPageSelectServer": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpIconTitle": "伺服器圖示",
+  "mcpIconInvalid": "無法使用此圖片，請選擇不超過 10 MB 的有效圖片。",
+  "mcpSelectServers": "選擇伺服器",
+  "mcpMoveToGroup": "移到群組",
+  "mcpRenameGroup": "重新命名群組",
+  "mcpDeleteGroupConfirm": "群組內的伺服器將移至“其他”，不會刪除伺服器。",
+  "mcpGroupNameInvalid": "請輸入非空且不重複的群組名稱。",
+  "mcpEnableSelected": "啟用",
+  "mcpDisableSelected": "停用",
+  "mcpDeleteSelectedConfirm": "刪除選取的 {count} 個伺服器？",
+  "@mcpDeleteSelectedConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mcpAssistantSheetClearAll": "全不選",
   "backupPageTitle": "備份與還原",
   "backupPageWebDavTab": "WebDAV 備份",
@@ -522,6 +559,9 @@
   "contextTreeMigrationWarningsTitle": "舊版對話遷移已修復",
   "contextTreeMigrationWarningsContent": "JO-AIClient 在轉換舊版對話分支時修復了 {count} 筆遺失的選取分支記錄。修復結果已寫入警告記錄，未讀取或修改訊息正文。",
   "backupRestoreFailureTitle": "還原需要處理",
+  "backupRestoreDirectoryBlockedTitle": "還原正在等待資料夾釋放",
+  "backupRestoreDirectoryBlockedContent": "Windows 無法移動下方資料夾。請關閉正在使用該資料夾的終端機、編輯器或其他程式，然後繼續還原。如果仍然受阻，請檢查目前帳戶是否有移動該資料夾的權限。先前的還原進度已保留。",
+  "backupRestoreContinueButton": "繼續還原",
   "backupRestoreFailureContent": "JO-AIClient 無法驗證完整的原有或新資料，因此未開啟聊天資料。請關閉 JO-AIClient 後重試；若問題持續發生，請保留診斷碼以供支援人員排查。",
   "backupRestoreBusinessLeaseUnavailableTitle": "JO-AIClient 已在執行",
   "backupRestoreBusinessLeaseUnavailableContent": "JO-AIClient 的資料仍由另一個應用程式程序使用。請關閉其他 JO-AIClient 視窗後重新啟動；目前程序尚未開啟聊天資料。",
@@ -543,6 +583,36 @@
   "startupRecoveryExportButton": "匯出我的資料副本",
   "startupRecoveryResetButton": "重設資料",
   "startupRecoveryBusy": "處理中…",
+  "databaseConflictTitle": "偵測到兩個資料庫",
+  "databaseConflictBody": "應用程式發現 jo_aiclient.db 和 kelivo.db 同時存在。請選擇要繼續使用的一個。另一個資料庫不會被刪除，會整體移動到 {directory} 保留。",
+  "@databaseConflictBody": {
+    "placeholders": {
+      "directory": {
+        "type": "String"
+      }
+    }
+  },
+  "databaseConflictUse": "使用這個",
+  "databaseConflictExit": "結束應用程式",
+  "databaseConflictModified": "修改時間",
+  "databaseConflictSize": "檔案大小",
+  "databaseConflictQuarantineFailed": "無法移動另一個資料庫，未做任何變更。請檢查檔案權限後再試一次。",
+  "databaseConflictUnreadable": "無法讀取",
+  "backupEncryptionTitle": "加密備份",
+  "backupEncryptionOffHint": "未加密的備份可被直接讀取。",
+  "backupEncryptionOnHint": "目前頁面內的備份均會加密。",
+  "backupEncryptionPassword": "口令",
+  "backupEncryptionConfirmPassword": "確認口令",
+  "backupEncryptionPasswordHint": "請妥善保存口令，遺忘後無法還原備份。口令僅在目前頁面保留。",
+  "backupEncryptionMismatch": "兩次輸入的口令不一致。",
+  "backupEncryptionShowPassword": "顯示口令",
+  "backupEncryptionHidePassword": "隱藏口令",
+  "backupEncryptionUnlockTitle": "加密備份",
+  "backupEncryptionUnlockHint": "請輸入建立這份備份時使用的口令。",
+  "backupEncryptionUnlock": "解鎖",
+  "backupEncryptionFailed": "口令錯誤或備份已損壞，請重試或取消。",
+  "backupProgressEncrypting": "正在加密備份",
+  "backupProgressDecrypting": "正在解密備份",
   "startupRecoveryExportSucceeded": "已儲存一份資料副本。",
   "startupRecoveryExportFailed": "無法匯出資料副本。",
   "startupRecoveryRepairFailed": "修復未能解決問題。請先匯出資料副本，然後重設。",

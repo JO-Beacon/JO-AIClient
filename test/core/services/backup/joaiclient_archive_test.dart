@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:Kelivo/core/models/progress_update.dart';
+import 'package:Kelivo/core/services/backup/backup_cancel_token.dart';
 import 'package:Kelivo/core/services/backup/joaiclient_archive.dart';
 
 void main() {
@@ -33,7 +34,7 @@ void main() {
       expect(await JoaiclientArchive.isJoaiclient(archive), isTrue);
       final outerBytes = await archive.readAsBytes();
       expect(outerBytes.sublist(0, 4), isNot(<int>[0x50, 0x4b, 0x03, 0x04]));
-      expect(outerBytes.sublist(56), payloadBytes);
+      expect(outerBytes.sublist(88), payloadBytes);
 
       await JoaiclientArchive.unwrapToZip(
         sourceFile: archive,
@@ -121,4 +122,194 @@ void main() {
     );
     expect(await restored.exists(), isFalse);
   });
+  test('v2 encrypts a multi-chunk payload and leaves no plaintext', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/encrypted.joaiclient');
+    final restored = File('${root.path}/restored.zip');
+    final payloadBytes = List<int>.generate(
+      2 * 1024 * 1024 + 12345,
+      (index) => index % 251,
+    );
+    await payload.writeAsBytes(payloadBytes, flush: true);
+
+    await JoaiclientArchive.wrapZipPayload(
+      zipFile: payload,
+      outputFile: archive,
+      password: 'correct horse battery staple',
+    );
+
+    expect(await JoaiclientArchive.isJoaiclient(archive), isTrue);
+    expect(await JoaiclientArchive.isEncrypted(archive), isTrue);
+    final outer = await archive.readAsBytes();
+    expect(outer.sublist(0, 8), JoaiclientArchive.magic);
+    expect(
+      outer.sublist(0, 4),
+      isNot(<int>[0x50, 0x4b, 0x03, 0x04]),
+    );
+    expect(
+      outer.length,
+      greaterThan(payloadBytes.length),
+    );
+
+    await JoaiclientArchive.unwrapToZip(
+      sourceFile: archive,
+      zipFile: restored,
+      password: 'correct horse battery staple',
+    );
+    expect(await restored.readAsBytes(), payloadBytes);
+  });
+
+  test('v2 requires a password and rejects a wrong one', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/encrypted.joaiclient');
+    final restored = File('${root.path}/restored.zip');
+    await payload.writeAsBytes(const [1, 2, 3, 4], flush: true);
+    await JoaiclientArchive.wrapZipPayload(
+      zipFile: payload,
+      outputFile: archive,
+      password: 'secret',
+    );
+
+    await expectLater(
+      JoaiclientArchive.unwrapToZip(sourceFile: archive, zipFile: restored),
+      throwsA(isA<FormatException>()),
+    );
+    await expectLater(
+      JoaiclientArchive.unwrapToZip(
+        sourceFile: archive,
+        zipFile: restored,
+        password: 'wrong',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(await restored.exists(), isFalse);
+  });
+
+  test('v2 rejects a tampered ciphertext and removes partial output', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/encrypted.joaiclient');
+    final restored = File('${root.path}/restored.zip');
+    await payload.writeAsBytes(
+      List<int>.generate(20000, (index) => index % 251),
+      flush: true,
+    );
+    await JoaiclientArchive.wrapZipPayload(
+      zipFile: payload,
+      outputFile: archive,
+      password: 'secret',
+    );
+
+    final bytes = await archive.readAsBytes();
+    bytes[bytes.length - 1] ^= 0xff;
+    await archive.writeAsBytes(bytes, flush: true);
+
+    await expectLater(
+      JoaiclientArchive.unwrapToZip(
+        sourceFile: archive,
+        zipFile: restored,
+        password: 'secret',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(await restored.exists(), isFalse);
+  });
+
+  test('v1 backups remain readable and report as unencrypted', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/plain.joaiclient');
+    final restored = File('${root.path}/restored.zip');
+    await payload.writeAsBytes(const [5, 6, 7, 8], flush: true);
+    await JoaiclientArchive.wrapV1ForTesting(
+      zipFile: payload,
+      outputFile: archive,
+    );
+
+    expect(await JoaiclientArchive.isEncrypted(archive), isFalse);
+    await JoaiclientArchive.unwrapToZip(
+      sourceFile: archive,
+      zipFile: restored,
+    );
+    expect(await restored.readAsBytes(), const [5, 6, 7, 8]);
+  });
+
+  test('v2 plain backups keep the v2 header but are not encrypted', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/plain-v2.joaiclient');
+    final restored = File('${root.path}/restored.zip');
+    await payload.writeAsBytes(const [1, 3, 5, 7], flush: true);
+    await JoaiclientArchive.wrapZipPayload(
+      zipFile: payload,
+      outputFile: archive,
+    );
+
+    final header = await archive.openRead(0, 11).first;
+    expect(header[8] | header[9] << 8, 2);
+    expect(header[10], 0);
+    expect(await JoaiclientArchive.isEncrypted(archive), isFalse);
+    await JoaiclientArchive.unwrapToZip(
+      sourceFile: archive,
+      zipFile: restored,
+    );
+    expect(await restored.readAsBytes(), const [1, 3, 5, 7]);
+  });
+
+  test('cancelling encryption removes the partial archive', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/encrypted.joaiclient');
+    await payload.writeAsBytes(
+      List<int>.generate(3 * 1024 * 1024, (i) => i % 251),
+      flush: true,
+    );
+    final token = BackupCancelToken();
+    addTearDown(token.dispose);
+    await expectLater(
+      JoaiclientArchive.wrapZipPayload(
+        zipFile: payload,
+        outputFile: archive,
+        password: 'secret',
+        cancelToken: token,
+        onProgress: (update) {
+          if ((update.fraction ?? 0) > 0.2) token.cancel();
+        },
+      ),
+      throwsA(isA<BackupCancelledException>()),
+    );
+    expect(await archive.exists(), isFalse);
+  });
+
+  test('cancelling decryption removes the partial zip', () async {
+    final payload = File('${root.path}/payload.zip');
+    final archive = File('${root.path}/encrypted.joaiclient');
+    final restored = File('${root.path}/restored.zip');
+    await payload.writeAsBytes(
+      List<int>.generate(2 * 1024 * 1024, (i) => i % 251),
+      flush: true,
+    );
+    await JoaiclientArchive.wrapZipPayload(
+      zipFile: payload,
+      outputFile: archive,
+      password: 'secret',
+    );
+    final token = BackupCancelToken();
+    addTearDown(token.dispose);
+    var cancelled = false;
+    await expectLater(
+      JoaiclientArchive.unwrapToZip(
+        sourceFile: archive,
+        zipFile: restored,
+        password: 'secret',
+        cancelToken: token,
+        onProgress: (update) {
+          if ((update.fraction ?? 0) > 0.2) {
+            cancelled = true;
+            token.cancel();
+          }
+        },
+      ),
+      throwsA(isA<BackupCancelledException>()),
+    );
+    expect(cancelled, isTrue);
+    expect(await restored.exists(), isFalse);
+  });
+
 }

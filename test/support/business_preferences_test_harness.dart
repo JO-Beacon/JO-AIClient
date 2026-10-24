@@ -19,7 +19,7 @@ final class BusinessPreferencesTestHarness {
     );
     return BusinessPreferencesTestHarness._(
       directory,
-      File('${directory.path}/kelivo.db'),
+      File('${directory.path}/${AppDatabase.databaseFileName}'),
     );
   }
 

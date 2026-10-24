@@ -49,7 +49,7 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('kelivo_cherry_test_');
     PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
     SharedPreferences.setMockInitialValues({});
-    final databaseFile = File('${tempDir.path}/kelivo.db');
+    final databaseFile = File('${tempDir.path}/jo_aiclient.db');
     database = AppDatabase.open(file: databaseFile);
     businessRepository = BusinessRepository(database);
     chatService = ChatService(

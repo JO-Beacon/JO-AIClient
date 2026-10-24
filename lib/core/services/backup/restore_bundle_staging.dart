@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../database/app_database.dart';
+import '../../database/database_names.dart';
 import '../../database/backup_portability.dart';
 import '../../database/extension_entity_store.dart';
 import '../../database/schema_migrations.dart';
@@ -65,8 +66,10 @@ final class RestoreBundleStaging {
   RestoreBundleStaging._();
 
   static const workspaceRootName = RestoreWorkspaceLock.workspaceRootName;
-  static const _backupFormat = 'kelivo-backup';
-  static const _backupFormatVersion = 2;
+  static const _backupFormat = 'jo-aiclient-backup';
+  static const _backupFormatVersion = 1;
+  static const _legacyBackupFormat = 'kelivo-backup';
+  static const _legacyBackupFormatVersion = 2;
 
   /// 与 DataSync 里同名常量保持一致。像上面的 _backupFormatVersion 一样
   /// 在这里复制一份而不是 import，因为 DataSync 依赖本文件。
@@ -80,7 +83,8 @@ final class RestoreBundleStaging {
     'workspaces',
     'sessions',
   ];
-  static const _databaseEntry = 'database/kelivo.db';
+  static const _databaseEntry = 'database/${DatabaseNames.current}';
+  static const _legacyDatabaseEntry = 'database/${DatabaseNames.legacy}';
 
   /// 本机设置册子在包内的目录前缀。
   ///
@@ -240,17 +244,18 @@ final class RestoreBundleStaging {
         );
       }
 
+      final databaseEntry = declaredEntries.containsKey(_databaseEntry)
+          ? _databaseEntry
+          : _legacyDatabaseEntry;
       final stagedDatabaseFile = File(
-        p.joinAll([payloadDirectory.path, ..._databaseEntry.split('/')]),
+        p.joinAll([payloadDirectory.path, ...databaseEntry.split('/')]),
       );
       _throwIfCancelled(cancelToken);
-      stagedEntries[_databaseEntry] = await _copyVerified(
-        File(
-          p.joinAll([extractedDirectory.path, ..._databaseEntry.split('/')]),
-        ),
+      stagedEntries[databaseEntry] = await _copyVerified(
+        File(p.joinAll([extractedDirectory.path, ...databaseEntry.split('/')])),
         stagedDatabaseFile,
-        _databaseEntry,
-        declaredEntries[_databaseEntry]!,
+        databaseEntry,
+        declaredEntries[databaseEntry]!,
         payloadDirectory,
         resolvedDurability,
         cancelToken: cancelToken,
@@ -509,8 +514,14 @@ final class RestoreBundleStaging {
     final includeChats = manifest['includeChats'];
     final includeFiles = manifest['includeFiles'];
     final payloadKind = manifest['payloadKind'];
-    if (manifest['format'] != _backupFormat ||
-        manifest['formatVersion'] != _backupFormatVersion ||
+    final format = manifest['format'];
+    final formatVersion = manifest['formatVersion'];
+    final formatAccepted =
+        (format == _backupFormat && formatVersion == _backupFormatVersion) ||
+        (format == _legacyBackupFormat &&
+            (formatVersion == _legacyBackupFormatVersion ||
+                formatVersion == 3));
+    if (!formatAccepted ||
         includeChats != true ||
         includeFiles is! bool ||
         payloadKind != 'sqlite' ||
@@ -1220,7 +1231,9 @@ final class RestoreBundleStaging {
     final presentKeys = database.keys.toSet();
     if (!presentKeys.containsAll(expectedKeys) ||
         !presentKeys.difference(expectedKeys).every(optionalKeys.contains) ||
-        database['entry'] != _databaseEntry ||
+        (database['entry'] != _databaseEntry &&
+            (requireCurrentSchema ||
+                database['entry'] != _legacyDatabaseEntry)) ||
         schemaVersion is! int ||
         // 来源清单可以合法地写着一个本构建从未听过的 schema；只有暂存候选
         // 必须是当前 schema。

@@ -79,6 +79,7 @@ import 'core/database/database_installation_gate.dart';
 import 'core/database/empty_database_recovery_guard.dart';
 import 'core/database/private_data_storage.dart';
 import 'core/database/app_database.dart';
+import 'core/database/database_name_migration.dart';
 import 'core/database/business_migration_engine.dart';
 import 'core/database/business_preferences.dart';
 import 'core/database/business_repository.dart';
@@ -109,14 +110,16 @@ import 'shared/widgets/app_overlays.dart';
 import 'shared/widgets/floating_ipad_padding.dart';
 import 'shared/widgets/loading_dialog_card.dart';
 import 'shared/widgets/snackbar.dart';
+import 'shared/widgets/database_conflict_screen.dart';
 import 'shared/widgets/restore_failure_screen.dart';
+
 import 'shared/widgets/restore_progress_screen.dart';
 import 'shared/widgets/restore_outcome_notice.dart';
 import 'shared/widgets/context_tree_migration_notice.dart';
 import 'features/backup/widgets/associated_backup_import_launcher.dart';
 import 'package:system_fonts/system_fonts.dart';
 import 'dart:io'
-    show Directory, File, Platform, stderr; // 保留以便 provider 内进行全局覆盖
+    show Directory, File, Platform, stderr, exit; // 保留以便 provider 内进行全局覆盖
 import 'core/services/mobile_background.dart';
 import 'core/services/notification_service.dart';
 import 'features/home/controllers/chat_actions.dart';
@@ -277,7 +280,8 @@ Future<void> main(List<String> arguments) async {
         associatedJoaiclientPath =
             await AssociatedBackupPathEvents.readPendingPath(appDataDirectory);
       }
-      final RestoreReceipt? restoreOutcome;
+      await _resolveDatabaseNameConflict(appDataDirectory, startupProgress);
+      late final RestoreReceipt? restoreOutcome;
       final restoreDiagnostics = RestoreStartupDiagnostics();
       RestoreBusinessLease? businessLease;
       // 大备份恢复可能耗时数秒，若期间一帧不画，用户无法区分这与应用
@@ -304,45 +308,71 @@ Future<void> main(List<String> arguments) async {
           _RestoreProgressApp(stage: restoreStage, fraction: restoreFraction),
         );
       }
-      try {
-        // 租约通过其内部注册表在进程退出前始终由进程持有，
-        // 防止另一个实例与当前实例争抢业务 I/O。
-        businessLease = await RestoreBusinessLease.acquire(
-          appDataDirectory: appDataDirectory,
-        );
-        FlutterLogger.stage('business lease acquired');
-        restoreOutcome =
-            await RestoreStartupGate.recoverAndRequireBusinessReady(
+      while (true) {
+        try {
+          // 租约通过其内部注册表在进程退出前始终由进程持有，
+          // 防止另一个实例与当前实例争抢业务 I/O。
+          businessLease ??= await RestoreBusinessLease.acquire(
+            appDataDirectory: appDataDirectory,
+          );
+          FlutterLogger.stage('business lease acquired');
+          restoreOutcome =
+              await RestoreStartupGate.recoverAndRequireBusinessReady(
+                appDataDirectory: appDataDirectory,
+                businessLease: businessLease,
+                diagnostics: restoreDiagnostics,
+                onStage: restoreStage == null
+                    ? null
+                    : (stage) {
+                        restoreStage.value = stage;
+                        restoreFraction?.value = _restoreStageFraction(stage);
+                      },
+              );
+          FlutterLogger.stage('restore recover done');
+          reportStartupProgress(0.24);
+          break;
+        } catch (error, stackTrace) {
+          FlutterLogger.stage('restore recover FAILED: $error');
+          stderr.writeln('[RestoreStartupGate] $error\n$stackTrace');
+          await _initRestoreFailureWindow();
+          final report = StartupFailureReport.capture(
+            stage: StartupFailureStage.restoreGate,
+            error: error,
+            step: 'recover_and_require_business_ready',
+            stackTrace: stackTrace,
+            restoreDetails: restoreDiagnostics.details,
+          );
+          final retry = report.blockedRestoreDirectory == null
+              ? null
+              : Completer<void>();
+          runApp(
+            _RestoreFailureApp(
+              key: ObjectKey(report),
+              report: report,
               appDataDirectory: appDataDirectory,
               businessLease: businessLease,
-              diagnostics: restoreDiagnostics,
-              onStage: restoreStage == null
+              retryRestore: retry == null
                   ? null
-                  : (stage) {
-                      restoreStage.value = stage;
-                      restoreFraction?.value = _restoreStageFraction(stage);
+                  : () async {
+                      if (!retry.isCompleted) retry.complete();
                     },
-            );
-        FlutterLogger.stage('restore recover done');
-        reportStartupProgress(0.24);
-      } catch (error, stackTrace) {
-        FlutterLogger.stage('restore recover FAILED: $error');
-        stderr.writeln('[RestoreStartupGate] $error\n$stackTrace');
-        await _initRestoreFailureWindow();
-        runApp(
-          _RestoreFailureApp(
-            report: StartupFailureReport.capture(
-              stage: StartupFailureStage.restoreGate,
-              error: error,
-              step: 'recover_and_require_business_ready',
-              stackTrace: stackTrace,
-              restoreDetails: restoreDiagnostics.details,
             ),
-            appDataDirectory: appDataDirectory,
-            businessLease: businessLease,
-          ),
-        );
-        return;
+          );
+          if (retry == null) return;
+          await retry.future;
+          if (restoreStage != null) {
+            restoreStage.value = RestoreStartupStage.checkingBackup;
+            restoreFraction?.value = _restoreStageFraction(
+              RestoreStartupStage.checkingBackup,
+            );
+            runApp(
+              _RestoreProgressApp(
+                stage: restoreStage,
+                fraction: restoreFraction,
+              ),
+            );
+          }
+        }
       }
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -655,18 +685,74 @@ class _RestoreProgressApp extends StatelessWidget {
   }
 }
 
+Future<void> _resolveDatabaseNameConflict(
+  Directory appDataDirectory,
+  ValueNotifier<ProgressUpdate?> progress,
+) async {
+  final conflict = await DatabaseNameMigration.inspect(appDataDirectory);
+  if (conflict == null) return;
+  final choice = Completer<DatabaseConflictChoice>();
+  runApp(
+    _DatabaseConflictApp(
+      conflict: conflict,
+      onChoose: (value) async {
+        await DatabaseNameMigration.resolve(conflict, value);
+        if (!choice.isCompleted) choice.complete(value);
+      },
+      onExit: () => exit(0),
+    ),
+  );
+  final resolved = await choice.future;
+  if (resolved == DatabaseConflictChoice.exit) return;
+  runApp(_StartupApp(progress: progress));
+}
+
+class _DatabaseConflictApp extends StatelessWidget {
+  const _DatabaseConflictApp({
+    required this.conflict,
+    required this.onChoose,
+    required this.onExit,
+  });
+
+  final DatabaseConflict conflict;
+  final Future<void> Function(DatabaseConflictChoice choice) onChoose;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ThemePalettes.defaultPalette;
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      onGenerateTitle: (context) =>
+          AppLocalizations.of(context)!.aboutPageAppName,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      theme: buildLightThemeForScheme(palette.light),
+      darkTheme: buildDarkThemeForScheme(palette.dark),
+      home: DatabaseConflictScreen(
+        conflict: conflict,
+        onChoose: onChoose,
+        onExit: onExit,
+      ),
+    );
+  }
+}
+
 class _RestoreFailureApp extends StatelessWidget {
   const _RestoreFailureApp({
+    super.key,
     required this.report,
     this.appDataDirectory,
     this.businessLease,
     this.privateStorageSource,
+    this.retryRestore,
   });
 
   final StartupFailureReport report;
   final Directory? appDataDirectory;
   final Directory? privateStorageSource;
   final RestoreBusinessLease? businessLease;
+  final Future<void> Function()? retryRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -682,6 +768,7 @@ class _RestoreFailureApp extends StatelessWidget {
       home: RestoreFailureScreen(
         report: report,
         restart: PlatformUtils.restartApp,
+        retryRestore: retryRestore,
         appDataDirectory: appDataDirectory,
         businessLease: businessLease,
       ),

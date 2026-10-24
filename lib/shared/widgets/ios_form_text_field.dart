@@ -30,6 +30,7 @@ class IosFormTextField extends StatelessWidget {
     this.autocorrect = true,
     this.enableSuggestions = true,
     this.editorBuilder,
+    this.suffix,
   });
 
   final String label;
@@ -59,6 +60,9 @@ class IosFormTextField extends StatelessWidget {
   /// 替换内部输入框（用于长文本按行编辑器）。为空时保持原来的 [TextField]。
   /// 外壳（标签、底色、间距）仍由本组件负责。
   final Widget Function(BuildContext context)? editorBuilder;
+
+  /// 可选的后缀控件（例如密码显示/隐藏按钮）。
+  final Widget? suffix;
 
   bool get _useInlineLabel => inlineLabel ?? (maxLines == 1);
 
@@ -153,6 +157,11 @@ class IosFormTextField extends StatelessWidget {
             ),
             border: InputBorder.none,
             contentPadding: EdgeInsets.zero,
+            suffixIcon: suffix,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: 36,
+            ),
           ),
         );
 

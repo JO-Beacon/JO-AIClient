@@ -202,7 +202,7 @@ Future<File> _createSqliteBackupFixture({
       'bytes': await settingsFile.length(),
       'sha256': await _fileSha256(settingsFile),
     },
-    'database/kelivo.db': {
+    'database/jo_aiclient.db': {
       'bytes': await databaseFile.length(),
       'sha256': databaseSha256 ?? await _fileSha256(databaseFile),
     },
@@ -226,7 +226,7 @@ Future<File> _createSqliteBackupFixture({
       if (businessEntityRowIds != null)
         'businessEntityRowIds': businessEntityRowIds,
       'database': {
-        'entry': 'database/kelivo.db',
+        'entry': 'database/jo_aiclient.db',
         'schemaVersion': schemaVersionOverride ?? snapshotInfo.schemaVersion,
         'conversationCount': snapshotInfo.conversationCount,
         'messageCount': snapshotInfo.messageCount,
@@ -239,7 +239,7 @@ Future<File> _createSqliteBackupFixture({
   encoder.create(zipFile.path);
   encoder.addFileSync(manifestFile, 'manifest.json');
   encoder.addFileSync(settingsFile, 'settings.json');
-  encoder.addFileSync(databaseFile, 'database/kelivo.db');
+  encoder.addFileSync(databaseFile, 'database/jo_aiclient.db');
   if (assetFile != null) {
     encoder.addFileSync(assetFile, 'upload/fixture.txt');
   }
@@ -590,7 +590,11 @@ void main() {
         expect(prepared.receipt.state, RestoreReceiptState.prepared);
         expect(
           File(
-            p.join(prepared.candidateDirectory.path, 'database', 'kelivo.db'),
+            p.join(
+              prepared.candidateDirectory.path,
+              'database',
+              'jo_aiclient.db',
+            ),
           ).existsSync(),
           isTrue,
         );
@@ -855,6 +859,71 @@ void main() {
       expect(await JoaiclientArchive.isJoaiclient(backupFile), isTrue);
     });
 
+    test('external export writes the JO archive format', () async {
+      final chatService = ChatService();
+      final sync = DataSync(
+        businessRepository: businessRepository,
+        chatService: chatService,
+      );
+      final backupFile = await sync.prepareJoaiclientFile(
+        const WebDavConfig(includeChats: false, includeFiles: false),
+      );
+      addTearDown(() => DataSync.cleanupTemporaryBackupFile(backupFile));
+      addTearDown(() async {
+        await chatService.close();
+        chatService.dispose();
+      });
+
+      final zipFile = File('${root.path}/own-format.zip');
+      await JoaiclientArchive.unwrapToZip(
+        sourceFile: backupFile,
+        zipFile: zipFile,
+      );
+      final input = InputFileStream(zipFile.path);
+      final archive = ZipDecoder().decodeStream(input);
+      try {
+        final manifest = jsonDecode(
+          utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
+        ) as Map<String, dynamic>;
+        expect(manifest['format'], 'jo-aiclient-backup');
+        expect(manifest['formatVersion'], 1);
+        expect(manifest['minimumReadableFormatVersion'], 1);
+      } finally {
+        archive.clearSync();
+        input.closeSync();
+      }
+    });
+
+    test('Kelivo-compatible bare ZIP keeps the legacy format', () async {
+      final chatService = ChatService();
+      final sync = DataSync(
+        businessRepository: businessRepository,
+        chatService: chatService,
+      );
+      final backupFile = await sync.prepareBackupFile(
+        const WebDavConfig(includeChats: false, includeFiles: false),
+      );
+      addTearDown(() => DataSync.cleanupTemporaryBackupFile(backupFile));
+      addTearDown(() async {
+        await chatService.close();
+        chatService.dispose();
+      });
+
+      expect(p.extension(backupFile.path), '.zip');
+      final input = InputFileStream(backupFile.path);
+      final archive = ZipDecoder().decodeStream(input);
+      try {
+        final manifest = jsonDecode(
+          utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
+        ) as Map<String, dynamic>;
+        expect(manifest['format'], 'kelivo-backup');
+        expect(manifest['formatVersion'], 2);
+      } finally {
+        archive.clearSync();
+        input.closeSync();
+      }
+    });
+
     test(
       'keeps a UI-owned progress callback out of joaiclient restore isolates',
       () async {
@@ -954,7 +1023,7 @@ void main() {
 
         final run = await _singleRestoreRunDirectory(root);
         final candidate = File(
-          p.join(run.path, 'candidate', 'database', 'kelivo.db'),
+          p.join(run.path, 'candidate', 'database', 'jo_aiclient.db'),
         );
         final candidateDatabase = sqlite.sqlite3.open(
           candidate.path,
@@ -1588,7 +1657,7 @@ void main() {
           };
           expect(archivedBytes.keys, {
             'settings.json',
-            'database/kelivo.db',
+            'database/jo_aiclient.db',
             'upload/shared.txt',
             'manifest.json',
           });
@@ -1606,7 +1675,7 @@ void main() {
           final manifestEntries = manifest['entries'] as Map;
           expect(manifestEntries.keys.toSet(), {
             'settings.json',
-            'database/kelivo.db',
+            'database/jo_aiclient.db',
             'upload/shared.txt',
           });
           for (final name in manifestEntries.keys.cast<String>()) {
@@ -1637,7 +1706,7 @@ void main() {
 
           final snapshotFile = File(p.join(root.path, 'jo_export.sqlite'));
           await snapshotFile.writeAsBytes(
-            archivedBytes['database/kelivo.db']!,
+            archivedBytes['database/jo_aiclient.db']!,
             flush: true,
           );
           final database = sqlite.sqlite3.open(
@@ -1728,7 +1797,7 @@ void main() {
       try {
         archive = ZipDecoder().decodeStream(input);
         final manifestEntry = archive.findFile('manifest.json');
-        final databaseEntry = archive.findFile('database/kelivo.db');
+        final databaseEntry = archive.findFile('database/jo_aiclient.db');
 
         expect(manifestEntry, isNotNull);
         expect(databaseEntry, isNotNull);
@@ -1750,7 +1819,8 @@ void main() {
         expect(manifest['includeChats'], isTrue);
         expect(manifest['appVersion'], '1.0.0-test+1');
         expect(
-          ((manifest['entries'] as Map)['database/kelivo.db'] as Map)['sha256'],
+          ((manifest['entries'] as Map)['database/jo_aiclient.db']
+              as Map)['sha256'],
           archivedHash,
         );
       } finally {
@@ -1808,7 +1878,7 @@ void main() {
           'appVersion': '1.0.0-test+1',
           'secretsIncluded': true,
           'database': {
-            'entry': 'database/kelivo.db',
+            'entry': 'database/jo_aiclient.db',
             'schemaVersion': AppDatabase.currentSchemaVersion,
             'conversationCount': 1,
             'messageCount': 1,
@@ -1818,7 +1888,7 @@ void main() {
               'bytes': await settingsFile.length(),
               'sha256': await _fileSha256(settingsFile),
             },
-            'database/kelivo.db': {
+            'database/jo_aiclient.db': {
               'bytes': await sourceFile.length(),
               'sha256': await _fileSha256(sourceFile),
             },
@@ -1830,7 +1900,7 @@ void main() {
       encoder.create(zipFile.path);
       encoder.addFileSync(manifestFile, 'manifest.json');
       encoder.addFileSync(settingsFile, 'settings.json');
-      encoder.addFileSync(sourceFile, 'database/kelivo.db');
+      encoder.addFileSync(sourceFile, 'database/jo_aiclient.db');
       encoder.closeSync();
 
       final chatService = ChatService();
@@ -1898,7 +1968,7 @@ void main() {
         isTrue,
       );
       final candidateDatabase = File(
-        '${runDirectory.path}/candidate/database/kelivo.db',
+        '${runDirectory.path}/candidate/database/jo_aiclient.db',
       );
       final candidateManifest =
           jsonDecode(
@@ -1908,7 +1978,7 @@ void main() {
               )
               as Map<String, dynamic>;
       expect(
-        ((candidateManifest['entries'] as Map)['database/kelivo.db']
+        ((candidateManifest['entries'] as Map)['database/jo_aiclient.db']
             as Map)['sha256'],
         await _fileSha256(candidateDatabase),
       );
@@ -2195,14 +2265,16 @@ void main() {
       expect(manifest['database'], isA<Map<String, dynamic>>());
       expect(
         (manifest['entries'] as Map<String, dynamic>).keys,
-        containsAll(['database/kelivo.db', 'upload/fixture.txt']),
+        containsAll(['database/jo_aiclient.db', 'upload/fixture.txt']),
       );
       expect(
         (manifest['entries'] as Map<String, dynamic>),
         isNot(contains('settings.json')),
       );
       expect(
-        await File(p.join(candidate.path, 'database', 'kelivo.db')).exists(),
+        await File(
+          p.join(candidate.path, 'database', 'jo_aiclient.db'),
+        ).exists(),
         isTrue,
       );
       expect(
@@ -2562,7 +2634,7 @@ void main() {
       final encoder = ZipFileEncoder();
       encoder.create(zipFile.path);
       encoder.addFileSync(settingsFile, 'settings.json');
-      encoder.addFileSync(databaseFile, 'database/kelivo.db');
+      encoder.addFileSync(databaseFile, 'database/jo_aiclient.db');
       encoder.closeSync();
       await BusinessRestoreService(
         businessRepository,

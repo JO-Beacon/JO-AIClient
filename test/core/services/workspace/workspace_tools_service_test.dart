@@ -30,6 +30,7 @@ class _RecordingApproval extends ToolApprovalService {
     required String toolName,
     required Map<String, dynamic> arguments,
     String? conversationId,
+    String? workspaceId,
   }) async {
     calls++;
     lastName = toolName;
@@ -143,6 +144,7 @@ void main() {
     bool registerRuntime = true,
     Future<void> Function()? onShellCompleted,
     Future<EnvironmentExecutionConfig> Function()? loadEnvironment,
+    WorkspaceBinding? Function(String)? readWorkspaceBinding,
   }) {
     final provider = WorkspaceRuntimeProvider();
     if (registerRuntime && runtime != null) {
@@ -153,6 +155,7 @@ void main() {
       runtimeProvider: provider,
       onShellCompleted: onShellCompleted,
       loadEnvironment: loadEnvironment,
+      readWorkspaceBinding: readWorkspaceBinding,
       updateConversationExtras: (id, update) async {
         extrasById[id] = update(extrasById[id] ?? <String, dynamic>{});
       },
@@ -833,6 +836,46 @@ void main() {
   });
 
   group('approval', () {
+    test(
+      'shell reads grants and revocations during the same generation',
+      () async {
+        var binding = const WorkspaceBinding(workspaceId: 'ws1');
+        final approval = _RecordingApproval();
+        final tools = service(
+          runtime: _SandboxedRuntime(),
+          readWorkspaceBinding: (id) {
+            expect(id, 'conv-1');
+            return binding;
+          },
+        );
+        final context = ctx(
+          sandboxed: true,
+          allowAll: false,
+          shellNeedsApproval: true,
+        );
+        Future<void> run(String id) async {
+          final result = await tools.handle(
+            context,
+            'shell',
+            {'command': 'printf ok'},
+            toolCallId: id,
+            approvalService: approval,
+          );
+          expect(jsonOf(result)['exit_code'], 0);
+        }
+
+        await run('before-grant');
+        expect(approval.calls, 1);
+        binding = const WorkspaceBinding(workspaceId: 'ws1', allowAll: true);
+        await run('after-grant');
+        await run('next-command');
+        expect(approval.calls, 1);
+        binding = const WorkspaceBinding(workspaceId: 'ws1');
+        await run('after-revoke');
+        expect(approval.calls, 2);
+      },
+    );
+
     test('shell asks when shellNeedsApproval', () async {
       final approval = _RecordingApproval();
       final runtime = _SandboxedRuntime();

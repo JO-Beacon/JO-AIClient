@@ -130,7 +130,7 @@ void main() {
           'run_$_runId',
           'candidate',
           'database',
-          'kelivo.db',
+          'jo_aiclient.db',
         ),
       );
       await source.parent.create(recursive: true);
@@ -146,7 +146,7 @@ void main() {
 
       await hook.renameAndSync(
         source: source,
-        targetPath: p.join(appData.path, 'kelivo.db'),
+        targetPath: p.join(appData.path, 'jo_aiclient.db'),
       );
 
       expect(reached, [RestoreProcessFailpoint.candidateDatabaseMoved]);
@@ -162,12 +162,12 @@ void main() {
             'run_$_runId',
             'candidate',
             'database',
-            'kelivo.db',
+            'jo_aiclient.db',
           ),
         );
         await candidate.parent.create(recursive: true);
         await candidate.writeAsBytes([1, 2, 3], flush: true);
-        final live = File(p.join(appData.path, 'kelivo.db'));
+        final live = File(p.join(appData.path, 'jo_aiclient.db'));
         final reached = <RestoreProcessFailpoint>[];
         final hook = RestoreProcessBoundaryDurability(
           appDataDirectory: appData,

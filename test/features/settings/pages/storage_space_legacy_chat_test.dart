@@ -36,7 +36,8 @@ class _FakePathProvider extends PathProviderPlatform {
 }
 
 Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
-  for (var attempt = 0; attempt < 40 && finder.evaluate().isEmpty; attempt++) {
+  // 文件系统扫描使用真实时钟，不是推帧时钟；允许整套测试并发时的 I/O 争用。
+  for (var attempt = 0; attempt < 400 && finder.evaluate().isEmpty; attempt++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 10)),
     );

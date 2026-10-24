@@ -407,7 +407,7 @@ END;
     final directory = await Directory.systemTemp.createTemp(
       'kelivo_business_wal_checkpoint_',
     );
-    final file = File('${directory.path}/kelivo.db');
+    final file = File('${directory.path}/jo_aiclient.db');
     final walDatabase = AppDatabase.open(file: file);
     final walRepository = BusinessRepository(walDatabase);
     addTearDown(() async {

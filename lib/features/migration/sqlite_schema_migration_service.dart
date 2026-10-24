@@ -186,7 +186,7 @@ final class SqliteSchemaMigrationService implements MigrationWorkflow {
     final workDir = await Directory.systemTemp.createTemp(
       'jo_kelivo_sqlite_migration_',
     );
-    final snapshot = File(p.join(workDir.path, 'kelivo.db'));
+    final snapshot = File(p.join(workDir.path, AppDatabase.databaseFileName));
     File? backup;
     try {
       final snapshotInfo = await _createLinearSnapshot(
@@ -531,7 +531,9 @@ final class SqliteSchemaMigrationService implements MigrationWorkflow {
       }
       final manifestEntry = entries['manifest.json'];
       final settingsEntry = entries['settings.json'];
-      final databaseEntry = entries['database/kelivo.db'];
+      final databaseEntry =
+          entries['database/${AppDatabase.databaseFileName}'] ??
+          entries['database/${AppDatabase.legacyDatabaseFileName}'];
       if (manifestEntry == null ||
           settingsEntry == null ||
           databaseEntry == null) {
@@ -594,7 +596,9 @@ final class SqliteSchemaMigrationService implements MigrationWorkflow {
           throw StateError('migration_backup_entry_hash:${entry.key}');
         }
       }
-      final dbFile = File(p.join(temp.path, 'database', 'kelivo.db'));
+      final dbFile = File(
+        p.join(temp.path, 'database', p.basename(databaseEntry.name)),
+      );
       final database = sqlite.sqlite3.open(dbFile.path);
       try {
         final info = _validateLinearSnapshot(database);

@@ -10,6 +10,7 @@ import '../services/backup/backup_cancel_token.dart';
 import '../models/progress_update.dart';
 import '../services/chat/chat_service.dart';
 import '../services/backup/data_sync.dart';
+import '../services/backup/joaiclient_archive.dart';
 import '../services/backup/backup_activity.dart';
 import '../services/backup/device_ledger_export_settings.dart';
 import '../services/backup/local_device_settings_ledger.dart';
@@ -58,7 +59,7 @@ class BackupProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> backup({ProgressCallback? onProgress}) async {
+  Future<bool> backup({ProgressCallback? onProgress, String? password}) async {
     BackupActivity.begin();
     _busy = true;
     _message = null;
@@ -74,6 +75,7 @@ class BackupProvider extends ChangeNotifier {
         // core 层（data_sync / chat_service）统一用上游的新类型。
         onProgress: adaptProgressCallbackToSink(onProgress),
         ledgerEntries: ledgerEntries,
+        password: password,
       );
       _message = 'Backup uploaded';
       return true;
@@ -91,6 +93,7 @@ class BackupProvider extends ChangeNotifier {
     BackupFileItem item, {
     RestoreMode mode = RestoreMode.overwrite,
     ProgressCallback? onProgress,
+    JoaiclientPasswordPrompt? onPassword,
   }) async {
     BackupActivity.begin();
     _busy = true;
@@ -102,6 +105,7 @@ class BackupProvider extends ChangeNotifier {
         item,
         mode: mode,
         onProgress: adaptProgressCallbackToSink(onProgress),
+        onPassword: onPassword,
       );
       _message = 'Restored';
     } catch (e) {
@@ -144,6 +148,7 @@ class BackupProvider extends ChangeNotifier {
     ProgressCallback? onProgress,
     BackupCancelToken? cancelToken,
     bool includeLedger = false,
+    String? password,
   }) async {
     BackupActivity.begin();
     try {
@@ -153,6 +158,7 @@ class BackupProvider extends ChangeNotifier {
         onProgress: onProgress,
         cancelToken: cancelToken,
         ledgerEntries: ledgerEntries,
+        password: password,
       );
     } finally {
       BackupActivity.end();
@@ -188,6 +194,7 @@ class BackupProvider extends ChangeNotifier {
     RestoreMode mode = RestoreMode.overwrite,
     ProgressCallback? onProgress,
     BackupCancelToken? cancelToken,
+    JoaiclientPasswordPrompt? onPassword,
   }) async {
     BackupActivity.begin();
     try {
@@ -197,6 +204,7 @@ class BackupProvider extends ChangeNotifier {
         mode: mode,
         onProgress: adaptProgressCallbackToSink(onProgress),
         cancelToken: cancelToken,
+        onPassword: onPassword,
       );
     } finally {
       BackupActivity.end();

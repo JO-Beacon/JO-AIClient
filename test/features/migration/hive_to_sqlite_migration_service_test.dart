@@ -145,7 +145,7 @@ void main() {
     expect(entryNames, contains('settings.json'));
     expect(entryNames, isNot(contains('chats.json')));
     expect(entryNames, isNot(contains('manifest.json')));
-    expect(entryNames, isNot(contains('database/kelivo.db')));
+    expect(entryNames, isNot(contains('database/jo_aiclient.db')));
     expect(entryNames, contains('conversations.hive'));
     expect(entryNames, contains('messages.hive'));
     expect(entryNames, contains('tool_events_v1.hive'));
@@ -228,7 +228,7 @@ void main() {
     expect(afterMigration.needsMigration, isFalse);
     expect(
       HiveMigrationMarker.isMigrationComplete(
-        File('${tempDir.path}/kelivo.db'),
+        File('${tempDir.path}/jo_aiclient.db'),
       ),
       isTrue,
     );
@@ -275,7 +275,7 @@ void main() {
     await chatService.close();
 
     final repo = ChatDatabaseRepository.open(
-      file: File('${tempDir.path}/kelivo.db'),
+      file: File('${tempDir.path}/jo_aiclient.db'),
     );
     addTearDown(repo.close);
     expect(await repo.getTextPartCount(), 2);
@@ -285,7 +285,7 @@ void main() {
     expect(digest, isNotEmpty);
     expect(digest.length, 64);
     final raw = sqlite.sqlite3.open(
-      '${tempDir.path}/kelivo.db',
+      '${tempDir.path}/jo_aiclient.db',
       mode: sqlite.OpenMode.readOnly,
     );
     addTearDown(raw.close);
@@ -335,7 +335,7 @@ void main() {
       expect(backupFile.existsSync(), isTrue);
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isFalse,
       );
@@ -380,11 +380,14 @@ void main() {
       expect(backupFile.existsSync(), isTrue);
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isFalse,
       );
-      expect(File('${tempDir.path}/kelivo.db.migrating').existsSync(), isFalse);
+      expect(
+        File('${tempDir.path}/jo_aiclient.db.migrating').existsSync(),
+        isFalse,
+      );
       expect(File('${tempDir.path}/conversations.hive').existsSync(), isTrue);
     },
   );
@@ -440,7 +443,7 @@ void main() {
       await service.migrate();
 
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       expect(await repo.getTotalMessageCount(), 1);
@@ -449,7 +452,7 @@ void main() {
 
       await repo.close();
       final raw = sqlite.sqlite3.open(
-        '${tempDir.path}/kelivo.db',
+        '${tempDir.path}/jo_aiclient.db',
         mode: sqlite.OpenMode.readOnly,
       );
       addTearDown(raw.close);
@@ -494,7 +497,7 @@ void main() {
 
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
@@ -503,7 +506,7 @@ void main() {
         isFalse,
       );
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       expect(await repo.getTextPartCount(), 1);
@@ -535,7 +538,7 @@ void main() {
 
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
@@ -545,7 +548,7 @@ void main() {
       );
 
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       expect(await repo.getTotalMessageCount(), 1);
@@ -600,7 +603,7 @@ void main() {
 
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
@@ -610,7 +613,7 @@ void main() {
       );
 
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       // The conversation and the decodable message survive; the corrupt
@@ -668,12 +671,12 @@ void main() {
 
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       final ids = (await repo.getAllConversations())
@@ -734,12 +737,12 @@ void main() {
 
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       // The prescan failure only degrades the truncate-index repair; the
@@ -818,7 +821,7 @@ void main() {
       expect(backupFile.existsSync(), isTrue);
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isFalse,
       );
@@ -828,8 +831,11 @@ void main() {
       );
       expect(File('${tempDir.path}/conversations.hive').existsSync(), isTrue);
       expect(File('${tempDir.path}/messages.hive').existsSync(), isTrue);
-      expect(File('${tempDir.path}/kelivo.db').existsSync(), isFalse);
-      expect(File('${tempDir.path}/kelivo.db.migrating').existsSync(), isFalse);
+      expect(File('${tempDir.path}/jo_aiclient.db').existsSync(), isFalse);
+      expect(
+        File('${tempDir.path}/jo_aiclient.db.migrating').existsSync(),
+        isFalse,
+      );
 
       // Retry succeeds once the injected corruption hook is cleared.
       final retry = HiveToSqliteMigrationService(
@@ -839,7 +845,7 @@ void main() {
       await retry.migrate(backupPath: backupFile.path);
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
@@ -1229,15 +1235,15 @@ void main() {
       await Hive.close();
       // A directory at the target path makes the final replace step fail
       // after the temporary database was fully written.
-      await Directory('${tempDir.path}/kelivo.db').create();
-      final staleTemp = File('${tempDir.path}/kelivo.db.migrating');
-      final staleWal = File('${tempDir.path}/kelivo.db.migrating-wal');
+      await Directory('${tempDir.path}/jo_aiclient.db').create();
+      final staleTemp = File('${tempDir.path}/jo_aiclient.db.migrating');
+      final staleWal = File('${tempDir.path}/jo_aiclient.db.migrating-wal');
 
       final service = HiveToSqliteMigrationService(
         HiveToSqliteMigrationDecision(
           needsMigration: true,
           appDataDir: tempDir,
-          sqliteFile: File('${tempDir.path}/kelivo.db'),
+          sqliteFile: File('${tempDir.path}/jo_aiclient.db'),
           hiveFiles: [File('${tempDir.path}/conversations.hive')],
         ),
       );
@@ -1261,7 +1267,7 @@ void main() {
         HiveToSqliteMigrationDecision(
           needsMigration: true,
           appDataDir: tempDir,
-          sqliteFile: File('${tempDir.path}/kelivo.db'),
+          sqliteFile: File('${tempDir.path}/jo_aiclient.db'),
           hiveFiles: [hiveFile],
         ),
       );
@@ -1286,12 +1292,12 @@ void main() {
       await Hive.close();
       // A directory at the live path makes publish fail after the attempt is
       // recorded, simulating a hard failure without needing a real OOM.
-      await Directory('${tempDir.path}/kelivo.db').create();
+      await Directory('${tempDir.path}/jo_aiclient.db').create();
 
       final decision = HiveToSqliteMigrationDecision(
         needsMigration: true,
         appDataDir: tempDir,
-        sqliteFile: File('${tempDir.path}/kelivo.db'),
+        sqliteFile: File('${tempDir.path}/jo_aiclient.db'),
         hiveFiles: [File('${tempDir.path}/conversations.hive')],
       );
 
@@ -1387,15 +1393,15 @@ void main() {
       HiveToSqliteMigrationDecision(
         needsMigration: true,
         appDataDir: tempDir,
-        sqliteFile: File('${tempDir.path}/kelivo.db'),
+        sqliteFile: File('${tempDir.path}/jo_aiclient.db'),
         hiveFiles: decision.hiveFiles,
       ),
     );
     addTearDown(priming.dispose);
-    await Directory('${tempDir.path}/kelivo.db').create();
+    await Directory('${tempDir.path}/jo_aiclient.db').create();
     await expectLater(priming.migrate(), throwsA(anything));
     expect(priming.attemptCount, 1);
-    await Directory('${tempDir.path}/kelivo.db').delete(recursive: true);
+    await Directory('${tempDir.path}/jo_aiclient.db').delete(recursive: true);
 
     final service = HiveToSqliteMigrationService(
       await HiveToSqliteMigrationService.check(),
@@ -1425,7 +1431,7 @@ void main() {
     final decision = HiveToSqliteMigrationDecision(
       needsMigration: true,
       appDataDir: tempDir,
-      sqliteFile: File('${tempDir.path}/kelivo.db'),
+      sqliteFile: File('${tempDir.path}/jo_aiclient.db'),
       hiveFiles: [hiveFile],
     );
     final stateFile = File(
@@ -1450,9 +1456,9 @@ void main() {
   test(
     'replaceSqlite publishes the migrated database on the happy path',
     () async {
-      final live = File('${tempDir.path}/kelivo.db')
+      final live = File('${tempDir.path}/jo_aiclient.db')
         ..writeAsStringSync('old-placeholder');
-      final temp = File('${tempDir.path}/kelivo.db.migrating')
+      final temp = File('${tempDir.path}/jo_aiclient.db.migrating')
         ..writeAsStringSync('migrated-contents');
       final service = HiveToSqliteMigrationService(
         HiveToSqliteMigrationDecision(
@@ -1473,9 +1479,9 @@ void main() {
   );
 
   test('replaceSqlite fails loudly when a temp -wal sidecar exists', () async {
-    final live = File('${tempDir.path}/kelivo.db')
+    final live = File('${tempDir.path}/jo_aiclient.db')
       ..writeAsStringSync('old-placeholder');
-    final temp = File('${tempDir.path}/kelivo.db.migrating')
+    final temp = File('${tempDir.path}/jo_aiclient.db.migrating')
       ..writeAsStringSync('migrated-contents');
     File('${temp.path}-wal').writeAsStringSync('stray-wal');
     final service = HiveToSqliteMigrationService(
@@ -1505,11 +1511,11 @@ void main() {
   test(
     'replaceSqlite ignores a stray -wal next to the live placeholder',
     () async {
-      final live = File('${tempDir.path}/kelivo.db')
+      final live = File('${tempDir.path}/jo_aiclient.db')
         ..writeAsStringSync('old-placeholder');
       final liveWal = File('${live.path}-wal')
         ..writeAsStringSync('stale-placeholder-wal');
-      final temp = File('${tempDir.path}/kelivo.db.migrating')
+      final temp = File('${tempDir.path}/jo_aiclient.db.migrating')
         ..writeAsStringSync('migrated-contents');
       final service = HiveToSqliteMigrationService(
         HiveToSqliteMigrationDecision(
@@ -1532,8 +1538,8 @@ void main() {
   );
 
   test('replaceSqlite recovers after rename-aside before move-in', () async {
-    final live = File('${tempDir.path}/kelivo.db');
-    final temp = File('${tempDir.path}/kelivo.db.migrating')
+    final live = File('${tempDir.path}/jo_aiclient.db');
+    final temp = File('${tempDir.path}/jo_aiclient.db.migrating')
       ..writeAsStringSync('migrated-contents');
     final aside = File('${live.path}.previous')
       ..writeAsStringSync('old-placeholder');
@@ -1560,11 +1566,11 @@ void main() {
   test(
     'replaceSqlite recovers after move-in before retiring the old file',
     () async {
-      final live = File('${tempDir.path}/kelivo.db')
+      final live = File('${tempDir.path}/jo_aiclient.db')
         ..writeAsStringSync('migrated-contents');
       final aside = File('${live.path}.previous')
         ..writeAsStringSync('old-placeholder');
-      final temp = File('${tempDir.path}/kelivo.db.migrating');
+      final temp = File('${tempDir.path}/jo_aiclient.db.migrating');
       expect(temp.existsSync(), isFalse);
 
       final service = HiveToSqliteMigrationService(
@@ -1651,7 +1657,7 @@ void main() {
       expect(File('${tempDir.path}/messages.hive').existsSync(), isTrue);
 
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       expect(await repo.getImagePartCount(), 2);
@@ -1730,7 +1736,7 @@ void main() {
       expect(File('${tempDir.path}/messages.hive').existsSync(), isTrue);
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isFalse,
       );
@@ -1782,11 +1788,14 @@ void main() {
 
       expect(backupFile.existsSync(), isTrue);
       expect(File('${tempDir.path}/messages.hive').existsSync(), isTrue);
-      expect(File('${tempDir.path}/kelivo.db').existsSync(), isFalse);
-      expect(File('${tempDir.path}/kelivo.db.migrating').existsSync(), isFalse);
+      expect(File('${tempDir.path}/jo_aiclient.db').existsSync(), isFalse);
+      expect(
+        File('${tempDir.path}/jo_aiclient.db.migrating').existsSync(),
+        isFalse,
+      );
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isFalse,
       );
@@ -1834,11 +1843,14 @@ void main() {
       );
 
       expect(File('${tempDir.path}/messages.hive').existsSync(), isTrue);
-      expect(File('${tempDir.path}/kelivo.db').existsSync(), isFalse);
-      expect(File('${tempDir.path}/kelivo.db.migrating').existsSync(), isFalse);
+      expect(File('${tempDir.path}/jo_aiclient.db').existsSync(), isFalse);
+      expect(
+        File('${tempDir.path}/jo_aiclient.db.migrating').existsSync(),
+        isFalse,
+      );
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isFalse,
       );
@@ -1876,7 +1888,7 @@ void main() {
 
       expect(
         HiveMigrationMarker.isMigrationComplete(
-          File('${tempDir.path}/kelivo.db'),
+          File('${tempDir.path}/jo_aiclient.db'),
         ),
         isTrue,
       );
@@ -1884,7 +1896,7 @@ void main() {
       expect(File('${tempDir.path}/messages.hive').existsSync(), isTrue);
 
       final repo = ChatDatabaseRepository.open(
-        file: File('${tempDir.path}/kelivo.db'),
+        file: File('${tempDir.path}/jo_aiclient.db'),
       );
       addTearDown(repo.close);
       final message = await repo.getMessage('message-retry');

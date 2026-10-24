@@ -9,6 +9,7 @@ import '../database/business_repository.dart';
 import '../models/backup.dart';
 import '../models/progress_update.dart';
 import '../services/backup/data_sync.dart';
+import '../services/backup/joaiclient_archive.dart';
 import '../services/backup/backup_activity.dart';
 import '../services/backup/device_ledger_export_settings.dart';
 import '../services/backup/local_device_settings_ledger.dart';
@@ -126,7 +127,7 @@ class S3BackupProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> backup({ProgressCallback? onProgress}) async {
+  Future<bool> backup({ProgressCallback? onProgress, String? password}) async {
     BackupActivity.begin();
     _busy = true;
     _message = null;
@@ -145,6 +146,7 @@ class S3BackupProvider extends ChangeNotifier {
           ),
         ),
         ledgerEntries: ledgerEntries,
+        password: password,
       );
       final prefix = _normalizePrefix(_cfg.prefix);
       final key = '$prefix${p.basename(file.path)}';
@@ -184,6 +186,7 @@ class S3BackupProvider extends ChangeNotifier {
     BackupFileItem item, {
     RestoreMode mode = RestoreMode.overwrite,
     ProgressCallback? onProgress,
+    JoaiclientPasswordPrompt? onPassword,
   }) async {
     BackupActivity.begin();
     _busy = true;
@@ -217,6 +220,7 @@ class S3BackupProvider extends ChangeNotifier {
                 : 0.3 + update.fraction! * 0.7,
           ),
         ),
+        onPassword: onPassword,
       );
       onProgress?.call(const ProgressUpdate(value: 1));
       _message = 'Restored';

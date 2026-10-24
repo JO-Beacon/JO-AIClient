@@ -64,7 +64,7 @@ void main() {
             ),
           ),
         );
-        expect(await File('${root.path}/kelivo.db').exists(), isFalse);
+        expect(await File('${root.path}/jo_aiclient.db').exists(), isFalse);
       },
     );
   }
@@ -95,7 +95,10 @@ void main() {
   test(
     'database journals are retained with their copy, not listed as databases',
     () async {
-      final base = p.join(root.path, 'kelivo.db.displaced-0000000000000001');
+      final base = p.join(
+        root.path,
+        'jo_aiclient.db.displaced-0000000000000001',
+      );
       for (final suffix in ['', '-wal', '-shm', '-journal']) {
         await File('$base$suffix').writeAsString('retained $suffix');
       }
@@ -114,7 +117,7 @@ void main() {
       DatabaseInstallationGate.ensureReady(appDataDirectory: root),
       throwsA(isA<StateError>()),
     );
-    expect(await File('${root.path}/kelivo.db').exists(), isFalse);
+    expect(await File('${root.path}/jo_aiclient.db').exists(), isFalse);
     expect(await wal.readAsString(), 'committed history');
   });
   test(
@@ -146,13 +149,13 @@ void main() {
       );
       await EmptyDatabaseRecoveryGuard.acknowledge(root);
       await check();
-      final db = sqlite.sqlite3.open('${root.path}/kelivo.db');
+      final db = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
       db.execute(
         "INSERT INTO conversation_rows (id,title,created_at,updated_at) VALUES ('new','New',1,1)",
       );
       db.close();
       await check();
-      final later = sqlite.sqlite3.open('${root.path}/kelivo.db');
+      final later = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
       later.execute('DELETE FROM conversation_rows');
       later.close();
       await expectLater(check(), throwsA(isA<StateError>()));
@@ -167,7 +170,7 @@ void main() {
       );
       await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-old.zip'));
       final repository = ChatDatabaseRepository.open(
-        file: File('${root.path}/kelivo.db'),
+        file: File('${root.path}/jo_aiclient.db'),
       );
       try {
         await repository.putConversation(
@@ -200,7 +203,7 @@ void main() {
       );
       await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-old.zip'));
       final repository = ChatDatabaseRepository.open(
-        file: File('${root.path}/kelivo.db'),
+        file: File('${root.path}/jo_aiclient.db'),
       );
       try {
         await repository.deleteConversation('missing');
@@ -227,7 +230,7 @@ void main() {
           File('${root.path}/kelivo-snapshot-old.zip'),
         );
         final repository = ChatDatabaseRepository.open(
-          file: File('${root.path}/kelivo.db'),
+          file: File('${root.path}/jo_aiclient.db'),
         );
         try {
           await repository.putConversation(
@@ -260,7 +263,7 @@ void main() {
         appDataDirectory: root,
       );
       await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-old.zip'));
-      final live = File('${root.path}/kelivo.db');
+      final live = File('${root.path}/jo_aiclient.db');
       var repository = ChatDatabaseRepository.open(file: live);
       await repository.putConversation(Conversation(id: 'last', title: 'Last'));
       await repository.close();
@@ -301,7 +304,7 @@ void main() {
       );
       await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-old.zip'));
       await EmptyDatabaseRecoveryGuard.acknowledge(root);
-      final live = File('${root.path}/kelivo.db');
+      final live = File('${root.path}/jo_aiclient.db');
       final priorEmpty = await live.copy('${root.path}/old-empty.sqlite');
       final repository = ChatDatabaseRepository.open(file: live);
       try {
@@ -332,7 +335,7 @@ void main() {
       await source.ensureReady();
       await source.close();
       final repository = ChatDatabaseRepository.open(
-        file: File('${root.path}/kelivo.db'),
+        file: File('${root.path}/jo_aiclient.db'),
       );
       try {
         await expectLater(
@@ -380,7 +383,7 @@ void main() {
     );
     await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-old.zip'));
     final repository = ChatDatabaseRepository.open(
-      file: File('${root.path}/kelivo.db'),
+      file: File('${root.path}/jo_aiclient.db'),
     );
     try {
       await repository.putConversation(
@@ -391,7 +394,7 @@ void main() {
     }
     // main calls this after a successful database restore, including nonempty ones.
     await EmptyDatabaseRecoveryGuard.acknowledge(root);
-    final database = sqlite.sqlite3.open('${root.path}/kelivo.db');
+    final database = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
     database.execute('DELETE FROM conversation_rows');
     database.close();
     await expectLater(
@@ -412,7 +415,7 @@ void main() {
         File('${root.path}/snapshots 2/kelivo-snapshot-1.zip'),
       );
       await EmptyDatabaseRecoveryGuard.acknowledge(root);
-      final db = sqlite.sqlite3.open('${root.path}/kelivo.db');
+      final db = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
       db.execute(
         "INSERT INTO conversation_rows (id,title,created_at,updated_at) VALUES ('new','New',1,1)",
       );
@@ -444,7 +447,7 @@ void main() {
       await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-1.zip'));
       await EmptyDatabaseRecoveryGuard.acknowledge(root);
       final repository = ChatDatabaseRepository.open(
-        file: File('${root.path}/kelivo.db'),
+        file: File('${root.path}/jo_aiclient.db'),
       );
       try {
         await repository.putConversation(Conversation(id: 'new', title: 'New'));
@@ -457,7 +460,7 @@ void main() {
         ).exists(),
         isFalse,
       );
-      final db = sqlite.sqlite3.open('${root.path}/kelivo.db');
+      final db = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
       db.execute('DELETE FROM conversation_rows');
       db.close();
       await expectLater(
@@ -478,7 +481,7 @@ void main() {
       await writeRecoverySnapshot(File('${root.path}/kelivo-snapshot-1.zip'));
       await EmptyDatabaseRecoveryGuard.acknowledge(root);
       final repository = ChatDatabaseRepository.open(
-        file: File('${root.path}/kelivo.db'),
+        file: File('${root.path}/jo_aiclient.db'),
       );
       try {
         await repository.beginSendGeneration(
@@ -507,7 +510,7 @@ void main() {
         ).exists(),
         isFalse,
       );
-      final db = sqlite.sqlite3.open('${root.path}/kelivo.db');
+      final db = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
       db.execute('DELETE FROM conversation_rows');
       db.close();
       await expectLater(
@@ -523,7 +526,7 @@ void main() {
     'independent installation history blocks silent recreation after DB and receipt disappear',
     () async {
       await DatabaseInstallationGate.ensureReady(appDataDirectory: root);
-      await File('${root.path}/kelivo.db').delete();
+      await File('${root.path}/jo_aiclient.db').delete();
       await for (final file in root.list()) {
         if (file.path.contains('database_installation_receipt_')) {
           await file.delete();
@@ -539,14 +542,14 @@ void main() {
           ),
         ),
       );
-      expect(await File('${root.path}/kelivo.db').exists(), isFalse);
+      expect(await File('${root.path}/jo_aiclient.db').exists(), isFalse);
     },
   );
   test(
     'gateway cannot recreate a database removed after startup admission',
     () async {
       await DatabaseInstallationGate.ensureReady(appDataDirectory: root);
-      final database = File('${root.path}/kelivo.db');
+      final database = File('${root.path}/jo_aiclient.db');
       await database.delete();
       final gateway = ChatDatabaseGateway();
       await expectLater(gateway.acquire(database), throwsA(isA<StateError>()));

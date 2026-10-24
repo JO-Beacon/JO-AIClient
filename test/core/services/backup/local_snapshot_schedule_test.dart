@@ -11,7 +11,7 @@ void main() {
 
     setUp(() async {
       root = await Directory.systemTemp.createTemp('kelivo_fingerprint_');
-      database = File(p.join(root.path, 'kelivo.db'));
+      database = File(p.join(root.path, 'jo_aiclient.db'));
       await database.writeAsString('contents');
     });
 
@@ -173,7 +173,10 @@ void main() {
     });
 
     test('不认得的名字返回 null，不会被当成副本', () {
-      expect(LocalSnapshotPaths.createdAtFromFileName('kelivo.db'), isNull);
+      expect(
+        LocalSnapshotPaths.createdAtFromFileName('jo_aiclient.db'),
+        isNull,
+      );
       expect(
         LocalSnapshotPaths.createdAtFromFileName(
           '${LocalSnapshotPaths.filePrefix}nonsense'

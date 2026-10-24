@@ -80,7 +80,7 @@ void main() {
     PathProviderPlatform.instance = _FakePathProviderPlatform(directory.path);
     HttpOverrides.global = null;
     repository = ChatDatabaseRepository.open(
-      file: File('${directory.path}/kelivo.db'),
+      file: File('${directory.path}/jo_aiclient.db'),
     );
     await repository.ensureReady();
     chatService = ChatService(existingRepository: repository);

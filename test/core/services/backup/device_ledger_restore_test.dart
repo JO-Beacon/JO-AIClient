@@ -124,7 +124,7 @@ Future<File> _createLedgerBackupFixture({
       'bytes': await settingsFile.length(),
       'sha256': await _sha256File(settingsFile),
     },
-    'database/kelivo.db': {
+    'database/jo_aiclient.db': {
       'bytes': await File(databasePath).length(),
       'sha256': await _sha256File(File(databasePath)),
     },
@@ -159,7 +159,7 @@ Future<File> _createLedgerBackupFixture({
       'includeFiles': false,
       'secretsIncluded': true,
       'database': {
-        'entry': 'database/kelivo.db',
+        'entry': 'database/jo_aiclient.db',
         'schemaVersion': snapshotInfo.schemaVersion,
         'conversationCount': snapshotInfo.conversationCount,
         'messageCount': snapshotInfo.messageCount,
@@ -173,7 +173,7 @@ Future<File> _createLedgerBackupFixture({
   encoder.create(zipFile.path);
   encoder.addFileSync(manifestFile, 'manifest.json');
   encoder.addFileSync(settingsFile, 'settings.json');
-  encoder.addFileSync(File(databasePath), 'database/kelivo.db');
+  encoder.addFileSync(File(databasePath), 'database/jo_aiclient.db');
   for (final entry in ledgerFilesOnDisk.entries) {
     encoder.addFileSync(entry.value, entry.key);
   }
@@ -206,7 +206,7 @@ void main() {
     late AppDatabase businessDatabase;
     late BusinessRepository businessRepository;
 
-    /// 当前测试里活的 ChatService。它持有 `appDataDir/kelivo.db` 的独占连接，
+    /// 当前测试里活的 ChatService。它持有 `appDataDir/jo_aiclient.db` 的独占连接，
     /// 冷重启模拟前必须先释放，否则 cutover 的 journal_mode 切换会被锁。
     ChatService? liveChatService;
     var liveChatServiceClosed = false;

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../../../core/models/assistant.dart';
+import '../../../core/models/workspace_binding.dart';
 import '../../../core/models/model_spec.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/environment_provider.dart';
@@ -63,6 +64,12 @@ class ToolHandlerService {
         registry: contextProvider.read<ToolRunRegistry>(),
         runtimeProvider: contextProvider.read<WorkspaceRuntimeProvider>(),
         updateConversationExtras: chat.updateConversationExtras,
+        readWorkspaceBinding: (id) {
+          final conversation = chat.getConversation(id);
+          return conversation == null
+              ? null
+              : WorkspaceBinding.fromExtras(conversation.extras);
+        },
         touchLastUsed: workspaces.touchLastUsed,
         onSkillRead: onSkillRead,
         onShellCompleted: onShellCompleted,

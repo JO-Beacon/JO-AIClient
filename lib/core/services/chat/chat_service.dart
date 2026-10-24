@@ -3843,6 +3843,12 @@ class ChatService extends ChangeNotifier {
     // 切走可能让原分支的首条消息搁浅（其父不再是分叉锚点）：
     // 在这里立刻按契约归一化，避免它从时间线与分支导航中消失。
     final updated = tree.switchBranch(branchId).normalizeDegradedAnchors();
+    debugPrint(
+      'conversation_tree_switch: conv=$conversationId '
+      'branch=${tree.activeBranchId}->$branchId '
+      'branches=${tree.branches.length}->${updated.branches.length} '
+      'path=${tree.activePath().length}->${updated.activePath().length}',
+    );
     if (_temporaryConversationIds.contains(conversationId)) {
       _temporaryConversationTrees[conversationId] = updated;
     } else {

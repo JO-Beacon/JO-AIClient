@@ -133,7 +133,7 @@ void main() {
     try {
       final archive = ZipDecoder().decodeStream(input);
       final names = archive.map((entry) => entry.name).toSet();
-      expect(names, containsAll({'settings.json', 'database/kelivo.db'}));
+      expect(names, containsAll({'settings.json', 'database/jo_aiclient.db'}));
       expect(names, contains('manifest.json'));
     } finally {
       input.closeSync();
@@ -295,7 +295,7 @@ void main() {
       final archive = ZipDecoder().decodeStream(input);
       expect(
         archive.map((entry) => entry.name),
-        everyElement(isNot('kelivo.db-wal')),
+        everyElement(isNot('jo_aiclient.db-wal')),
       );
     } finally {
       input.closeSync();

@@ -73,7 +73,14 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
         try {
             // A rename/delete in Flutter is committed to the same WAL. Watching
             // it keeps the picker current without publishing a second registry.
-            cursor.watch(appData) { it == "kelivo.db" || it == "kelivo.db-wal" }
+            cursor.watch(appData) {
+                it == "jo_aiclient.db" ||
+                    it == "jo_aiclient.db-wal" ||
+                    it == "jo_aiclient.db-shm" ||
+                    it == "kelivo.db" ||
+                    it == "kelivo.db-wal" ||
+                    it == "kelivo.db-shm"
+            }
             if (parentDocumentId == WorkspaceDocumentPaths.ROOT) {
                 for (root in store.list()) cursor.addDocument(root, "", root.directory)
             } else {

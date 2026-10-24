@@ -90,7 +90,7 @@ abstract final class EmptyDatabaseRecoveryGuard {
     sqlite.Database? database;
     try {
       await DatabaseFamilyPreserver.validateSource(source);
-      final copy = File(p.join(temporary.path, 'kelivo.db'));
+      final copy = File(p.join(temporary.path, AppDatabase.databaseFileName));
       for (final suffix in ['', '-wal', '-shm', '-journal']) {
         final file = File('${source.path}$suffix');
         if (await FileSystemEntity.type(file.path, followLinks: false) ==

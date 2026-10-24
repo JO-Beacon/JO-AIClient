@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
@@ -7,12 +9,14 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:pointycastle/export.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 import 'package:Kelivo/core/database/app_database.dart';
 import 'package:Kelivo/core/database/business_repository.dart';
 import 'package:Kelivo/core/models/backup.dart';
 import 'package:Kelivo/core/services/backup/data_sync.dart';
+import 'package:Kelivo/core/services/backup/kelivo_backup_encryption.dart';
 import 'package:Kelivo/core/services/chat/chat_service.dart';
 
 import 'generated/upstream_kelivo_schema3/schema_v3.dart' as upstream_v3;
@@ -43,6 +47,7 @@ Future<String> _sha256(File file) async {
 Future<File> _createUpstreamSchema3Zip(
   Directory root, {
   bool dropTombstone = false,
+  int formatVersion = 2,
 }) async {
   final databaseFile = File('${root.path}/upstream.sqlite');
   final database = upstream_v3.DatabaseAtV3(NativeDatabase(databaseFile));
@@ -99,7 +104,7 @@ Future<File> _createUpstreamSchema3Zip(
   await manifestFile.writeAsString(
     jsonEncode({
       'format': 'kelivo-backup',
-      'formatVersion': 2,
+      'formatVersion': formatVersion,
       'payloadKind': 'sqlite',
       'createdAtUtc': '2026-09-22T00:00:00.000Z',
       'appVersion': '1.3.0+79',
@@ -124,6 +129,67 @@ Future<File> _createUpstreamSchema3Zip(
   encoder.addFileSync(databaseFile, 'database/kelivo.db');
   encoder.closeSync();
   return zipFile;
+}
+
+
+Future<File> _encryptKelivoBackup(
+  File plain,
+  File output,
+  String password,
+) async {
+  final bytes = await plain.readAsBytes();
+  final random = Random.secure();
+  final salt = Uint8List.fromList(
+    List<int>.generate(16, (_) => random.nextInt(256)),
+  );
+  final noncePrefix = Uint8List.fromList(
+    List<int>.generate(8, (_) => random.nextInt(256)),
+  );
+  final header = Uint8List(KelivoBackupEncryption.headerLength);
+  header.setRange(0, 8, KelivoBackupEncryption.magic);
+  header[8] = 2;
+  header.setRange(9, 25, salt);
+  header.setRange(25, 33, noncePrefix);
+  ByteData.sublistView(header).setUint64(33, bytes.length, Endian.big);
+  final kdf = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
+    ..init(Pbkdf2Parameters(salt, 600000, 32));
+  final key = kdf.process(Uint8List.fromList(utf8.encode(password)));
+  final chunks = max(
+    1,
+    (bytes.length + KelivoBackupEncryption.chunkSize - 1) ~/
+        KelivoBackupEncryption.chunkSize,
+  );
+  final handle = await output.open(mode: FileMode.write);
+  try {
+    await handle.writeFrom(header);
+    for (var index = 0; index < chunks; index++) {
+      final start = index * KelivoBackupEncryption.chunkSize;
+      final end = min(
+        start + KelivoBackupEncryption.chunkSize,
+        bytes.length,
+      );
+      final nonce = Uint8List(12)
+        ..setRange(0, 8, noncePrefix)
+        ..setRange(8, 12, _u32(index));
+      final aad = Uint8List(header.length + 4)
+        ..setRange(0, header.length, header)
+        ..setRange(header.length, header.length + 4, _u32(index));
+      final cipher = GCMBlockCipher(AESEngine())
+        ..init(true, AEADParameters(KeyParameter(key), 128, nonce, aad));
+      await handle.writeFrom(
+        cipher.process(Uint8List.fromList(bytes.sublist(start, end))),
+      );
+    }
+  } finally {
+    await handle.close();
+  }
+  return output;
+}
+
+Uint8List _u32(int value) {
+  final bytes = Uint8List(4);
+  ByteData.sublistView(bytes).setUint32(0, value, Endian.big);
+  return bytes;
 }
 
 void main() {
@@ -183,7 +249,9 @@ void main() {
       final databaseInfo = manifest['database'] as Map<String, dynamic>;
       expect(databaseInfo['schemaVersion'], AppDatabase.currentSchemaVersion);
 
-      final candidateDatabase = File('${candidate.path}/database/kelivo.db');
+      final candidateDatabase = File(
+        '${candidate.path}/database/${AppDatabase.databaseFileName}',
+      );
       final raw = sqlite.sqlite3.open(
         candidateDatabase.path,
         mode: sqlite.OpenMode.readOnly,
@@ -433,4 +501,123 @@ void main() {
       await businessDatabase.close();
     }
   });
+  test('DataSync imports an upstream v3 archive with scope', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'kelivo_schema3_v3_',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final previousPathProvider = PathProviderPlatform.instance;
+    PathProviderPlatform.instance = _FakePathProviderPlatform(root);
+    addTearDown(() {
+      PathProviderPlatform.instance = previousPathProvider;
+    });
+
+    final zipFile = await _createUpstreamSchema3Zip(
+      root,
+      formatVersion: 3,
+    );
+    final businessDatabase = AppDatabase(NativeDatabase.memory());
+    final businessRepository = BusinessRepository(businessDatabase);
+    final chatService = ChatService();
+    try {
+      await chatService.init();
+      final dataSync = DataSync(
+        chatService: chatService,
+        businessRepository: businessRepository,
+      );
+      await dataSync.restoreFromLocalFile(
+        zipFile,
+        const WebDavConfig(includeChats: true, includeFiles: false),
+        mode: RestoreMode.overwrite,
+      );
+      final workspace = Directory('${root.path}/.kelivo_restore');
+      final runs = await workspace
+          .list(followLinks: false)
+          .where((entity) => entity is Directory)
+          .map((entity) => entity as Directory)
+          .where((directory) {
+            final name = directory.uri.pathSegments
+                .where((segment) => segment.isNotEmpty)
+                .last;
+            return RegExp(r'^run_[a-f0-9]{32}$').hasMatch(name);
+          })
+          .toList();
+      expect(runs, hasLength(1));
+      final candidate = Directory('${runs.single.path}/candidate');
+      final manifest =
+          jsonDecode(
+                await File('${candidate.path}/manifest.json').readAsString(),
+              )
+              as Map<String, dynamic>;
+      expect(
+        manifest['database']['schemaVersion'],
+        AppDatabase.currentSchemaVersion,
+      );
+    } finally {
+      await chatService.close();
+      await businessDatabase.close();
+    }
+  });
+
+  test('DataSync restores an encrypted upstream v3 archive', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'kelivo_schema3_encrypted_',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final previousPathProvider = PathProviderPlatform.instance;
+    PathProviderPlatform.instance = _FakePathProviderPlatform(root);
+    addTearDown(() {
+      PathProviderPlatform.instance = previousPathProvider;
+    });
+
+    final zip = await _createUpstreamSchema3Zip(root, formatVersion: 3);
+    final encrypted = File('${root.path}/upstream.kbackup');
+    await _encryptKelivoBackup(zip, encrypted, 'secret');
+
+    final businessDatabase = AppDatabase(NativeDatabase.memory());
+    final businessRepository = BusinessRepository(businessDatabase);
+    final chatService = ChatService();
+    try {
+      await chatService.init();
+      final dataSync = DataSync(
+        chatService: chatService,
+        businessRepository: businessRepository,
+      );
+      var attempts = 0;
+      await dataSync.restoreFromLocalFile(
+        encrypted,
+        const WebDavConfig(includeChats: true, includeFiles: true),
+        mode: RestoreMode.overwrite,
+        onPassword: ({required bool retry}) async {
+          attempts++;
+          return attempts == 1 ? 'wrong' : 'secret';
+        },
+      );
+      expect(attempts, 2);
+      final workspace = Directory('${root.path}/.kelivo_restore');
+      final runs = await workspace
+          .list(followLinks: false)
+          .where((entity) => entity is Directory)
+          .toList();
+      expect(runs, isNotEmpty);
+      final candidate = Directory('${runs.first.path}/candidate');
+      final manifest =
+          jsonDecode(
+                await File('${candidate.path}/manifest.json').readAsString(),
+              )
+              as Map<String, dynamic>;
+      expect(
+        manifest['database']['schemaVersion'],
+        AppDatabase.currentSchemaVersion,
+      );
+    } finally {
+      await chatService.close();
+      await businessDatabase.close();
+    }
+  });
+
 }

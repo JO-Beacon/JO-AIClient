@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:Kelivo/l10n/app_localizations.dart';
+import 'package:Kelivo/core/services/backup/restore_diagnostic_exception.dart';
 import 'package:Kelivo/shared/widgets/restore_failure_screen.dart';
 
 /// 平台通道的替身：它在 `flutter test` 下永不应答，
@@ -137,6 +138,63 @@ void main() {
       expect(find.text('Export a copy of my data'), findsOneWidget);
       expect(find.text('Repair and restart'), findsNothing);
       expect(find.text('Reset data'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'blocked directory continues the same restore without restarting',
+    (tester) async {
+      useTallSurface(tester);
+      var retries = 0;
+      var restarts = 0;
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('restore-blocked-ui-'),
+      );
+      addTearDown(() => directory!.delete(recursive: true));
+      final report = StartupFailureReport.capture(
+        stage: StartupFailureStage.restoreGate,
+        error: RestoreFileSystemException(
+          const FileSystemException(
+            'restore_durability_rename:5',
+            r'C:\app\workspaces',
+          ),
+          const {
+            'operation': 'MoveFileExW',
+            'source type': 'directory',
+            'Windows error code': '5',
+            'source path': r'C:\app\workspaces',
+          },
+        ),
+        restoreDetails: const {
+          'restore stage': 'preservingCurrentData',
+          'last observed receipt state': 'prepared',
+        },
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: RestoreFailureScreen(
+            report: report,
+            restart: () async => restarts++,
+            retryRestore: () async => retries++,
+            appDataDirectory: directory,
+            appVersionLoader: stubVersion,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restore is waiting for a folder'), findsOneWidget);
+      expect(find.text(r'C:\app\workspaces'), findsOneWidget);
+      expect(find.text('Restart JO-AIClient'), findsNothing);
+      expect(find.text('Advanced: restore an older copy'), findsNothing);
+
+      await tester.tap(find.text('Continue restore'));
+      await tester.pump();
+      expect(retries, 1);
+      expect(restarts, 0);
     },
   );
 }

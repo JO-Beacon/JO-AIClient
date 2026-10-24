@@ -28,7 +28,7 @@ class _InterruptRetirement implements RestoreDurability {
     required String targetPath,
   }) async {
     await delegate.renameAndSync(source: source, targetPath: targetPath);
-    if (p.basename(targetPath) == 'original-kelivo.db') {
+    if (p.basename(targetPath) == 'original-jo_aiclient.db') {
       throw StateError('injected termination');
     }
   }
@@ -46,12 +46,12 @@ void main() {
     'interrupted retirement retains committed WAL with its main database and resumes before admission',
     () async {
       final producer = await root.createTemp('producer-');
-      final producerFile = File(p.join(producer.path, 'kelivo.db'));
+      final producerFile = File(p.join(producer.path, 'jo_aiclient.db'));
       final database = sqlite.sqlite3.open(producerFile.path);
       database.execute('CREATE TABLE evidence (value TEXT);');
       database.execute('PRAGMA journal_mode=WAL;');
       database.execute("INSERT INTO evidence VALUES ('committed in WAL');");
-      final source = File(p.join(root.path, 'kelivo.db'));
+      final source = File(p.join(root.path, 'jo_aiclient.db'));
       for (final suffix in ['', '-wal', '-shm']) {
         await File('${producerFile.path}$suffix').copy('${source.path}$suffix');
       }
@@ -99,9 +99,11 @@ void main() {
       for (final suffix in ['', '-wal', '-shm']) {
         await File(
           '${copy.path}$suffix',
-        ).copy(p.join(reading.path, 'kelivo.db$suffix'));
+        ).copy(p.join(reading.path, 'jo_aiclient.db$suffix'));
       }
-      final recovered = sqlite.sqlite3.open(p.join(reading.path, 'kelivo.db'));
+      final recovered = sqlite.sqlite3.open(
+        p.join(reading.path, 'jo_aiclient.db'),
+      );
       expect(
         recovered.select('SELECT value FROM evidence').single['value'],
         'committed in WAL',

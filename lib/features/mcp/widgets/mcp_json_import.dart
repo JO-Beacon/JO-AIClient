@@ -5,38 +5,25 @@ import '../../../core/providers/mcp_provider.dart';
 import '../../../core/services/mcp/mcp_config_import.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/form_sheet.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
 import '../../../shared/widgets/section_card.dart';
-import '../../../desktop/widgets/desktop_dialog_style.dart';
-import '../../../theme/app_semantic_colors.dart';
+import 'mcp_form.dart';
 
 Future<void> showMcpJsonImport(
   BuildContext context, {
   bool desktop = false,
 }) async {
   final provider = context.read<McpProvider>();
-  final child = _McpJsonImport(provider: provider);
-  if (desktop) {
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: ctx.overlaySurface,
-        shape: DesktopDialogStyle.shape(ctx),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        child: ConstrainedBox(
-          constraints: DesktopDialogStyle.editorConstraints(ctx),
-          child: child,
-        ),
-      ),
-    );
-  } else {
-    await showFormSheet<void>(context, builder: (_) => child);
-  }
+  await showMcpForm<void>(
+    context,
+    desktop: desktop,
+    builder: (_) => _McpJsonImport(provider: provider, desktop: desktop),
+  );
 }
 
 class _McpJsonImport extends StatefulWidget {
-  const _McpJsonImport({required this.provider});
+  const _McpJsonImport({required this.provider, required this.desktop});
+  final bool desktop;
   final McpProvider provider;
   @override
   State<_McpJsonImport> createState() => _McpJsonImportState();
@@ -84,7 +71,9 @@ class _McpJsonImportState extends State<_McpJsonImport> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
-    return FormSheet(
+    return McpForm(
+      desktop: widget.desktop,
+      width: 640,
       title: l10n.mcpImportJson,
       actions: Row(
         children: [

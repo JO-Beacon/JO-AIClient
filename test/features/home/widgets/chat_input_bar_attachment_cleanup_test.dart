@@ -414,9 +414,18 @@ void main() {
       ),
       isTrue,
     );
-    final remainingPaths = await tester.runAsync(
-      () => uploadDir.list().map((entry) => entry.path).toSet(),
-    );
+    // 推一下“销毁后写入的文件”的后续删除；固定真实时钟延时排不干 widget 测试的伪时钟工作。
+    Set<String>? remainingPaths;
+    for (var attempt = 0; attempt < 400; attempt++) {
+      await tester.pump();
+      remainingPaths = await tester.runAsync(
+        () => uploadDir.list().map((entry) => entry.path).toSet(),
+      );
+      if (setEquals(remainingPaths, existingPaths)) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+    }
     expect(remainingPaths, existingPaths);
 
     controller.dispose();

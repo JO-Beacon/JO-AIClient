@@ -98,7 +98,7 @@ void main() {
   testWidgets('acknowledgement hides the icon persistently and keeps data', (
     tester,
   ) async {
-    final database = File('${directory.path}/kelivo.db');
+    final database = File('${directory.path}/jo_aiclient.db');
     final snapshot = File('${directory.path}/snapshots/old.zip');
     await tester.runAsync(() async {
       await notice.writeAsString('pending');

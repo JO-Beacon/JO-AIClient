@@ -2084,5 +2084,51 @@ void main() {
         ['user-1', 'assistant-v1'],
       );
     });
+
+    test(
+      'branch-changing deletion reloads the new branch instead of keeping the old prefix',
+      () async {
+        final oldBranch = List<ChatMessage>.generate(1000, _message);
+        messages = oldBranch;
+        conversation = Conversation(
+          id: 'conversation-1',
+          title: 'Branch delete',
+          messageIds: oldBranch.map((message) => message.id).toList(),
+        );
+        chatService = _FakeLazyChatService(messages);
+        controller.dispose();
+        controller = ChatController(chatService: chatService);
+        await controller.setCurrentConversationAndLoad(conversation);
+        await controller.loadStartWindow();
+        expect(controller.hasMoreAfter, isTrue);
+
+        final branchMessage = ChatMessage(
+          id: 'branch-message',
+          role: 'assistant',
+          content: 'new branch',
+          conversationId: conversation.id,
+        );
+        final firstMessage = oldBranch.first;
+        final removedIds = {
+          for (var index = 1; index < oldBranch.length; index++)
+            oldBranch[index].id,
+        };
+        messages
+          ..clear()
+          ..addAll([firstMessage, branchMessage]);
+
+        await controller.refreshTimelineAfterMutation(
+          removedRevisionIds: removedIds,
+          activePathIds: const ['message-0', 'branch-message'],
+          forceReload: true,
+        );
+
+        expect(controller.messages.map((message) => message.id), [
+          'message-0',
+          'branch-message',
+        ]);
+        expect(controller.hasMoreAfter, isFalse);
+      },
+    );
   });
 }

@@ -57,7 +57,7 @@ void main() {
       root = await Directory.systemTemp.createTemp('kelivo_chatbox_zip_db_');
       PathProviderPlatform.instance = _FakePathProvider(root.path);
       SharedPreferences.setMockInitialValues({});
-      final databaseFile = File('${root.path}/kelivo.db');
+      final databaseFile = File('${root.path}/jo_aiclient.db');
       database = AppDatabase.open(file: databaseFile);
       businessRepository = BusinessRepository(database);
       chatRepository = ChatDatabaseRepository(

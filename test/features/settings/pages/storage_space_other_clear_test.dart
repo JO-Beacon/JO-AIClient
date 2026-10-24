@@ -39,7 +39,8 @@ Future<void> _writeSizedFile(Directory root, String name, int size) async {
 }
 
 Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
-  for (var attempt = 0; attempt < 40 && finder.evaluate().isEmpty; attempt++) {
+  // 与旧文件 UI 测试一致：让真实文件系统工作在整套测试负载下完成。
+  for (var attempt = 0; attempt < 400 && finder.evaluate().isEmpty; attempt++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 10)),
     );

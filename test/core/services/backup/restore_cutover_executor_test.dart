@@ -36,7 +36,7 @@ void main() {
     });
 
     test('commits database and assets in the first startup pass', () async {
-      final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+      final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
       await _createDatabase(liveDatabase, conversationId: 'old');
       final oldUpload = File(p.join(appData.path, 'upload', 'old.txt'));
       await oldUpload.parent.create();
@@ -77,7 +77,7 @@ void main() {
       );
       expect(
         await _conversationIds(
-          File(p.join(previous.path, 'database', 'kelivo.db')),
+          File(p.join(previous.path, 'database', 'jo_aiclient.db')),
         ),
         ['old'],
       );
@@ -108,9 +108,10 @@ void main() {
       );
 
       expect(terminal.state, RestoreReceiptState.committed);
-      expect(await _conversationIds(File(p.join(appData.path, 'kelivo.db'))), [
-        'new',
-      ]);
+      expect(
+        await _conversationIds(File(p.join(appData.path, 'jo_aiclient.db'))),
+        ['new'],
+      );
       final manifest =
           (jsonDecode(
                     await File(
@@ -127,7 +128,7 @@ void main() {
     });
 
     test('rolls back an interrupted candidate database install', () async {
-      final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+      final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
       await _createDatabase(liveDatabase, conversationId: 'old');
       final oldUpload = File(p.join(appData.path, 'upload', 'old.txt'));
       await oldUpload.parent.create();
@@ -164,7 +165,11 @@ void main() {
       expect(
         await _conversationIds(
           File(
-            p.join(prepared.candidateDirectory.path, 'database', 'kelivo.db'),
+            p.join(
+              prepared.candidateDirectory.path,
+              'database',
+              'jo_aiclient.db',
+            ),
           ),
         ),
         ['new'],
@@ -182,7 +187,7 @@ void main() {
     });
 
     test('keeps a divergent committed terminal fail-closed', () async {
-      final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+      final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
       await _createDatabase(liveDatabase, conversationId: 'old');
       final prepared = await _prepareBundle(
         root: root,
@@ -235,7 +240,7 @@ Future<PreparedRestoreBundle> _prepareBundle({
   await extracted.create();
   final settings = File(p.join(extracted.path, 'settings.json'));
   await settings.writeAsString('{"theme":"new"}', flush: true);
-  final database = File(p.join(extracted.path, 'database', 'kelivo.db'));
+  final database = File(p.join(extracted.path, 'database', 'jo_aiclient.db'));
   await database.parent.create(recursive: true);
   await _createDatabase(database, conversationId: 'new');
   final databaseInfo = await ChatDatabaseRepository.prepareSnapshotForRestore(
@@ -243,7 +248,7 @@ Future<PreparedRestoreBundle> _prepareBundle({
   );
   final entries = <String, dynamic>{
     'settings.json': await _descriptor(settings),
-    'database/kelivo.db': await _descriptor(database),
+    'database/jo_aiclient.db': await _descriptor(database),
   };
   if (includeFiles) {
     final upload = File(p.join(extracted.path, 'upload', 'new.txt'));
@@ -263,7 +268,7 @@ Future<PreparedRestoreBundle> _prepareBundle({
       'includeFiles': includeFiles,
       'secretsIncluded': true,
       'database': {
-        'entry': 'database/kelivo.db',
+        'entry': 'database/jo_aiclient.db',
         'schemaVersion': databaseInfo.schemaVersion,
         'conversationCount': databaseInfo.conversationCount,
         'messageCount': databaseInfo.messageCount,
@@ -342,9 +347,9 @@ final class _ThrowAfterCandidateDatabaseRename implements RestoreDurability {
   }) async {
     await delegate.renameAndSync(source: source, targetPath: targetPath);
     if (!_didThrow &&
-        p.basename(source.path) == 'kelivo.db' &&
+        p.basename(source.path) == 'jo_aiclient.db' &&
         p.basename(source.parent.path) == 'database' &&
-        p.equals(targetPath, p.join(appDataDirectory.path, 'kelivo.db')) &&
+        p.equals(targetPath, p.join(appDataDirectory.path, 'jo_aiclient.db')) &&
         source.path.contains('${p.separator}candidate${p.separator}')) {
       _didThrow = true;
       throw StateError('injected_after_candidate_database_rename');

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/widgets/ios_tactile.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../core/providers/mcp_provider.dart';
 import '../../../shared/widgets/snackbar.dart';
@@ -114,9 +115,12 @@ class _McpJsonEditSheetState extends State<_McpJsonEditSheet> {
               padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: Icon(Lucide.X, size: 20, color: cs.onSurface),
+                  IosIconButton(
+                    minSize: 44,
+                    onTap: () => Navigator.of(context).maybePop(),
+                    icon: Lucide.X,
+                    size: 20,
+                    color: cs.onSurface,
                     tooltip: MaterialLocalizations.of(
                       context,
                     ).closeButtonTooltip,
@@ -130,9 +134,12 @@ class _McpJsonEditSheetState extends State<_McpJsonEditSheet> {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    onPressed: _save,
-                    icon: Icon(Lucide.Check, size: 20, color: cs.primary),
+                  IosIconButton(
+                    minSize: 44,
+                    onTap: _save,
+                    icon: Lucide.Check,
+                    size: 20,
+                    color: cs.primary,
                     tooltip: AppLocalizations.of(
                       context,
                     )!.mcpServerEditSheetSave,

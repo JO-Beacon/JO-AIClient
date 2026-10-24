@@ -76,12 +76,12 @@ Future<Map<String, int>> _brokenPreservation(
   String damage,
 ) async {
   await DatabaseInstallationGate.ensureReady(appDataDirectory: root);
-  final live = File('${root.path}/kelivo.db');
+  final live = File('${root.path}/jo_aiclient.db');
   final producer = await Directory.systemTemp.createTemp(
     'kelivo-wal-producer-',
   );
   try {
-    final producerFile = await live.copy('${producer.path}/kelivo.db');
+    final producerFile = await live.copy('${producer.path}/jo_aiclient.db');
     final database = sqlite.sqlite3.open(producerFile.path);
     try {
       database.execute('PRAGMA journal_mode=WAL');
@@ -102,7 +102,7 @@ Future<Map<String, int>> _brokenPreservation(
       live,
       durability: _Faults(
         beforeRename: (_, target) {
-          if (p.basename(target) == 'original-kelivo.db') {
+          if (p.basename(target) == 'original-jo_aiclient.db') {
             throw StateError('injected interruption');
           }
         },
@@ -160,7 +160,7 @@ Future<void> _restore(Directory root, File snapshot) async {
     appDataDirectory: root,
     allowDatabaseIdentityChange: true,
   );
-  final database = sqlite.sqlite3.open('${root.path}/kelivo.db');
+  final database = sqlite.sqlite3.open('${root.path}/jo_aiclient.db');
   try {
     expect(
       database
@@ -261,7 +261,7 @@ void main() {
               stop();
             }
             if (point == 'main retired' &&
-                p.basename(target) == 'original-kelivo.db') {
+                p.basename(target) == 'original-jo_aiclient.db') {
               stop();
             }
           },
@@ -304,7 +304,7 @@ void main() {
     'healthy startup snapshot recovery still rolls back to the live database',
     () async {
       await DatabaseInstallationGate.ensureReady(appDataDirectory: root);
-      final live = File('${root.path}/kelivo.db');
+      final live = File('${root.path}/jo_aiclient.db');
       final old = sqlite.sqlite3.open(live.path);
       old.execute(
         "INSERT INTO conversation_rows(id,title,created_at,updated_at) VALUES('old','Original chat',1,1)",

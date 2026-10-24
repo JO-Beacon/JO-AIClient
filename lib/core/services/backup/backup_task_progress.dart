@@ -24,6 +24,8 @@ enum BackupPhase {
   // --- JO-AIClient 独有 ---
   wrapping,
   restoring,
+  encrypting,
+  decrypting,
 }
 
 enum BackupProgressUnit { none, bytes, items }

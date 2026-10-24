@@ -27,7 +27,7 @@ Future<({Directory directory, String manifestSha256})> _createBundle(
       'sha256': (await sha256.bind(settings.openRead()).first).toString(),
     },
   };
-  final database = File(p.join(directory.path, 'database', 'kelivo.db'));
+  final database = File(p.join(directory.path, 'database', 'jo_aiclient.db'));
   ChatDatabaseSnapshotInfo? databaseInfo;
   if (includeDatabase) {
     await database.parent.create(recursive: true);
@@ -40,7 +40,7 @@ Future<({Directory directory, String manifestSha256})> _createBundle(
     databaseInfo = await ChatDatabaseRepository.prepareSnapshotForRestore(
       database,
     );
-    entries['database/kelivo.db'] = {
+    entries['database/jo_aiclient.db'] = {
       'bytes': await database.length(),
       'sha256': (await sha256.bind(database.openRead()).first).toString(),
     };
@@ -67,7 +67,7 @@ Future<({Directory directory, String manifestSha256})> _createBundle(
       'secretsIncluded': true,
       if (includeDatabase)
         'database': {
-          'entry': 'database/kelivo.db',
+          'entry': 'database/jo_aiclient.db',
           'schemaVersion': databaseInfo!.schemaVersion,
           'conversationCount': databaseInfo.conversationCount,
           'messageCount': databaseInfo.messageCount,
@@ -158,7 +158,7 @@ void main() {
               as Map<String, dynamic>;
       expect(candidateManifest['includeFiles'], isFalse);
       expect((candidateManifest['entries'] as Map<String, dynamic>).keys, [
-        'database/kelivo.db',
+        'database/jo_aiclient.db',
       ]);
     });
 

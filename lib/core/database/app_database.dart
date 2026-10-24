@@ -7,6 +7,7 @@ import 'package:drift/native.dart';
 import 'package:sqlite3/common.dart' show AllowedArgumentCount, CommonDatabase;
 
 import '../../utils/app_directories.dart';
+import 'database_names.dart';
 
 part 'app_database.g.dart';
 
@@ -825,7 +826,8 @@ class ExtensionEntityRows extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
-  static const databaseFileName = 'kelivo.db';
+  static const databaseFileName = DatabaseNames.current;
+  static const legacyDatabaseFileName = DatabaseNames.legacy;
   static const contextTreeMigrationWarningsKey =
       'context_tree_migration_warnings_v1';
 

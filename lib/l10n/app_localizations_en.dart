@@ -1816,6 +1816,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mcpAssistantSheetSelectAll => 'Select All';
 
   @override
+  String get mcpPageStatusFailed => 'Connection failed';
+
+  @override
+  String mcpPageCardToolsShort(int enabled, int total) {
+    return 'Tools $enabled/$total';
+  }
+
+  @override
+  String mcpPageSelectServer(String name) {
+    return 'Select $name';
+  }
+
+  @override
+  String get mcpIconTitle => 'Server icon';
+
+  @override
+  String get mcpIconInvalid =>
+      'Unable to use this image. Choose a valid image up to 10 MB.';
+
+  @override
+  String get mcpSelectServers => 'Select servers';
+
+  @override
+  String get mcpMoveToGroup => 'Move to group';
+
+  @override
+  String get mcpRenameGroup => 'Rename group';
+
+  @override
+  String get mcpDeleteGroupConfirm =>
+      'Servers in this group will be moved to Other. The servers will not be deleted.';
+
+  @override
+  String get mcpGroupNameInvalid => 'Use a nonempty, unique group name.';
+
+  @override
+  String get mcpEnableSelected => 'Enable';
+
+  @override
+  String get mcpDisableSelected => 'Disable';
+
+  @override
+  String mcpDeleteSelectedConfirm(int count) {
+    return 'Delete $count selected servers?';
+  }
+
+  @override
   String get mcpAssistantSheetClearAll => 'Clear';
 
   @override
@@ -1885,6 +1932,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupRestoreFailureTitle => 'Restore requires attention';
+
+  @override
+  String get backupRestoreDirectoryBlockedTitle =>
+      'Restore is waiting for a folder';
+
+  @override
+  String get backupRestoreDirectoryBlockedContent =>
+      'Windows could not move the folder below. Close terminals, editors, or other programs using it, then continue restoring. If it is still blocked, check that your account can move the folder. Your restore progress has been kept.';
+
+  @override
+  String get backupRestoreContinueButton => 'Continue restore';
 
   @override
   String get backupRestoreFailureContent =>
@@ -1957,6 +2015,83 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get startupRecoveryBusy => 'Working…';
+
+  @override
+  String get databaseConflictTitle => 'Two databases found';
+
+  @override
+  String databaseConflictBody(String directory) {
+    return 'Both jo_aiclient.db and kelivo.db exist. Choose the one to keep. The other database will not be deleted; it will be moved as a whole to $directory.';
+  }
+
+  @override
+  String get databaseConflictUse => 'Use this';
+
+  @override
+  String get databaseConflictExit => 'Quit app';
+
+  @override
+  String get databaseConflictModified => 'Modified';
+
+  @override
+  String get databaseConflictSize => 'Size';
+
+  @override
+  String get databaseConflictQuarantineFailed =>
+      'Could not move the other database. Nothing was changed. Check file permissions and try again.';
+
+  @override
+  String get databaseConflictUnreadable => 'Unreadable';
+
+  @override
+  String get backupEncryptionTitle => 'Encrypt backups';
+
+  @override
+  String get backupEncryptionOffHint =>
+      'Unencrypted backups can be read by anyone with the file.';
+
+  @override
+  String get backupEncryptionOnHint =>
+      'Backups are encrypted while this page stays open.';
+
+  @override
+  String get backupEncryptionPassword => 'Password';
+
+  @override
+  String get backupEncryptionConfirmPassword => 'Confirm password';
+
+  @override
+  String get backupEncryptionPasswordHint =>
+      'Keep this password safe. If you lose it, the backup cannot be restored. It is kept only while this page is open.';
+
+  @override
+  String get backupEncryptionMismatch => 'Passwords do not match.';
+
+  @override
+  String get backupEncryptionShowPassword => 'Show password';
+
+  @override
+  String get backupEncryptionHidePassword => 'Hide password';
+
+  @override
+  String get backupEncryptionUnlockTitle => 'Encrypted backup';
+
+  @override
+  String get backupEncryptionUnlockHint =>
+      'Enter the password used to create this backup.';
+
+  @override
+  String get backupEncryptionUnlock => 'Unlock';
+
+  @override
+  String get backupEncryptionFailed =>
+      'The password is incorrect, or the backup is damaged. Try again or cancel.';
+
+  @override
+  String get backupProgressEncrypting => 'Encrypting backup';
+
+  @override
+  String get backupProgressDecrypting => 'Decrypting backup';
 
   @override
   String get startupRecoveryExportSucceeded => 'A copy of your data was saved.';

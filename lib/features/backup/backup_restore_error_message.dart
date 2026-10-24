@@ -11,6 +11,12 @@ String backupRestoreErrorMessage(AppLocalizations localizations, Object error) {
   if (code == 'kelivo_schema2_unsupported') {
     return localizations.backupRestoreOldKelivoUnsupported;
   }
+  if (code == 'joaiclient_decryption_failed' ||
+      code == 'joaiclient_password_required' ||
+      code == 'kelivo_backup_password_required' ||
+      code == 'kelivo_backup_decryption_failed') {
+    return localizations.backupEncryptionFailed;
+  }
   if (_isJoaiclientArchiveError(code)) {
     return localizations.backupRestoreCorruptArchiveMessage(code);
   }
@@ -56,4 +62,13 @@ bool _isJoaiclientArchiveError(String code) =>
     code == 'joaiclient_payload_size' ||
     code == 'joaiclient_payload_length' ||
     code == 'joaiclient_payload_truncated' ||
-    code == 'joaiclient_payload_hash';
+    code == 'joaiclient_payload_hash' ||
+    code == 'joaiclient_password_required' ||
+    code == 'joaiclient_password_unexpected' ||
+    code == 'joaiclient_decryption_failed' ||
+    code == 'joaiclient_encryption_failed' ||
+    code == 'kelivo_backup_password_required' ||
+    code == 'kelivo_backup_decryption_failed' ||
+    code == 'kelivo_backup_encryption_header' ||
+    code == 'kelivo_backup_encryption_version' ||
+    code == 'kelivo_backup_encryption_size';

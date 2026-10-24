@@ -31,6 +31,7 @@ Future<void> showDesktopContextMenuAt(
   BuildContext context, {
   required Offset globalPosition,
   required List<DesktopContextMenuItem> items,
+  Color? backgroundColor,
 }) async {
   // Match the navigator used by showGeneralDialog, including nested panes.
   final overlay = Navigator.of(context, rootNavigator: true).overlay;
@@ -108,7 +109,9 @@ Future<void> showDesktopContextMenuAt(
                           filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: cs.surface.withValues(alpha: 0.66),
+                              color:
+                                  backgroundColor ??
+                                  cs.surface.withValues(alpha: 0.66),
                             ),
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
@@ -157,7 +160,7 @@ double _estimateMenuWidth(
 ) {
   // 基础内边距：左右 12；图标 18，若有则再加间距 10
   double maxText = 0;
-  final textStyle = TextStyle(
+  final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
     fontSize: 14.5,
     color: Theme.of(context).colorScheme.onSurface,
     decoration: TextDecoration.none,
@@ -166,7 +169,8 @@ double _estimateMenuWidth(
   for (final it in items) {
     final tp = TextPainter(
       text: TextSpan(text: it.label, style: textStyle),
-      textDirection: TextDirection.ltr,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
     )..layout(maxWidth: maxW);
     double width = 12 /*left*/ + tp.width + 12 /*right*/;
@@ -178,7 +182,7 @@ double _estimateMenuWidth(
     }
     if (width > maxText) maxText = width;
   }
-  return maxText.clamp(minW, maxW);
+  return (maxText.ceilToDouble() + 4).clamp(minW, maxW);
 }
 
 /// 显示锚定到 widget key 的菜单（根据空间决定显示在 widget 上方或下方）。
@@ -280,6 +284,7 @@ class _GlassMenuItemState extends State<_GlassMenuItem> {
       onExit: (_) => setState(() => _hover = false),
       cursor: SystemMouseCursors.click,
       child: IosCardPress(
+        focusable: true,
         borderRadius: BorderRadius.zero,
         baseColor: Colors.transparent,
         onTap: () {

@@ -64,11 +64,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     final row = find.byKey(ValueKey('mcp-$id'));
-    await tester.drag(row, const Offset(-500, 0));
+    await tester.tap(
+      find.descendant(of: row, matching: find.byTooltip('More')),
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(of: row, matching: find.text('Delete')));
+    await tester.tap(find.text('Delete').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+    await tester.tap(find.text('Delete').last);
     await tester.pumpAndSettle();
     expect(provider.getById(id), isNull);
     await tester.tap(find.text('Undo'));

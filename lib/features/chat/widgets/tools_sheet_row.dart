@@ -15,7 +15,8 @@ import 'package:Kelivo/theme/app_font_weights.dart';
 class ToolsSheetRow extends StatelessWidget {
   const ToolsSheetRow({
     super.key,
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.label,
     this.subtitle,
     this.detail,
@@ -23,9 +24,10 @@ class ToolsSheetRow extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.trailing,
-  });
+  }) : assert(icon != null || leading != null);
 
-  final IconData icon;
+  final IconData? icon;
+  final Widget? leading;
   final String label;
   final String? subtitle;
   final String? detail;
@@ -58,7 +60,7 @@ class ToolsSheetRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: onColor),
+            leading ?? Icon(icon, size: 20, color: onColor),
             const SizedBox(width: 10),
             Expanded(
               child: hasSubtitle

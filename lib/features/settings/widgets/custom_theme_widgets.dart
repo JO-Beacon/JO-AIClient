@@ -194,9 +194,15 @@ Future<T?> _showAppSheet<T>(
 
 /// 对话框标题（桌面端）：标题加关闭按钮。
 class AppDialogHeader extends StatelessWidget {
-  const AppDialogHeader({super.key, required this.title, this.actions});
+  const AppDialogHeader({
+    super.key,
+    required this.title,
+    this.actions,
+    this.showClose = true,
+  });
   final String title;
   final List<Widget>? actions;
+  final bool showClose;
 
   @override
   Widget build(BuildContext context) {
@@ -219,16 +225,17 @@ class AppDialogHeader extends StatelessWidget {
               ),
             ),
             ...?actions,
-            Tooltip(
-              message: AppLocalizations.of(context)!.commonClose,
-              child: IosIconButton(
-                icon: Lucide.X,
-                size: 18,
-                color: cs.onSurface.withValues(alpha: 0.62),
-                semanticLabel: AppLocalizations.of(context)!.commonClose,
-                onTap: () => Navigator.of(context).maybePop(),
+            if (showClose)
+              Tooltip(
+                message: AppLocalizations.of(context)!.commonClose,
+                child: IosIconButton(
+                  icon: Lucide.X,
+                  size: 18,
+                  color: cs.onSurface.withValues(alpha: 0.62),
+                  semanticLabel: AppLocalizations.of(context)!.commonClose,
+                  onTap: () => Navigator.of(context).maybePop(),
+                ),
               ),
-            ),
           ],
         ),
       ),

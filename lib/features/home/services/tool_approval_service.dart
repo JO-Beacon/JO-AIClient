@@ -20,6 +20,7 @@ class ToolApprovalRequest {
   final String toolName;
   final Map<String, dynamic> arguments;
   final String? conversationId;
+  final String? workspaceId;
   final Completer<ToolApprovalResult> _completer;
 
   ToolApprovalRequest({
@@ -27,6 +28,7 @@ class ToolApprovalRequest {
     required this.toolName,
     required this.arguments,
     this.conversationId,
+    this.workspaceId,
     required this._completer,
   });
 
@@ -81,6 +83,7 @@ class ToolApprovalService extends ChangeNotifier {
     required String toolName,
     required Map<String, dynamic> arguments,
     String? conversationId,
+    String? workspaceId,
   }) {
     final key = _storageKey(conversationId, toolCallId);
     final existing = _pending[key];
@@ -91,6 +94,7 @@ class ToolApprovalService extends ChangeNotifier {
       toolName: toolName,
       arguments: arguments,
       conversationId: conversationId,
+      workspaceId: workspaceId,
       completer: completer,
     );
     notifyListeners();
@@ -102,6 +106,28 @@ class ToolApprovalService extends ChangeNotifier {
     final req = _take(toolCallId, conversationId);
     if (req != null && !req._completer.isCompleted) {
       req._completer.complete(ToolApprovalResult.approved());
+    }
+    notifyListeners();
+  }
+
+  /// 会话级工作区授权落盘后，立即放行该工作区下等待中的 Shell。
+  void approveWorkspaceShells({
+    required String conversationId,
+    required String workspaceId,
+  }) {
+    if (conversationId.trim().isEmpty || workspaceId.isEmpty) return;
+    final matches = _pending.entries
+        .where(
+          (entry) =>
+              entry.value.conversationId == conversationId.trim() &&
+              entry.value.workspaceId == workspaceId &&
+              entry.value.toolName == 'shell',
+        )
+        .toList();
+    if (matches.isEmpty) return;
+    for (final entry in matches) {
+      _pending.remove(entry.key);
+      entry.value._completer.complete(ToolApprovalResult.approved());
     }
     notifyListeners();
   }

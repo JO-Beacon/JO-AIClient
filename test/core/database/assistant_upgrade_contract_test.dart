@@ -36,7 +36,7 @@ void main() {
   late File file;
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('assistant-upgrade-');
-    file = File('${directory.path}/kelivo.db');
+    file = File('${directory.path}/jo_aiclient.db');
   });
   tearDown(() => directory.delete(recursive: true));
 

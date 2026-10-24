@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
+import 'package:Kelivo/core/database/app_database.dart';
 import 'package:Kelivo/core/database/chat_database_repository.dart';
 import 'package:Kelivo/core/models/backup_scope.dart';
 import 'package:Kelivo/core/models/conversation.dart';
@@ -21,7 +22,9 @@ Future<File> writeRecoverySnapshot(
         'kelivo-recovery-fixture-',
       );
       try {
-        final database = File('${staging.path}/kelivo.db');
+        final database = File(
+          '${staging.path}/${AppDatabase.databaseFileName}',
+        );
         final repository = ChatDatabaseRepository.open(file: database);
         try {
           await repository.ensureReady();
@@ -56,7 +59,7 @@ Future<File> writeRecoverySnapshot(
         await settings.writeAsString('{}');
         final files = {
           'settings.json': settings,
-          'database/kelivo.db': database,
+          'database/${AppDatabase.databaseFileName}': database,
         };
         final entries = <String, Object>{};
         for (final entry in files.entries) {
@@ -81,7 +84,7 @@ Future<File> writeRecoverySnapshot(
               for (final category in BackupCategory.values) category.name: true,
             },
             'database': {
-              'entry': 'database/kelivo.db',
+              'entry': 'database/${AppDatabase.databaseFileName}',
               'schemaVersion': info.schemaVersion,
               'conversationCount': info.conversationCount,
               'messageCount': info.messageCount,

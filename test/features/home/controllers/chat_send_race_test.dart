@@ -364,7 +364,7 @@ void main() {
     // loopback API server below needs real networking.
     HttpOverrides.global = null;
     repository = ChatDatabaseRepository.open(
-      file: File('${directory.path}/kelivo.db'),
+      file: File('${directory.path}/jo_aiclient.db'),
     );
     await repository.ensureReady();
     service = _CancelFailureChatService(repository);

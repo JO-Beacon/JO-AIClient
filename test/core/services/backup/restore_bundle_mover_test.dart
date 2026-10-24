@@ -69,7 +69,7 @@ void main() {
     test(
       'resumes old database and asset moves after a post-rename failure',
       () async {
-        final database = File(p.join(appData.path, 'kelivo.db'));
+        final database = File(p.join(appData.path, 'jo_aiclient.db'));
         await database.writeAsBytes([1, 2, 3], flush: true);
         final upload = File(p.join(appData.path, 'upload', 'item'));
         await upload.parent.create();
@@ -113,7 +113,7 @@ void main() {
     );
 
     test('syncs every old asset before the first bundle rename', () async {
-      final database = File(p.join(appData.path, 'kelivo.db'));
+      final database = File(p.join(appData.path, 'jo_aiclient.db'));
       await database.writeAsBytes([1, 2, 3], flush: true);
       final asset = File(p.join(appData.path, 'upload', 'nested', 'item.txt'));
       await asset.parent.create(recursive: true);
@@ -149,7 +149,7 @@ void main() {
       );
       final phaseBarrier = durability.events.indexOf('directory:.:true');
       final databaseRename = durability.events.indexWhere(
-        (event) => event.endsWith('/previous.pending/database/kelivo.db'),
+        (event) => event.endsWith('/previous.pending/database/jo_aiclient.db'),
       );
       expect(fileSync, inInclusiveRange(0, firstRename - 1));
       expect(phaseBarrier, inInclusiveRange(0, firstRename - 1));
@@ -196,7 +196,7 @@ void main() {
         );
 
         final installed = await RestorePreviousBuilder.describeFile(
-          File(p.join(appData.path, 'kelivo.db')),
+          File(p.join(appData.path, 'jo_aiclient.db')),
         );
         expect(installed.sha256, fixture.newDatabaseSha256);
         expect(
@@ -250,7 +250,7 @@ void main() {
       );
 
       final restored = await RestorePreviousBuilder.describeFile(
-        File(p.join(appData.path, 'kelivo.db')),
+        File(p.join(appData.path, 'jo_aiclient.db')),
       );
       expect(restored.sha256, fixture.oldDatabaseSha256);
       expect(
@@ -301,7 +301,7 @@ Future<_CutoverFixture> _prepareCutoverFixture({
   required Directory runDirectory,
   required Directory candidateDirectory,
 }) async {
-  final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+  final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
   await _createDatabase(liveDatabase, conversationId: 'old');
   final oldDatabase = await RestorePreviousBuilder.describeFile(liveDatabase);
   final oldUpload = File(p.join(appData.path, 'upload', 'old'));
@@ -310,7 +310,7 @@ Future<_CutoverFixture> _prepareCutoverFixture({
   await Directory(p.join(appData.path, 'images')).create();
 
   final candidateDatabase = File(
-    p.join(candidateDirectory.path, 'database', 'kelivo.db'),
+    p.join(candidateDirectory.path, 'database', 'jo_aiclient.db'),
   );
   await candidateDatabase.parent.create(recursive: true);
   await _createDatabase(candidateDatabase, conversationId: 'new');
@@ -335,13 +335,13 @@ Future<_CutoverFixture> _prepareCutoverFixture({
       'includeChats': true,
       'includeFiles': true,
       'database': {
-        'entry': 'database/kelivo.db',
+        'entry': 'database/jo_aiclient.db',
         'schemaVersion': databaseInfo.schemaVersion,
         'conversationCount': databaseInfo.conversationCount,
         'messageCount': databaseInfo.messageCount,
       },
       'entries': {
-        'database/kelivo.db': databaseDescriptor,
+        'database/jo_aiclient.db': databaseDescriptor,
         'upload/new': uploadDescriptor,
       },
     }),

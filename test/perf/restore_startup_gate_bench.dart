@@ -35,7 +35,7 @@ void main() {
     await appData.create();
 
     final fixtureWatch = Stopwatch()..start();
-    final liveDatabase = File(p.join(appData.path, 'kelivo.db'));
+    final liveDatabase = File(p.join(appData.path, 'jo_aiclient.db'));
     await _createDatabase(liveDatabase, conversationId: 'old');
     final liveBytes = await _writeAssets(
       Directory(p.join(appData.path, 'upload')),
@@ -47,7 +47,7 @@ void main() {
     final extracted = Directory(p.join(root.path, 'extracted'));
     await extracted.create();
     final candidateDatabase = File(
-      p.join(extracted.path, 'database', 'kelivo.db'),
+      p.join(extracted.path, 'database', 'jo_aiclient.db'),
     );
     await candidateDatabase.parent.create(recursive: true);
     await _createDatabase(candidateDatabase, conversationId: 'new');
@@ -65,7 +65,7 @@ void main() {
 
     final entries = <String, dynamic>{
       'settings.json': await _descriptor(settings),
-      'database/kelivo.db': await _descriptor(candidateDatabase),
+      'database/jo_aiclient.db': await _descriptor(candidateDatabase),
     };
     await for (final entity in Directory(
       p.join(extracted.path, 'upload'),
@@ -88,7 +88,7 @@ void main() {
         'includeFiles': true,
         'secretsIncluded': true,
         'database': {
-          'entry': 'database/kelivo.db',
+          'entry': 'database/jo_aiclient.db',
           'schemaVersion': databaseInfo.schemaVersion,
           'conversationCount': databaseInfo.conversationCount,
           'messageCount': databaseInfo.messageCount,
