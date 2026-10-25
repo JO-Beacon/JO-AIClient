@@ -1,18 +1,20 @@
 # 当前发布索引
 
-当前代码版本：`0.1.16+16`（已合入 main，待发布；发布正文已更新为 1.3.0 口径）。当前实现基座：Kelivo `1.3.0+79`（tag `v1.3.0`，commit `81acf016`，2026-09-22；关于页声明值同为 `1.3.0 / 79`）。GitHub 上最新已公开 Release 为 `0.1.15+15`（2026-09-12 发布）。`0.1.16` 起新增 Windows ARM64 原生安装包。
-本地技术收口状态（2026-09-27，未发布）：全量测试 5721 通过／42 跳过／0 失败，全仓库分析无问题；Windows x64 便携包与安装包已本地重建；Linux x64 release 在 Ubuntu 26.04 GNOME/Wayland 虚拟机完成人工验证。此前 2026-09-21 已产出 Android 三个 ABI 正式版 APK 与 SHA-256（其后代码又有改动，需重新出包才与当前一致）。Android 真机、真实字体联网下载和真实使用场景人工验收仍未执行。
+当前代码版本：`0.1.17+17`（开发版，未发布；`0.1.16+16` 已于 2026-09-28 打 tag）。当前实现基座：Kelivo `1.3.1+80`（tag `v1.3.1`，commit `4742d2e2`，2026-10-08）。
+本地技术收口状态（2026-10-25）：全量测试 8696 通过／61 跳过／0 失败，全仓库分析无问题；Windows x64 安装包与 Android 三个 ABI 的 release APK 已重建到 `dist/`。iOS、macOS 和真实设备验收仍未执行。
 
 | 版本 | 状态 | 发布正文 |
 | --- | --- | --- |
-| `0.1.15+15` | 已发布（2026-09-12） | [.github/release-notes/0.1.15+15.md](.github/release-notes/0.1.15+15.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.15%2B15) |
-| `0.1.14+14` | 已发布（2026-09-07） | [.github/release-notes/0.1.14+14.md](.github/release-notes/0.1.14+14.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.14%2B14) |
-| `0.1.13+13` | 已发布（2026-09-02） | [.github/release-notes/0.1.13+13.md](.github/release-notes/0.1.13+13.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.13%2B13) |
+| `0.1.17+17` | 当前开发版，未发布 | [.github/release-notes/0.1.17+17.md](.github/release-notes/0.1.17+17.md) |
+| `0.1.16+16` | 已打 tag（2026-09-28） | [.github/release-notes/0.1.16+16.md](.github/release-notes/0.1.16+16.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.16%2B16) |
+| `0.1.15+15` | 已发布（2026-09-12） | [.github/release-notes/0.1.15+15.md](.github/release-notes/0.1.15+15.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.15%2B15) |
+| `0.1.14+14` | 已发布（2026-09-07） | [.github/release-notes/0.1.14+14.md](.github/release-notes/0.1.14+14.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.14%2B14) |
+| `0.1.13+13` | 已发布（2026-09-02） | [.github/release-notes/0.1.13+13.md](.github/release-notes/0.1.13+13.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.13%2B13) |
 | `0.1.12+12` | 历史草稿 | [.github/release-notes/0.1.12+12.md](.github/release-notes/0.1.12+12.md) |
-| `0.1.11+11` | 已发布（2026-09-01） | [.github/release-notes/0.1.11+11.md](.github/release-notes/0.1.11+11.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.11%2B11) |
-| `0.1.10+10` | 已发布（2026-08-29） | [.github/release-notes/0.1.10+10.md](.github/release-notes/0.1.10+10.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.10+10) |
-| `0.1.9+9` | 已发布（2026-08-27） | [.github/release-notes/0.1.9+9.md](.github/release-notes/0.1.9+9.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.9+9) |
-| `0.1.8+8` | 已发布（2026-08-18） | [.github/release-notes/0.1.8+8.md](.github/release-notes/0.1.8+8.md) · [GitHub Release](https://github.com/JO-Beacon/JO-Kelivo/releases/tag/0.1.8+8) |
+| `0.1.11+11` | 已发布（2026-09-01） | [.github/release-notes/0.1.11+11.md](.github/release-notes/0.1.11+11.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.11%2B11) |
+| `0.1.10+10` | 已发布（2026-08-29） | [.github/release-notes/0.1.10+10.md](.github/release-notes/0.1.10+10.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.10+10) |
+| `0.1.9+9` | 已发布（2026-08-27） | [.github/release-notes/0.1.9+9.md](.github/release-notes/0.1.9+9.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.9+9) |
+| `0.1.8+8` | 已发布（2026-08-18） | [.github/release-notes/0.1.8+8.md](.github/release-notes/0.1.8+8.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.8+8) |
 | `0.1.7+7` 及更早 | 历史记录 | 下方保留候选验证、资产校验和早期版本记录 |
 
 下方内容是历史发布和候选验证档案；历史版本中的版本号、基座版本、资产名称、哈希和验证结论按当时事实保留，不作为当前版本说明。

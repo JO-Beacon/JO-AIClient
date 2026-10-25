@@ -1,5 +1,7 @@
 # Telegram browser interaction reference
 
+> 说明：本文同步自上游 Kelivo 的浏览器实现/验证记录，供实现参考，不是 JO-AIClient 用户指南。文中的 Kelivo、psyche.kelivo、上游路径、版本号和测试产物属于上游记录，不代表当前 JO-AIClient 身份。
+
 Read-only source audit of `/Users/psyche/tmp/projects/Telegram-iOS` at local HEAD
 `f1dd7a2dbd02cbbf513e75d5695d8d36d1cf5838` (2026-10-15). The complete
 `TouchEffect.swift`, its clipping/container setup, and the directly related

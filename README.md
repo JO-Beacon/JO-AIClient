@@ -5,6 +5,12 @@
 
   <h2>⚠️ JO-AIClient 是基于 Kelivo 的非官方改版，按 GNU AGPL-3.0 发布 ⚠️</h2>
 
+  <p>
+    <a href="https://jo-beacon.github.io/JO-AIClient/">官网</a> ·
+    <a href="https://github.com/JO-Beacon/JO-AIClient">GitHub</a> ·
+    <a href="https://github.com/JO-Beacon/JO-AIClient/releases/latest">最新版本</a>
+  </p>
+
 </div>
 
 # JO-AIClient 下载
@@ -15,7 +21,7 @@
 - ✅ **[Windows AMD64](https://github.com/JO-Beacon/JO-AIClient/releases/latest)**（中文安装程序与免安装便携版均提供）
 - ✅ **[Windows ARM64](https://github.com/JO-Beacon/JO-AIClient/releases/latest)**（原生 ARM64，中文安装程序与免安装便携版均提供，`0.1.16` 起；x64 安装包也可直接装进 ARM 电脑）
 - ✅ **[Linux AMD64](https://github.com/JO-Beacon/JO-AIClient/releases/latest)**（AppImage、deb、tar.gz）
-- ❌ iOS / macOS（暂无计划，可使用 [Kelivo](https://github.com/Chevey339/kelivo)）
+- ❌ iOS / macOS（暂不提供官方安装包，可先使用 [Kelivo](https://github.com/Chevey339/kelivo)）
 - ❌ HarmonyOS NEXT（暂无计划，可使用 [kelivo-ohos](https://github.com/Chevey339/kelivo-ohos)）
 
 每个发布文件都附带同名 `.sha256` 校验文件。[Release 日志](Release日志.md)
@@ -64,8 +70,13 @@
 
 # 已继承的 [Kelivo](https://github.com/Chevey339/kelivo) 功能特性
 
-以下能力来自上游基座（当前基座：Kelivo `1.3.0`），JO-AIClient 保持同步。
+以下能力来自上游基座（当前基座：Kelivo `1.3.1+80`）。
 
+- 🌐 **内置浏览器与网页助手** - 在聊天内打开带标签页的浏览器，支持地址栏、前进后退、书签、历史、下载、网页查找和页面预览；可授权助手读取页面、点击、填表并执行分步浏览任务。详见[内置浏览器说明](docs/browser.md)。
+- 🧰 **工作区与终端** - 为会话绑定工作区，浏览和预览文件；桌面端使用系统终端，Android 使用内置 Linux 沙盒。
+- 🧩 **技能** - 安装和管理技能，让助手按预设说明完成特定任务。
+- ⏰ **定时任务** - 支持每天、工作日、自定义星期或只执行一次的任务，提供运行历史和通知摘要；iOS 支持提前准备结果。
+- 🔤 **在线字体** - 可从在线字体库选择并下载字体，下载后作为本地字体使用。
 - 🎨 **现代化设计** - Material You 设计语言，支持动态主题色（Android 12+）与自定义主题取色。
 - 🌙 **深色模式** - 完整适配深色主题。
 - 🌍 **多语言支持** - 支持英文、简体中文和繁体中文界面。

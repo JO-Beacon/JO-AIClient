@@ -1,5 +1,7 @@
 # Chat browser page cards
 
+> 说明：本文同步自上游 Kelivo 的浏览器实现/验证记录，供实现参考，不是 JO-AIClient 用户指南。文中的 Kelivo、psyche.kelivo、上游路径、版本号和测试产物属于上游记录，不代表当前 JO-AIClient 身份。
+
 Adjacent browser tool calls now appear as one “Browsing · N steps” timeline
 step. Its page card opens the last referenced tab and shows cached pixels,
 title and site identity. Reasoning, other tools and pending approvals break a
@@ -35,9 +37,9 @@ capture policies were not changed. Visual reference: the supplied `card-a.html`.
 
 | Layout | Before | After |
 | --- | --- | --- |
-| Phone, light | ![Before light](screenshots/browser-page-cards/before/phone-light.png) | ![After light](screenshots/browser-page-cards/after/phone-light.png) |
-| Phone, dark | ![Before dark](screenshots/browser-page-cards/before/phone-dark.png) | ![After dark](screenshots/browser-page-cards/after/phone-dark.png) |
-| Desktop | ![Before desktop](screenshots/browser-page-cards/before/desktop.png) | ![After desktop](screenshots/browser-page-cards/after/desktop.png) |
+| Phone, light | ![Before light](../screenshots/browser-page-cards/before/phone-light.png) | ![After light](../screenshots/browser-page-cards/after/phone-light.png) |
+| Phone, dark | ![Before dark](../screenshots/browser-page-cards/before/phone-dark.png) | ![After dark](../screenshots/browser-page-cards/after/phone-dark.png) |
+| Desktop | ![Before desktop](../screenshots/browser-page-cards/before/desktop.png) | ![After desktop](../screenshots/browser-page-cards/after/desktop.png) |
 
 Reproduce the captures with a local CJK font; no font is installed or bundled:
 

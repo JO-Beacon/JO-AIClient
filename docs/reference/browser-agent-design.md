@@ -1,5 +1,7 @@
 # Browser Agent implementation references
 
+> 说明：本文同步自上游 Kelivo 的浏览器实现/验证记录，供实现参考，不是 JO-AIClient 用户指南。文中的 Kelivo、psyche.kelivo、上游路径、版本号和测试产物属于上游记录，不代表当前 JO-AIClient 身份。
+
 The in-app browser uses one `browser` tool with explicit actions. It shares the
 user-visible WebView session, while tabs remain owned by a conversation. Agent
 access requires both the assistant's browser tool switch and the browser's global

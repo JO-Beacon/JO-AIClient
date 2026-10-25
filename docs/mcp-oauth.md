@@ -34,9 +34,9 @@ JO-AIClient 不内置未经部署的元数据 URL。下面的文档需要由客�
 
 ```json
 {
-  "client_id": "https://your-domain.example/kelivo/mcp-client.json",
+  "client_id": "https://your-domain.example/joaiclient/mcp-client.json",
   "client_name": "JO-AIClient",
-  "client_uri": "https://github.com/Chevey339/kelivo",
+  "client_uri": "https://github.com/JO-Beacon/JO-AIClient",
   "application_type": "native",
   "redirect_uris": [
     "psyche.kelivo://mcp-oauth-callback/authorize",

@@ -8,7 +8,7 @@
 
 - `.github/workflows/build-macos.yml`
 
-用平时发版的那个 workflow，勾选构建 macOS。要上传到 GitHub Release 时再勾选发布并填写 tag（现有 tag 形如 `v1.3.1`）。公证失败时不会执行发布步骤。
+用平时发版的那个 workflow，勾选构建 macOS。要上传到 GitHub Release 时再勾选发布并填写 tag（例如 `0.1.17+17`）。公证失败时不会执行发布步骤。
 
 只在本仓库的可信分支上手动触发带签名的构建。不要在来自 fork、并且改过 workflow 的分支上运行，否则修改后的脚本可以读到这些 secrets。
 
@@ -31,7 +31,7 @@
 | `APPLE_APP_SPECIFIC_PASSWORD` | 公证（备选） | 该 Apple ID 的 App 专用密码 |
 | `APPLE_TEAM_ID` | 可选 | 使用 Apple ID 公证时需要设置；脚本没有默认 Team ID |
 
-`APP_STORE_CONNECT_API_KEY_ISSUER_ID` 不是 Team ID。Team ID 是 `REPLACE_WITH_APPLE_TEAM_ID`，Issuer ID 是密钥页面上的 UUID。
+`APP_STORE_CONNECT_API_KEY_ISSUER_ID` 不是 Team ID。Team ID 是 `APPLE_TEAM_ID` secret 的值，Issuer ID 是密钥页面上的 UUID。
 
 ## 导出 Developer ID Application 证书
 
@@ -46,7 +46,7 @@
    - Mac Installer Distribution
    - **Developer ID Installer**（那是给 `.pkg` 用的；JO-AIClient 发布的是 `.dmg`）
 5. 上传上一步的 CSR，下载 `.cer`，双击装进「登录」钥匙串。
-6. 在「登录」→「我的证书」里展开 **Developer ID Application: 名字 (REPLACE_WITH_APPLE_TEAM_ID)**，下面必须挂着私钥。若证书在「系统」钥匙串、私钥在另一串，导出的 `.p12` 不能用来签名。
+6. 在「登录」→「我的证书」里展开 **Developer ID Application: 名字 (APPLE_TEAM_ID)**，下面必须挂着私钥。若证书在「系统」钥匙串、私钥在另一串，导出的 `.p12` 不能用来签名。
 7. 选中该证书（连同它的私钥），右键「导出…」，格式选 **个人信息交换 (.p12)**，设置密码。这个密码就是 `MACOS_CERTIFICATE_PASSWORD`。
 8. 在 Mac 上生成 base64，粘贴到 `MACOS_CERTIFICATE_P12_BASE64`：
 
@@ -73,7 +73,7 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | pbcopy
 
 ## 备选：Apple ID 与 App 专用密码
 
-API 密钥不可用时再使用这条路径。Apple ID 必须能访问 Team `REPLACE_WITH_APPLE_TEAM_ID` 的 Developer ID。
+API 密钥不可用时再使用这条路径。Apple ID 必须能访问 Team `APPLE_TEAM_ID` 的 Developer ID。
 
 1. 打开 [appleid.apple.com](https://appleid.apple.com) → 登录与安全 → **App 专用密码**，生成一个密码。
 2. `APPLE_ID` 填邮箱。`APPLE_APP_SPECIFIC_PASSWORD` 填专用密码（形如 `xxxx-xxxx-xxxx-xxxx`），不要填 Apple ID 登录密码。
@@ -96,12 +96,12 @@ API 密钥不可用时再使用这条路径。Apple ID 必须能访问 Team `REP
 本地抽查已发布的 DMG：
 
 ```bash
-hdiutil attach JO-AIClient_macos_1.3.1+80.dmg
+hdiutil attach JO-AIClient_macos_0.1.17+17.dmg
 codesign --verify --deep --strict --verbose=2 /Volumes/JO-AIClient/JO-AIClient.app
 codesign --display --verbose=4 /Volumes/JO-AIClient/JO-AIClient.app
 spctl --assess --type execute --verbose=4 /Volumes/JO-AIClient/JO-AIClient.app
-spctl --assess --type open --context context:primary-signature --verbose=4 JO-AIClient_macos_1.3.1+80.dmg
-xcrun stapler validate JO-AIClient_macos_1.3.1+80.dmg
+spctl --assess --type open --context context:primary-signature --verbose=4 JO-AIClient_macos_0.1.17+17.dmg
+xcrun stapler validate JO-AIClient_macos_0.1.17+17.dmg
 ```
 
 通过时 `spctl` 的来源是 `Notarized Developer ID`。
@@ -112,11 +112,11 @@ xcrun stapler validate JO-AIClient_macos_1.3.1+80.dmg
 
 第一次签过名的 release 发出后：
 
-1. 确认发布 tag 是 `v<版本号>`（例如 `v1.3.1`），资源名是 `JO-AIClient_macos_<版本号>+<构建号>.dmg`。这和 `pubspec.yaml` 的 `version: 1.3.1+80` 对应。不要拿带 commit SHA 的手动构建产物去交 cask；只有 workflow 里勾选「发布到 Release」时，文件名才不带 SHA。
+1. 确认发布 tag 是完整版本号（例如 `0.1.17+17`），资源名是 `JO-AIClient_macos_<版本号>+<构建号>.dmg`。这和 `pubspec.yaml` 的 `version: 0.1.17+17` 对应。不要拿带 commit SHA 的手动构建产物去交 cask；只有 workflow 里勾选「发布到 Release」时，文件名才不带 SHA。
 2. 下载该 DMG，计算哈希：
 
 ```bash
-shasum -a 256 JO-AIClient_macos_1.3.1+80.dmg
+shasum -a 256 JO-AIClient_macos_0.1.17+17.dmg
 lipo -archs /Volumes/JO-AIClient/JO-AIClient.app/Contents/MacOS/JO-AIClient
 ```
 
