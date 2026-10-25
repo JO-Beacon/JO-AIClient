@@ -282,6 +282,12 @@ class HomePageController extends ChangeNotifier {
   int _lastExternalComposerRevision = 0;
   int _composerResetRevision = 0;
 
+  bool get _isUserMessageEditActive {
+    final owner = _composerOwner;
+    if (owner == null) return false;
+    return _composerDrafts?.peek(owner)?.editMessageId != null;
+  }
+
   void _attachComposerDrafts() {
     if (_composerDrafts != null) return;
     final drafts = _chatService.composerDrafts;
@@ -533,6 +539,7 @@ class HomePageController extends ChangeNotifier {
         _applyingComposer = false;
         if (_composerOwner == conversation.id) {
           _mediaController.restoringDraft = false;
+          _appendPendingBrowserTaskDraft(conversation.id);
         }
         notifyListeners();
       }
@@ -1227,13 +1234,27 @@ class HomePageController extends ChangeNotifier {
           _context.mounted) {
         final conversationId = _pendingNotificationConversationId!;
         _pendingNotificationConversationId = null;
-        if (_chatService.getConversation(conversationId) == null) continue;
+        if (_chatService.getConversation(conversationId) == null) {
+          NotificationService.takePendingComposerText(conversationId);
+          continue;
+        }
         if (!_context.mounted || !_homeRouteVisible) {
           _pendingNotificationConversationId = conversationId;
           break;
         }
         onRevealConversation?.call();
         await switchConversationAnimated(conversationId);
+        if (currentConversation?.id == conversationId) {
+          final composerText = NotificationService.takePendingComposerText(
+            conversationId,
+          );
+          if (composerText != null) {
+            await appendBrowserTaskDraft(
+              composerText,
+              expectedConversationId: conversationId,
+            );
+          }
+        }
         final messageId = NotificationService.takePendingMessageId(
           conversationId,
         );
@@ -1252,6 +1273,82 @@ class HomePageController extends ChangeNotifier {
   @visibleForTesting
   void debugSetChatInitialized() {
     _chatInitialized = true;
+  }
+
+  /// Appends a user-requested browser task to the existing composer. Temporary
+  /// conversations remain in memory; the normal input listener persists others.
+  /// This deliberately does not submit a message or alter assistant tools.
+  Future<bool> appendBrowserTaskDraft(
+    String text, {
+    required String expectedConversationId,
+  }) async {
+    if (!_context.mounted ||
+        _composerDisposed ||
+        currentConversation?.id != expectedConversationId) {
+      NotificationService.restorePendingComposerText(
+        expectedConversationId,
+        text,
+      );
+      return false;
+    }
+    try {
+      await _activateComposerDraft();
+    } catch (_) {
+      NotificationService.restorePendingComposerText(
+        expectedConversationId,
+        text,
+      );
+      rethrow;
+    }
+    if (!_context.mounted ||
+        _composerDisposed ||
+        currentConversation?.id != expectedConversationId ||
+        (_composerDrafts != null &&
+            (_composerOwner != expectedConversationId ||
+                _mediaController.draftOwnerId != expectedConversationId))) {
+      NotificationService.restorePendingComposerText(
+        expectedConversationId,
+        text,
+      );
+      return false;
+    }
+    if (_isUserMessageEditActive || _mediaController.restoringDraft) {
+      showAppSnackBar(
+        _context,
+        message: AppLocalizations.of(_context)!.browserAskAiEditing,
+        type: NotificationType.info,
+      );
+      return false;
+    }
+    _appendBrowserTaskText(text);
+    return true;
+  }
+
+  /// A delayed page task follows the restored editor, never the visible chat
+  /// that happened to replace it while its draft was loading.
+  void _appendPendingBrowserTaskDraft(String conversationId) {
+    if (!_context.mounted ||
+        _composerDisposed ||
+        currentConversation?.id != conversationId ||
+        _isUserMessageEditActive ||
+        _mediaController.restoringDraft ||
+        (_composerDrafts != null &&
+            (_composerOwner != conversationId ||
+                _mediaController.draftOwnerId != conversationId))) {
+      return;
+    }
+    final text = NotificationService.takePendingComposerText(conversationId);
+    if (text != null) _appendBrowserTaskText(text);
+  }
+
+  void _appendBrowserTaskText(String text) {
+    final previous = _inputController.text;
+    final next = previous.isEmpty ? text : '$previous\n\n$text';
+    _inputController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _inputFocus.requestFocus();
   }
 
   @visibleForTesting
@@ -1738,6 +1835,7 @@ class HomePageController extends ChangeNotifier {
       if (!isDesktopPlatform) {
         unawaited(_forwardConvoFade());
       }
+      _appendPendingBrowserTaskDraft(id);
       return;
     }
     _restoreReadPositionOnNextSwitch = restoreReadPosition;
@@ -1805,6 +1903,7 @@ class HomePageController extends ChangeNotifier {
         _inputFocus.requestFocus();
       });
     }
+    if (_composerDrafts == null) _appendPendingBrowserTaskDraft(id);
   }
 
   Future<void> _reverseConvoFade() async {

@@ -6458,5 +6458,287 @@
     }
   },
   "imageExportProcessing": "Combining image and preparing preview…",
-  "imageExportSaving": "Saving image…"
+  "imageExportSaving": "Saving image…",
+
+  "browserActionBack": "Back",
+  "browserActionClick": "Click",
+  "browserActionCloseTab": "Close tab",
+  "browserActionEvaluate": "Run script",
+  "browserActionExtract": "Extract text",
+  "browserActionForward": "Forward",
+  "browserActionListTabs": "List tabs",
+  "browserActionNewTab": "New tab",
+  "browserActionOpen": "Open page",
+  "browserActionPress": "Press key",
+  "browserActionReload": "Reload",
+  "browserActionRender": "Render page",
+  "browserActionScroll": "Scroll",
+  "browserActionSnapshot": "Read page structure",
+  "browserActionSwitchTab": "Switch tab",
+  "browserActionType": "Type",
+  "browserActionUnknown": "Browser action",
+  "browserActionWait": "Wait",
+  "browserAddBookmark": "Add bookmark",
+  "browserAgentDescription": "Send a task in chat to let AI use the browser. Allowing it to continue only removes the pause; it does not send a message or start a task.",
+  "browserAgentEnabled": "Allow assistant browser access",
+  "browserAgentEnabledDescription": "Enabled assistants can browse and interact with pages in this browser.",
+  "browserAgentPaused": "AI actions paused",
+  "browserAgentTimedOut": "Operation timed out; AI paused",
+  "browserAgentWorking": "AI is working",
+  "browserAllowAgent": "Allow to continue",
+  "browserAskAi": "Let AI work on this page",
+  "browserAskAiAssistantDisabled": "Enable Browser control in this assistant’s tools first.",
+  "browserAskAiBrowserDisabled": "Allow assistants to use the browser in browser settings first.",
+  "browserAskAiCurrentPage": "the current browser page",
+  "browserAskAiDraft": "Please use the browser to work on this page:\n{page}\n\nMy request: ",
+  "@browserAskAiDraft": {
+    "placeholders": {
+      "page": {
+        "type": "String"
+      }
+    }
+  },
+  "browserAskAiInOwnerConversation": "Ask AI in the owning chat",
+  "browserAskAiUnavailable": "This chat is unavailable. Open the browser from a chat first.",
+  "browserBack": "Back",
+  "browserBookmarkTitle": "Title",
+  "browserBookmarkUrl": "Website",
+  "browserBookmarks": "Bookmarks",
+  "browserCancel": "Cancel",
+  "browserCardBlankPage": "Blank page",
+  "browserCardEnable": "Enable",
+  "browserCardLive": "Live",
+  "browserCardOpen": "Open",
+  "browserCardOpenFailed": "Couldn't open page",
+  "browserCardRunning": "{action}…",
+  "@browserCardRunning": {
+    "description": "Browser page card browserCardRunning",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "browserCardTabCount": "{count} tabs",
+  "@browserCardTabCount": {
+    "description": "Browser page card browserCardTabCount",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserClearData": "Clear website data",
+  "browserClearDataConfirm": "Clear cookies, storage and cache, and close all tabs? You will be signed out of websites.",
+  "browserClearDataUnavailable": "Clearing all website data is not supported by the Windows browser engine.",
+  "browserClearHistory": "Clear history",
+  "browserClearHistoryConfirm": "Delete all browsing history? Bookmarks will be kept.",
+  "browserClose": "Close browser",
+  "browserClosePanel": "Close browser panel",
+  "browserCloseTab": "Close tab",
+  "browserCopyLink": "Copy link",
+  "browserDataCleared": "Website data cleared",
+  "browserDelete": "Delete",
+  "browserDirectionDown": "Down",
+  "browserDirectionLeft": "Left",
+  "browserDirectionRight": "Right",
+  "browserDirectionUp": "Up",
+  "browserDone": "Done",
+  "browserDownloadCancelled": "Cancelled",
+  "browserDownloadFailed": "Download failed",
+  "browserDownloads": "Downloads",
+  "browserEditBookmark": "Edit bookmark",
+  "browserErrActionTimeout": "Operation timed out; outcome unknown. Check the page before allowing AI to continue.",
+  "browserErrAgentDisabled": "Browser control is off",
+  "browserErrGeneric": "Action failed",
+  "browserErrHumanControl": "You're controlling the browser",
+  "browserErrNotFound": "Element not found",
+  "browserErrNotVisible": "Element hidden or covered",
+  "browserErrStaleRef": "Element is stale; page needs re-reading",
+  "browserErrTabClosed": "Tab was closed",
+  "browserErrTimeout": "Page load timed out",
+  "browserFavorites": "Favorites",
+  "browserFind": "Find on page",
+  "browserFindHint": "Find text",
+  "browserFindNextMatch": "Next match",
+  "browserFindPreviousMatch": "Previous match",
+  "browserForward": "Forward",
+  "browserHistory": "History",
+  "browserInvalidUrl": "Enter a valid HTTP or HTTPS website address.",
+  "browserLinkCopied": "Link copied",
+  "browserLiveViewLimit": "All browser resources are in use. Try again when a task finishes, or close an unused page.",
+  "browserLoadFailed": "This page could not be loaded",
+  "browserMetaChars": "{count} chars",
+  "@browserMetaChars": {
+    "description": "Browser page card browserMetaChars",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "browserMetaElements": "{count} elements",
+  "@browserMetaElements": {
+    "description": "Browser page card browserMetaElements",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserMetaTabs": "{count} tabs",
+  "@browserMetaTabs": {
+    "description": "Number of tabs returned by list_tabs",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserMore": "More",
+  "browserMoveToConversation": "Move to this chat",
+  "browserNewTab": "New tab",
+  "browserNoBookmarks": "Your favorite places, all together.",
+  "browserNoDownloads": "Downloaded files appear here.",
+  "browserNoHistory": "Your browsing history appears here.",
+  "browserObserverHint": "AI is using this page. Select Take over to interact.",
+  "browserOpenDownload": "Open file",
+  "browserOpenExternal": "Open in default browser",
+  "browserOpenFullPage": "Open in full page",
+  "browserOpenInSidebar": "Open in sidebar",
+  "browserPageOptions": "Page options",
+  "browserReload": "Reload",
+  "browserRemoveBookmark": "Remove bookmark",
+  "browserReopenInConversation": "Reopen in this chat",
+  "browserRestoreTabs": "Restore tabs",
+  "browserRestoreTabsDescription": "Reopen your tabs when JO-AIClient starts.",
+  "browserRetry": "Try again",
+  "browserSave": "Save",
+  "browserSaveHistory": "Save history",
+  "browserSaveHistoryDescription": "Keep a local record of the pages you visit.",
+  "browserSearchEngine": "Search engine",
+  "browserSearchHint": "Search or enter website",
+  "browserSearchLibrary": "Search saved pages",
+  "browserSearchTabs": "Search tabs",
+  "browserSettings": "Browser settings",
+  "browserStop": "Stop loading",
+  "browserSurfaceFrosted": "Frosted",
+  "browserSurfaceLiquid": "Liquid glass",
+  "browserSurfaceSolid": "Solid",
+  "browserSurfaceStyle": "Surface style",
+  "browserTabBusy": "An assistant is still using this page. Wait for it to finish or stop the task before moving it.",
+  "browserTabs": "Tabs",
+  "browserTabsAll": "All tabs",
+  "browserTabsCount": "{count, plural, =1{1 tab} other{{count} tabs}}",
+  "@browserTabsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserTabsCurrentConversation": "This chat",
+  "browserTabsEmptyConversation": "No tabs here yet. Open a page or choose a tab from All tabs.",
+  "browserTabsNoResults": "No matching tabs",
+  "browserTabsUnassigned": "Personal tabs",
+  "browserTabsUnknownConversation": "Other chat",
+  "browserTakeOver": "Take over",
+  "browserTitle": "Browser",
+  "browserToday": "Today",
+  "browserToolSubtitle": "Browse and interact with signed-in pages. Enable Agent control in browser settings first.",
+  "browserToolTitle": "Browser control",
+  "browserUnsupported": "The embedded browser is not available on this platform.",
+  "browserUserAgent": "User agent",
+  "browserUserAgentCustom": "Custom",
+  "browserUserAgentDescription": "Changes reload the current webpage.",
+  "browserUserAgentDesktop": "Desktop",
+  "browserUserAgentHint": "Enter a custom User-Agent",
+  "browserUserAgentInvalid": "Use a single line of up to 2048 printable ASCII characters.",
+  "browserUserAgentMobile": "Mobile",
+  "browserYesterday": "Yesterday",
+
+  "browserActionFailed": "{action} failed",
+  "@browserActionFailed": {
+    "description": "Browser page card browserActionFailed",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "browserActionFailedCount": "· {count} failed",
+  "@browserActionFailedCount": {
+    "description": "Browser page card browserActionFailedCount",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserAskAiEditing": "Finish or cancel editing the current message before adding a page task.",
+  "browserGroupToggleSemantics": "Show or hide browser steps",
+  "browserOpen": "Open browser",
+  "browserOpenThisPage": "Open in browser",
+  "browserStepCount": "{count} steps",
+  "@browserStepCount": {
+    "description": "Browser page card browserStepCount",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserStepCurrent": "step {count}",
+  "@browserStepCurrent": {
+    "description": "Browser page card browserStepCurrent",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserStepGroupTitle": "Browsing",
+  "browserStepsShowEarlier": "{count} earlier steps",
+  "@browserStepsShowEarlier": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "displaySettingsPageShowBrowserPageCardsTitle": "Show webpage cards",
+
+  "worldBookCopyEntries": "Copy to…",
+  "worldBookMoveEntries": "Move to…",
+  "worldBookSelectEntries": "Select entries",
+  "worldBookSelectedEntries": "{count} selected",
+  "@worldBookSelectedEntries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "worldBookSelectionDone": "Done",
+  "worldBookNoMoveTargets": "Create another world book to move entries into it.",
+  "worldBookEntriesCopied": "{count, plural, =1{Copied 1 entry} other{Copied {count} entries}}",
+  "@worldBookEntriesCopied": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "worldBookEntriesMoved": "{count, plural, =1{Moved 1 entry} other{Moved {count} entries}}",
+  "@worldBookEntriesMoved": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "worldBookTransferFailed": "Could not save the entries. Please try again.",
+
+  "displaySettingsPageIosNativeSelectionMenuTitle": "iOS 26+ native selection menu",
+  "displaySettingsPageIosNativeSelectionMenuSubtitle": "Applies to input and messages. Turn off if menus feel slow."
 }

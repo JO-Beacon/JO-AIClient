@@ -1,0 +1,128 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '上传到 GitHub Release 草稿'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Release 标签，例如 0.1.17+17'
+        required: false
+        default: ''
+        type: string
+      prerelease:
+        description: '标记为预发布版本'
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+\+[0-9]+'
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.47.6'
+
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    env:
+      # 未配置时 tool/macos_sign_and_notarize.sh 会跳过签名。说明见 docs/macos-signing.md。
+      MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve version
+        shell: bash
+        env:
+          PUBLISH_RELEASE: ${{ inputs.publish_release || false }}
+          RELEASE_TAG: ${{ inputs.release_tag || '' }}
+        run: |
+          set -euo pipefail
+          raw_version="$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '[:space:]')"
+          release_version="${raw_version%%+*}"
+          version="$raw_version"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            if [[ "$GITHUB_REF_NAME" != "$raw_version" ]]; then
+              echo "Tag $GITHUB_REF_NAME does not match pubspec version $raw_version." >&2
+              exit 1
+            fi
+          elif [[ "$PUBLISH_RELEASE" == "true" ]]; then
+            if [[ "$RELEASE_TAG" != "$raw_version" ]]; then
+              echo "Release tag must be $raw_version." >&2
+              exit 1
+            fi
+          else
+            version="${version}_$(git rev-parse --short HEAD)"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "Resolved version: $version"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Sign app with Developer ID
+        run: bash tool/macos_sign_and_notarize.sh sign-app "build/macos/Build/Products/Release/JO-AIClient.app"
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+          brew install create-dmg
+          create-dmg \
+            --volname "JO-AIClient" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            "JO-AIClient_macos_${VERSION}.dmg" \
+            "build/macos/Build/Products/Release/JO-AIClient.app" || true
+          if [ ! -f "JO-AIClient_macos_${VERSION}.dmg" ]; then
+            hdiutil create -volname JO-AIClient \
+              -srcfolder "build/macos/Build/Products/Release/JO-AIClient.app" \
+              -ov -format UDZO "JO-AIClient_macos_${VERSION}.dmg"
+          fi
+
+      - name: Notarize and verify DMG
+        run: bash tool/macos_sign_and_notarize.sh notarize-dmg "JO-AIClient_macos_${VERSION}.dmg" "build/macos/Build/Products/Release/JO-AIClient.app"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-DMG
+          path: JO-AIClient_macos_*.dmg
+
+      - name: Publish to GitHub Release
+        if: ${{ inputs.publish_release == true && inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_tag }}
+          prerelease: ${{ inputs.prerelease || false }}
+          files: JO-AIClient_macos_*.dmg

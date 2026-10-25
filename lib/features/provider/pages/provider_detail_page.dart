@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../../core/services/model_spec/model_spec_resolver.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/selection_back_scope.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../utils/brand_assets.dart';
 import '../../../utils/avatar_cache.dart';
@@ -133,7 +134,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
 
-    return Scaffold(
+    final page = Scaffold(
       appBar: AppBar(
         leading: Tooltip(
           message: l10n.settingsPageBackButton,
@@ -269,10 +270,12 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                     }
                   } catch (_) {}
 
-                  // 移除供应商配置及相关选择或置顶
-                  await chatService.clearConversationModelOverrides(
-                    providerKey: widget.keyName,
-                  );
+                  // 未初始化时没有已加载会话，跳过数据库清理即可。
+                  if (chatService.initialized) {
+                    await chatService.clearConversationModelOverrides(
+                      providerKey: widget.keyName,
+                    );
+                  }
                   await settings.removeProviderConfig(widget.keyName);
                   if (!context.mounted) return;
                   showAppSnackBar(
@@ -280,7 +283,8 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                     message: l10n.providerDetailPageProviderDeletedSnackbar,
                     type: NotificationType.success,
                   );
-                  Navigator.of(context).maybePop();
+                  // 删除供应商时即使处于选择模式也必须关闭页面。
+                  Navigator.of(context).pop();
                 }
               },
             ),
@@ -317,6 +321,11 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           ),
         ),
       ),
+    );
+    return SelectionBackScope(
+      selecting: _isSelectionMode,
+      onCancel: _exitSelectionMode,
+      child: page,
     );
   }
 

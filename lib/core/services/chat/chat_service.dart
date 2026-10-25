@@ -33,6 +33,7 @@ import '../api/providers/claude/claude_history.dart';
 import '../api/providers/claude/claude_thinking_recovery.dart';
 import '../api/providers/google/gemini_thought_signature.dart';
 import '../api/providers/openai/responses_history.dart';
+import '../mcp/mcp_image_snapshot.dart';
 
 final class LoadedTimelineSlot {
   const LoadedTimelineSlot({required this.identity, required this.message});
@@ -2011,10 +2012,11 @@ class ChatService extends ChangeNotifier {
     return deleted;
   }
 
-  List<({String path, String kind})> _extractLocalAttachmentsFromMessage(
+  Future<List<({String path, String kind})>> _extractLocalAttachmentsFromMessage(
     ChatMessage message,
-  ) {
+  ) async {
     final fromParts = <String, ({String path, String kind})>{};
+    final previews = <String>{};
     for (final part in message.parts) {
       if (part is ImagePart) {
         // 不可用的占位符保留在历史记录中供 UI 使用，但不得进入
@@ -2036,6 +2038,16 @@ class ChatService extends ChangeNotifier {
         final fixed = SandboxPathResolver.resolveForIo(uri);
         if (fixed == null) continue;
         fromParts['file:$fixed'] = (path: fixed, kind: 'file');
+      } else if (part is ToolCallPart) {
+        final uri = part.browserPreviewImage;
+        if (uri == null || !previews.add(uri)) continue;
+        final file = await McpImageSnapshot.localFile(uri);
+        if (file != null) {
+          // 校验真实目标后保留沙箱路径写法；macOS 的 /var 可能解析到
+          // 词法根目录之外的 /private/var。
+          final path = SandboxPathResolver.resolveForIo(uri)!;
+          fromParts['image:$path'] = (path: path, kind: 'image');
+        }
       }
     }
     return List.unmodifiable(fromParts.values);
@@ -2064,6 +2076,7 @@ class ChatService extends ChangeNotifier {
     (part) =>
         part is ImagePart ||
         part is FilePart ||
+        (part is ToolCallPart && part.browserPreviewImage != null) ||
         (part is MalformedPart && part.isAttachmentKind),
   );
 
@@ -2150,7 +2163,9 @@ class ChatService extends ChangeNotifier {
       p.normalize(p.join(appDataDir.absolute.path, 'images')),
     ];
     final registrations = <MessageAssetRegistration>[];
-    for (final attachment in _extractLocalAttachmentsFromMessage(message)) {
+    for (final attachment in await _extractLocalAttachmentsFromMessage(
+      message,
+    )) {
       final normalizedPath = p.normalize(File(attachment.path).absolute.path);
       if (!allowedRoots.any((root) => p.isWithin(root, normalizedPath))) {
         continue;
@@ -2194,6 +2209,15 @@ class ChatService extends ChangeNotifier {
       // 消息持久化是权威来源。消息事务会先排队
       // 相关修订，因此资产索引更新失败会由
       // 有界启动回填重试，而不是导致发送失败。
+      debugPrint('Message asset synchronization failed: $error');
+    }
+  }
+
+  Future<void> _synchronizePersistedMessageAssetsBestEffort(String id) async {
+    try {
+      final message = await _repo.getMessage(id);
+      if (message != null) await _synchronizeMessageAssets(message);
+    } catch (error) {
       debugPrint('Message asset synchronization failed: $error');
     }
   }
@@ -2262,6 +2286,10 @@ class ChatService extends ChangeNotifier {
             followLinks: false,
           );
           if (type == FileSystemEntityType.file) {
+            if (await _recentlyReusedPreview(File(normalized), effectiveNow)) {
+              safe = false;
+              break;
+            }
             regularFiles.add(File(normalized));
           } else if (type != FileSystemEntityType.notFound) {
             safe = false;
@@ -2283,6 +2311,18 @@ class ChatService extends ChangeNotifier {
             }
             await file.rename(quarantine.path);
             quarantined.add((original: file, quarantine: quarantine));
+          }
+          if (!safe) continue;
+          // 重命名后复查：工具可能在第一次 stat 和隔离之间复用了原文件。
+          for (final moved in quarantined) {
+            if (await _recentlyReusedPreview(
+              moved.quarantine,
+              effectiveNow,
+              originalPath: moved.original.path,
+            )) {
+              safe = false;
+              break;
+            }
           }
           if (!safe) continue;
           final completed = await _repo.completeAssetGc(
@@ -2308,6 +2348,14 @@ class ChatService extends ChangeNotifier {
       debugPrint('Asset maintenance failed: $error');
     }
   }
+
+  Future<bool> _recentlyReusedPreview(
+    File file,
+    DateTime now, {
+    String? originalPath,
+  }) async =>
+      McpImageSnapshot.isDeduplicatedFile(originalPath ?? file.path) &&
+      (await file.lastModified()).toUtc().isAfter(now.subtract(_assetGcDelay));
 
   Future<void> _cleanupOrphanUploads() => runAssetMaintenance();
 
@@ -3470,6 +3518,12 @@ class ChatService extends ChangeNotifier {
     }
     if (generationRunId == null) {
       await updateStreamingCheckpointSilent(message, toolEvents);
+      if (_messageCanOwnAssets(message) ||
+          toolEvents.any(
+            (event) => browserPreviewImageFromToolEvent(event) != null,
+          )) {
+        await _synchronizePersistedMessageAssetsBestEffort(message.id);
+      }
       _statisticsRevision++;
       notifyListeners();
       return null;
@@ -3488,8 +3542,12 @@ class ChatService extends ChangeNotifier {
       errorCode: errorCode,
       geminiThoughtSignature: _geminiThoughtSigsCache[message.id],
     );
-    if (_messageCanOwnAssets(message)) {
-      await _synchronizeMessageAssetsBestEffort(message);
+    if (_messageCanOwnAssets(message) ||
+        toolEvents.any(
+          (event) => browserPreviewImageFromToolEvent(event) != null,
+        )) {
+      // 工具事件覆盖可能领先于消息的流式 parts。
+      await _synchronizePersistedMessageAssetsBestEffort(message.id);
     }
     _replaceCachedMessage(message);
     _toolEventsCache[message.id] = List<Map<String, dynamic>>.of(toolEvents);
@@ -3544,6 +3602,11 @@ class ChatService extends ChangeNotifier {
       return;
     }
     await _repo.setToolEvents(assistantMessageId, events);
+    if (events.any(
+      (event) => browserPreviewImageFromToolEvent(event) != null,
+    )) {
+      await _synchronizePersistedMessageAssetsBestEffort(assistantMessageId);
+    }
     _toolEventsCache[assistantMessageId] = List<Map<String, dynamic>>.of(
       events,
     );
@@ -3601,9 +3664,7 @@ class ChatService extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    await _repo.setToolEvents(assistantMessageId, list);
-    _toolEventsCache[assistantMessageId] = list;
-    notifyListeners();
+    await setToolEvents(assistantMessageId, list);
   }
 
   String? getProviderArtifact(String messageId, String kind) {
@@ -4430,6 +4491,61 @@ class ChatService extends ChangeNotifier {
   ///
   /// 用于上下文压缩的“保留最近消息”模式：摘要消息由调用方创建，
   /// 其余消息通过结构化 parts 原样写入新会话。
+  Future<Conversation> forkConversationAtRevision({
+    required String sourceConversationId,
+    required String sourceRevisionId,
+    required String title,
+    bool preserveVersions = false,
+  }) async {
+    if (!_initialized) await init();
+    final source = _conversationsCache[sourceConversationId];
+    if (source == null) throw StateError('conversation_missing');
+    if (preserveVersions) {
+      final forked = await _repo.forkConversationWithVersions(
+        sourceId: sourceConversationId,
+        targetRevisionId: sourceRevisionId,
+        title: source.title,
+        assistantId: source.assistantId,
+      );
+      if (forked == null) throw StateError('linear_fork_target_missing');
+      _conversationsCache[forked.id] = forked;
+      _messageOrderIds[forked.id] = List<String>.of(forked.messageIds);
+      _messageCounts[forked.id] = forked.messageIds.length;
+      _bumpConversationListRevision();
+      _currentConversationId = forked.id;
+      notifyListeners();
+      return forked;
+    }
+    final targetMessage = await _repo.getMessage(sourceRevisionId);
+    if (targetMessage == null ||
+        targetMessage.conversationId != sourceConversationId) {
+      throw StateError('linear_fork_target_missing');
+    }
+    final targetGroupId = targetMessage.groupId ?? targetMessage.id;
+    final probe = await _repo.loadLinearMessageWindow(
+      conversationId: sourceConversationId,
+      fromStart: true,
+      limit: 1,
+    );
+    final window = await _repo.loadLinearMessageWindow(
+      conversationId: sourceConversationId,
+      fromStart: true,
+      limit: probe.totalSlotCount,
+    );
+    final targetIndex = window.slots.indexWhere(
+      (slot) => slot.groupId == targetGroupId,
+    );
+    if (targetIndex < 0) throw StateError('linear_fork_target_not_visible');
+    final sourceMessages = await _repo.getMessagesByIds([
+      for (final slot in window.slots.take(targetIndex + 1)) slot.revisionId,
+    ]);
+    return forkConversationFromMessages(
+      title: title,
+      assistantId: source.assistantId,
+      sourceMessages: sourceMessages,
+    );
+  }
+
   Future<Conversation> forkConversationFromMessages({
     required String title,
     required String? assistantId,

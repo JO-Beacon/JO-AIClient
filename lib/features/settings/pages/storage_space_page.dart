@@ -16,6 +16,7 @@ import '../../../shared/utils/format_bytes.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
+import '../../../shared/widgets/selection_back_scope.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../utils/app_directories.dart';
 import '../../../theme/app_font_weights.dart';
@@ -2220,7 +2221,10 @@ class _UploadManagerState extends State<_UploadManager> {
   Future<void> _deleteSelected() async {
     if (_selected.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
-    final count = _selected.length;
+    // Back can clear or replace the selection while deletion awaits file I/O.
+    // Keep the targets shown in this confirmation independent of that UI state.
+    final pathsToDelete = _selected.toList(growable: false);
+    final count = pathsToDelete.length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
@@ -2244,7 +2248,7 @@ class _UploadManagerState extends State<_UploadManager> {
 
     try {
       final deleted = await StorageUsageService.deleteUploadFiles(
-        _selected,
+        pathsToDelete,
         images: widget.images,
       );
       if (!mounted) return;
@@ -2357,7 +2361,7 @@ class _UploadManagerState extends State<_UploadManager> {
       ],
     );
 
-    return Column(
+    final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.images) ...[
@@ -2458,6 +2462,11 @@ class _UploadManagerState extends State<_UploadManager> {
           ),
         ),
       ],
+    );
+    return SelectionBackScope(
+      selecting: _selectMode,
+      onCancel: _clearSelection,
+      child: content,
     );
   }
 }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../widgets/settings_search_target.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import '../../../icons/lucide_adapter.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
 import 'package:syncfusion_flutter_core/theme.dart';
@@ -2052,6 +2052,20 @@ class BehaviorStartupSettingsPage extends StatelessWidget {
         children: [
           _iosSectionCard(
             children: [
+              if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) ...[
+                _iosSwitchRow(
+                  context,
+                  icon: Lucide.TextSelect,
+                  label: l10n.displaySettingsPageIosNativeSelectionMenuTitle,
+                  subtitle:
+                      l10n.displaySettingsPageIosNativeSelectionMenuSubtitle,
+                  value: sp.iosNativeSelectionMenuEnabled,
+                  onChanged: (v) => context
+                      .read<SettingsProvider>()
+                      .setIosNativeSelectionMenuEnabled(v),
+                ),
+                _iosDivider(context),
+              ],
               _iosNavRow(
                 context,
                 icon: Lucide.RefreshCw,
@@ -2113,6 +2127,15 @@ class BehaviorStartupSettingsPage extends StatelessWidget {
                 value: sp.hideToolResultImages,
                 onChanged: (v) =>
                     context.read<SettingsProvider>().setHideToolResultImages(v),
+              ),
+              _iosDivider(context),
+              _iosSwitchRow(
+                context,
+                icon: Lucide.AppWindow,
+                label: l10n.displaySettingsPageShowBrowserPageCardsTitle,
+                value: sp.showBrowserPageCards,
+                onChanged: (v) =>
+                    context.read<SettingsProvider>().setShowBrowserPageCards(v),
               ),
               _iosDivider(context),
               _iosSwitchRow(

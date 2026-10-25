@@ -1801,7 +1801,8 @@ class ChatDatabaseRepository {
               EXISTS (
                 SELECT 1 FROM message_part_rows p
                 WHERE p.revision_id = m.id
-                  AND p.kind IN ('image', 'file')
+                  AND (p.kind IN ('image', 'file')
+                    OR (p.kind = 'tool_call' AND p.payload LIKE '%"previewImage"%'))
               ) OR
               EXISTS (
                 SELECT 1 FROM message_asset_rows a WHERE a.revision_id = m.id
@@ -4016,7 +4017,7 @@ class ChatDatabaseRepository {
             SELECT 1
             FROM asset_reference_dirty_rows d
             JOIN message_part_rows p ON p.revision_id = d.revision_id
-            WHERE p.kind IN ('text', 'image', 'file')
+            WHERE p.kind IN ('text', 'image', 'file', 'tool_call')
               AND (
                 instr(p.payload, c.path_form) > 0
                 OR instr(p.payload, c.alt_form) > 0
@@ -4045,7 +4046,7 @@ class ChatDatabaseRepository {
             AND NOT EXISTS (
               SELECT 1 FROM asset_reference_dirty_rows d
               JOIN message_part_rows p ON p.revision_id = d.revision_id
-              WHERE p.kind IN ('text', 'image', 'file')
+              WHERE p.kind IN ('text', 'image', 'file', 'tool_call')
                 AND (
                   instr(p.payload, ?) > 0 OR instr(p.payload, ?) > 0
                   OR instr(p.payload, ?) > 0 OR instr(p.payload, ?) > 0
@@ -4091,7 +4092,7 @@ class ChatDatabaseRepository {
               AND NOT EXISTS (
                 SELECT 1 FROM asset_reference_dirty_rows d
                 JOIN message_part_rows p ON p.revision_id = d.revision_id
-                WHERE p.kind IN ('text', 'image', 'file')
+                WHERE p.kind IN ('text', 'image', 'file', 'tool_call')
                   AND (
                     instr(p.payload, ?) > 0 OR instr(p.payload, ?) > 0
                     OR instr(p.payload, ?) > 0 OR instr(p.payload, ?) > 0
@@ -4417,6 +4418,200 @@ class ChatDatabaseRepository {
     });
   }
 
+  Future<void> _copyMessageRowsInto({
+    required String targetConversationId,
+    required List<MessageRow> messages,
+    required Map<String, String> messageIdMap,
+    required Map<String, String> groupIdMap,
+  }) async {
+    for (final message in messages) {
+      final targetMessageId = messageIdMap[message.id]!;
+      await _db
+          .into(_db.messageRows)
+          .insert(
+            MessageRowsCompanion.insert(
+              id: targetMessageId,
+              conversationId: targetConversationId,
+              role: message.role,
+              timestamp: message.timestamp,
+              modelId: Value(message.modelId),
+              providerId: Value(message.providerId),
+              totalTokens: Value(message.totalTokens),
+              isStreaming: const Value(false),
+              reasoningStartAt: Value(message.reasoningStartAt),
+              reasoningFinishedAt: Value(message.reasoningFinishedAt),
+              translation: Value(message.translation),
+              reasoningSegmentsJson: Value(message.reasoningSegmentsJson),
+              groupId: Value(
+                message.groupId == null ? null : groupIdMap[message.groupId],
+              ),
+              version: Value(message.version),
+              promptTokens: Value(message.promptTokens),
+              completionTokens: Value(message.completionTokens),
+              cachedTokens: Value(message.cachedTokens),
+              durationMs: Value(message.durationMs),
+              messageOrder: message.messageOrder,
+              senderId: Value(message.senderId),
+              extrasJson: Value(message.extrasJson),
+            ),
+          );
+      await _db.customStatement(
+        'INSERT INTO message_part_rows '
+        '(conversation_id, revision_id, ordinal, kind, payload, '
+        'created_at, updated_at) '
+        'SELECT ?, ?, ordinal, kind, payload, created_at, updated_at '
+        'FROM message_part_rows WHERE revision_id = ?;',
+        [targetConversationId, targetMessageId, message.id],
+      );
+      await _db.customStatement(
+        'INSERT INTO provider_artifact_rows '
+        '(conversation_id, revision_id, kind, payload, created_at, '
+        'updated_at) '
+        'SELECT ?, ?, kind, payload, created_at, updated_at '
+        'FROM provider_artifact_rows WHERE revision_id = ?;',
+        [targetConversationId, targetMessageId, message.id],
+      );
+      await _db.customStatement(
+        'INSERT INTO message_asset_rows '
+        '(conversation_id, revision_id, asset_id, kind) '
+        'SELECT ?, ?, asset_id, kind FROM message_asset_rows '
+        'WHERE revision_id = ?;',
+        [targetConversationId, targetMessageId, message.id],
+      );
+    }
+    await _db.customStatement(
+      'INSERT OR IGNORE INTO asset_reference_dirty_rows(revision_id) '
+      'SELECT revision_id FROM message_asset_rows WHERE conversation_id = ? '
+      'UNION '
+      'SELECT revision_id FROM message_part_rows '
+      "WHERE conversation_id = ? AND (kind IN ('image', 'file') "
+      "OR (kind = 'tool_call' AND payload LIKE '%\"previewImage\"%'));",
+      [targetConversationId, targetConversationId],
+    );
+  }
+
+  Future<Conversation?> forkConversationWithVersions({
+    required String sourceId,
+    required String targetRevisionId,
+    required String title,
+    String? assistantId,
+  }) {
+    return _db.transaction(() async {
+      final sourceRow = await (_db.select(
+        _db.conversationRows,
+      )..where((row) => row.id.equals(sourceId))).getSingleOrNull();
+      if (sourceRow == null) return null;
+
+      final sourceMessages =
+          await (_db.select(_db.messageRows)
+                ..where((row) => row.conversationId.equals(sourceId))
+                ..orderBy([(row) => OrderingTerm.asc(row.messageOrder)]))
+              .get();
+
+      final firstOrderByGroup = <String, int>{};
+      for (final row in sourceMessages) {
+        final groupId = row.groupId ?? row.id;
+        final current = firstOrderByGroup[groupId];
+        if (current == null || row.messageOrder < current) {
+          firstOrderByGroup[groupId] = row.messageOrder;
+        }
+      }
+
+      MessageRow? target;
+      for (final row in sourceMessages) {
+        if (row.id == targetRevisionId) {
+          target = row;
+          break;
+        }
+      }
+      if (target == null || target.conversationId != sourceId) {
+        return null;
+      }
+
+      final targetGroupId = target.groupId ?? target.id;
+      final anchorOrder = firstOrderByGroup[targetGroupId];
+      if (anchorOrder == null) return null;
+
+      final kept = sourceMessages
+          .where((row) {
+            final firstOrder = firstOrderByGroup[row.groupId ?? row.id];
+            return firstOrder != null && firstOrder <= anchorOrder;
+          })
+          .toList(growable: false);
+
+      const uuid = Uuid();
+      final targetId = uuid.v4();
+      final messageIdMap = {for (final message in kept) message.id: uuid.v4()};
+      final groupIdMap = <String, String>{};
+      for (final message in kept) {
+        final groupId = message.groupId ?? message.id;
+        groupIdMap.putIfAbsent(
+          groupId,
+          () => messageIdMap[groupId] ?? uuid.v4(),
+        );
+      }
+
+      final source = await _conversationFromRow(
+        sourceRow,
+        includeMessageIds: false,
+      );
+      var suggestions = const <String>[];
+      if (source.chatSuggestions.isNotEmpty &&
+          target.role == 'assistant' &&
+          !target.isStreaming) {
+        final tail = await loadLinearMessageWindow(
+          conversationId: sourceId,
+          limit: 1,
+        );
+        if (tail.slots.isNotEmpty &&
+            tail.slots.single.revisionId == targetRevisionId) {
+          suggestions = List<String>.of(source.chatSuggestions);
+        }
+      }
+      final keptSourceGroupIds = {
+        for (final row in kept) row.groupId ?? row.id,
+      };
+      final selections = <String, int>{
+        for (final entry in source.versionSelections.entries)
+          if (keptSourceGroupIds.contains(entry.key))
+            (groupIdMap[entry.key] ?? entry.key): entry.value,
+      };
+      selections[groupIdMap[targetGroupId]!] = target.version;
+
+      final now = DateTime.now();
+      await _invalidateEmptyAcknowledgement();
+      await _db
+          .into(_db.conversationRows)
+          .insert(
+            _conversationCompanion(
+              Conversation(
+                id: targetId,
+                title: title,
+                createdAt: now,
+                updatedAt: now,
+                assistantId: assistantId,
+                versionSelections: selections,
+                chatSuggestions: suggestions,
+                messageIds: [
+                  for (final message in kept) messageIdMap[message.id]!,
+                ],
+                extras: source.extras,
+              ),
+            ),
+          );
+      await _copyMessageRowsInto(
+        targetConversationId: targetId,
+        messages: kept,
+        messageIdMap: messageIdMap,
+        groupIdMap: groupIdMap,
+      );
+      final insertedRow = await (_db.select(
+        _db.conversationRows,
+      )..where((row) => row.id.equals(targetId))).getSingle();
+      return _conversationFromRow(insertedRow);
+    });
+  }
+
   Future<Conversation?> duplicateConversation(String sourceId) {
     return _db.transaction(() async {
       final sourceRow = await (_db.select(
@@ -4531,7 +4726,8 @@ class ChatDatabaseRepository {
         'SELECT revision_id FROM message_asset_rows WHERE conversation_id = ? '
         'UNION '
         'SELECT revision_id FROM message_part_rows '
-        "WHERE conversation_id = ? AND kind IN ('image', 'file');",
+        "WHERE conversation_id = ? AND (kind IN ('image', 'file') "
+        "OR (kind = 'tool_call' AND payload LIKE '%\"previewImage\"%'));",
         [targetId, targetId],
       );
       if (sourceTree != null) {
@@ -4722,7 +4918,8 @@ class ChatDatabaseRepository {
       await _db.customStatement(
         'INSERT OR IGNORE INTO asset_reference_dirty_rows(revision_id) '
         'SELECT DISTINCT revision_id FROM message_part_rows '
-        "WHERE conversation_id = ? AND kind IN ('image', 'file');",
+        "WHERE conversation_id = ? AND (kind IN ('image', 'file') "
+        "OR (kind = 'tool_call' AND payload LIKE '%\"previewImage\"%'));",
         [conversation.id],
       );
       await _writeConversationTree(tree);
@@ -5383,9 +5580,6 @@ class ChatDatabaseRepository {
     ChatMessage message, {
     List<Map<String, dynamic>>? toolEvents,
   }) async {
-    if (_messageHasAttachmentParts(message)) {
-      await markMessageAssetReferencesDirty(message.id);
-    }
     // 流中途的 reasoning 暂停不是移除 reasoning：checkpoint 快照仍带有预分配的
     // reasoningStartAt 时间戳，因此保留持久化 reasoning part，直到无时间戳消息
     // 证明 reasoning 已消失（完全重建、编辑、finalize）。
@@ -5406,6 +5600,12 @@ class ChatDatabaseRepository {
       message = message.copyWith(reasoningText: effectiveReasoningText);
     }
     final parts = _partsForPersistence(message, toolEvents);
+    if (_messageHasAttachmentParts(message) ||
+        parts.whereType<ToolCallPart>().any(
+          (part) => part.browserPreviewImage != null,
+        )) {
+      await markMessageAssetReferencesDirty(message.id);
+    }
     await (_db.delete(_db.messagePartRows)..where(
           (row) =>
               row.revisionId.equals(message.id) &
@@ -7459,7 +7659,8 @@ class ChatDatabaseRepository {
     await _db.customStatement(
       'INSERT OR IGNORE INTO asset_reference_dirty_rows(revision_id) '
       'SELECT DISTINCT revision_id FROM main.message_part_rows '
-      "WHERE conversation_id = ? AND kind IN ('image', 'file');",
+      "WHERE conversation_id = ? AND (kind IN ('image', 'file') "
+        "OR (kind = 'tool_call' AND payload LIKE '%\"previewImage\"%'));",
       [targetId],
     );
     final sourceBranches = await _db

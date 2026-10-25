@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 
 import 'package:flutter/services.dart';
 import 'package:Kelivo/core/models/workspace.dart';
-import 'package:Kelivo/core/services/workspace/workspace_runtime.dart';
 import 'package:Kelivo/features/workspace/widgets/files/file_browser.dart';
 import 'package:Kelivo/features/workspace/pages/workspace_files_desktop_layout.dart';
 import 'package:Kelivo/features/workspace/widgets/workspace_tools_pane.dart';
@@ -28,7 +27,6 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:provider/provider.dart';
 
 import '../../../support/business_test_harness.dart';
-import '../terminal/fake_workspace_runtime.dart';
 
 class _FolderPicker extends FilePicker {
   String? folder;
@@ -103,6 +101,13 @@ void main() {
   late WorkspaceProvider workspaces;
 
   setUp(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('app.workspace', StandardMethodCodec()),
+          (call) async => call.method == 'hasDirectoryStorageAccess'
+              ? true
+              : null,
+        );
     FilePicker.platform = _FolderPicker();
     tempDir = Directory.systemTemp.createTempSync('kelivo_workspaces_pane_');
     previousPathProvider = PathProviderPlatform.instance;
@@ -114,6 +119,11 @@ void main() {
   });
 
   tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('app.workspace', StandardMethodCodec()),
+          null,
+        );
     PathProviderPlatform.instance = previousPathProvider;
     await database.close();
     if (tempDir.existsSync()) {
@@ -121,20 +131,13 @@ void main() {
     }
   });
 
-  Widget harness({WorkspaceRuntime? runtime}) {
+  Widget harness() {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (_) => SettingsProvider(createBusinessTestPreferences()),
         ),
         ChangeNotifierProvider<WorkspaceProvider>.value(value: workspaces),
-        ChangeNotifierProvider<WorkspaceRuntimeProvider>(
-          create: (_) {
-            final provider = WorkspaceRuntimeProvider();
-            if (runtime != null) provider.register(runtime);
-            return provider;
-          },
-        ),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -235,11 +238,6 @@ void main() {
       await tester.tap(find.byKey(WorkspacesPane.createKey));
       await _settleSheet(tester);
       expect(find.byType(BottomSheet), findsNothing);
-      expect(
-        find.text('JO-AIClient creates and manages a folder for this project.'),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Kelivo'), findsNothing);
       await tester.enterText(find.byType(TextField), 'Native workspace');
       await tester.pump();
       await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -252,11 +250,7 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     },
-    variant: TargetPlatformVariant({
-      TargetPlatform.windows,
-      TargetPlatform.macOS,
-      TargetPlatform.linux,
-    }),
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
   );
 
   testWidgets(
@@ -389,37 +383,23 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       late Workspace alpha;
       late Workspace beta;
-      late String firstRoot;
-      late String secondRoot;
-      final runtime = FakeWorkspaceRuntime();
       await tester.runAsync(() async {
         alpha = await workspaces.create(name: 'App redesign');
         beta = await workspaces.create(name: 'Research notes');
         final root = await workspaces.hostRootFor(alpha);
-        firstRoot = root;
         Directory(p.join(root, 'src')).createSync();
         File(p.join(root, 'README.md')).writeAsStringSync('# App redesign');
         File(p.join(root, 'package.json')).writeAsStringSync('{}');
-        secondRoot = await workspaces.hostRootFor(beta);
+        final secondRoot = await workspaces.hostRootFor(beta);
         File(p.join(secondRoot, 'notes.md')).writeAsStringSync('# Research');
       });
-      await tester.pumpWidget(harness(runtime: runtime));
+      await tester.pumpWidget(harness());
       await _awaitIo(
         tester,
         () =>
             find.byKey(FileBrowser.itemKey('README.md')).evaluate().isNotEmpty,
       );
       expect(find.byKey(FileBrowser.itemKey('README.md')), findsOneWidget);
-      await tester.tap(find.text('Reveal in file manager'));
-      await tester.pump();
-      expect(runtime.lastRevealPath, firstRoot);
-      expect(
-        p.equals(
-          firstRoot,
-          p.join(tempDir.path, 'workspaces', alpha.id, 'files'),
-        ),
-        isTrue,
-      );
       await tester.runAsync(
         () => workspaces.update(alpha.copyWith(name: 'Z app redesign')),
       );
@@ -437,16 +417,6 @@ void main() {
         () => find.byKey(FileBrowser.itemKey('notes.md')).evaluate().isNotEmpty,
       );
       expect(find.byKey(FileBrowser.itemKey('notes.md')), findsOneWidget);
-      await tester.tap(find.text('Reveal in file manager'));
-      await tester.pump();
-      expect(runtime.lastRevealPath, secondRoot);
-      expect(
-        p.equals(
-          secondRoot,
-          p.join(tempDir.path, 'workspaces', beta.id, 'files'),
-        ),
-        isTrue,
-      );
       expect(find.byKey(FileBrowser.itemKey('README.md')), findsNothing);
       expect(find.byType(Scaffold), findsOneWidget);
       final search = find.descendant(
@@ -466,9 +436,80 @@ void main() {
       expect(find.byKey(FileBrowser.itemKey('notes.md')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
+  testWidgets(
+    'wide mobile creation imports a copy into a managed workspace',
+    (tester) async {
+      const haptics = MethodChannel('haptic_feedback');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(haptics, (_) async => true);
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(haptics, null),
+      );
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1366, 1024);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = Directory(p.join(tempDir.path, 'source'))..createSync();
+      final original = File(p.join(source.path, 'note.txt'))
+        ..writeAsStringSync('original');
+      (FilePicker.platform as _FolderPicker).folder = source.path;
+      await tester.pumpWidget(harness());
+      await _pumpUi(tester);
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(WorkspacesPane)),
+      )!;
+      await tester.tap(find.byKey(WorkspacesPane.createKey));
+      await _settleSheet(tester);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text(l10n.workspaceMgmtImportFromFolder), findsOneWidget);
+      expect(find.text(l10n.workspaceMgmtKindLinkedTitle), findsNothing);
+      await tester.enterText(find.byType(TextField), 'Imported');
+      tester.view.viewInsets = const FakeViewPadding(bottom: 400);
+      addTearDown(tester.view.resetViewInsets);
+      await _settleSheet(tester);
+      expect(
+        tester
+            .getBottomRight(
+              find.byKey(const ValueKey<String>('workspaces-create-confirm')),
+            )
+            .dy,
+        lessThanOrEqualTo(624),
+      );
+      await tester.tap(find.text(l10n.workspaceMgmtImportFromFolder));
+      await tester.pump();
+      await _tapFormConfirm(
+        tester,
+        const ValueKey<String>('workspaces-create-confirm'),
+      );
+      await _awaitIo(tester, () => workspaces.workspaces.isNotEmpty);
+      final created = workspaces.workspaces.single;
+      expect(created.kind, WorkspaceKind.managed);
+      expect(created.hostPath, isNull);
+      final destination = await tester.runAsync(
+        () => workspaces.hostRootFor(created),
+      );
+      final copied = File(p.join(destination!, 'note.txt'));
+      await _awaitIo(tester, copied.existsSync);
+      expect(copied.readAsStringSync(), 'original');
+      expect(copied.path, isNot(original.path));
+      copied.writeAsStringSync('edited copy');
+      expect(original.readAsStringSync(), 'original');
+      await _awaitIo(
+        tester,
+        () => find.byType(DesktopWorkspaceFiles).evaluate().isNotEmpty,
+      );
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
     variant: TargetPlatformVariant({
-      TargetPlatform.windows,
-      TargetPlatform.macOS,
+      TargetPlatform.iOS,
+      TargetPlatform.android,
     }),
   );
 

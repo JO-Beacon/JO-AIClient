@@ -28,6 +28,7 @@ final class BusinessKeyRegistry {
     'linux_hide_title_bar_v1',
     'android_adaptive_refresh_rate_v1',
     'desktop_hotkeys_commands_v1',
+    'ios_native_selection_menu_enabled_v1',
     'desktop_hotkeys_enabled_v1',
     'display_chat_font_scale_v1',
     // 长文本编辑是否用按行编辑器：取决于本机的输入法与性能，属本机偏好。

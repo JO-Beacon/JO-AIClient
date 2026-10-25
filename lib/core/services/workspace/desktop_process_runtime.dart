@@ -26,6 +26,9 @@ class DesktopProcessRuntime extends WorkspaceRuntime {
   bool get supportsSystemTerminal => true;
 
   @override
+  bool get supportsFileManager => true;
+
+  @override
   Future<RuntimeStatus> status() async {
     final shell = await _shell();
     if (shell == null) {

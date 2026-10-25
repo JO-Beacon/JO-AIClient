@@ -190,6 +190,8 @@ class SettingsProvider extends ChangeNotifier {
       'display_show_produced_files_v1';
   static const String _displayShowReasoningLevelBadgeKey =
       'display_show_reasoning_level_badge_v1';
+  static const String _iosNativeSelectionMenuEnabledKey =
+      'ios_native_selection_menu_enabled_v1';
   static const String _displayShowTotalTokensKey =
       'display_show_total_tokens_v1';
   static const String _displayAutoCollapseThinkingKey =
@@ -200,6 +202,8 @@ class SettingsProvider extends ChangeNotifier {
       'display_show_tool_result_summary_v1';
   static const String _displayHideToolResultImagesKey =
       'display_hide_tool_result_images_v1';
+  static const String _displayShowBrowserPageCardsKey =
+      'display_show_browser_page_cards_v1';
   static const String _displayShowRegenerateConfirmDialogKey =
       'display_show_regenerate_confirm_dialog_v1';
   static const String _displayShowMessageNavKey = 'display_show_message_nav_v1';
@@ -997,6 +1001,8 @@ class SettingsProvider extends ChangeNotifier {
     // 与上游有意分歧：上游该项默认关，本仓库默认开。
     _showReasoningLevelBadge =
         prefs.getBool(_displayShowReasoningLevelBadgeKey) ?? true;
+    _iosNativeSelectionMenuEnabled =
+        localPreferences.getBool(_iosNativeSelectionMenuEnabledKey) ?? true;
     _showTotalTokens = prefs.getBool(_displayShowTotalTokensKey) ?? false;
     _autoCollapseThinking =
         prefs.getBool(_displayAutoCollapseThinkingKey) ?? true;
@@ -1006,6 +1012,8 @@ class SettingsProvider extends ChangeNotifier {
         prefs.getBool(_displayShowToolResultSummaryKey) ?? false;
     _hideToolResultImages =
         prefs.getBool(_displayHideToolResultImagesKey) ?? false;
+    _showBrowserPageCards =
+        prefs.getBool(_displayShowBrowserPageCardsKey) ?? true;
     _showRegenerateConfirmDialog =
         prefs.getBool(_displayShowRegenerateConfirmDialogKey) ?? true;
     _showMessageNavButtons = prefs.getBool(_displayShowMessageNavKey) ?? true;
@@ -4669,6 +4677,17 @@ Requirements:
     await _preferences.setBool(_displayShowReasoningLevelBadgeKey, v);
   }
 
+  // 保留为每台设备的本地性能偏好。
+  bool _iosNativeSelectionMenuEnabled = true;
+  bool get iosNativeSelectionMenuEnabled => _iosNativeSelectionMenuEnabled;
+  Future<void> setIosNativeSelectionMenuEnabled(bool value) async {
+    if (_iosNativeSelectionMenuEnabled == value) return;
+    _iosNativeSelectionMenuEnabled = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_iosNativeSelectionMenuEnabledKey, value);
+  }
+
   // 仅影响展示：统计始终用整轮用量。
   bool _showTotalTokens = false;
   bool get showTotalTokens => _showTotalTokens;
@@ -4735,6 +4754,15 @@ Requirements:
     _hideToolResultImages = v;
     notifyListeners();
     await _preferences.setBool(_displayHideToolResultImagesKey, v);
+  }
+
+  bool _showBrowserPageCards = true;
+  bool get showBrowserPageCards => _showBrowserPageCards;
+  Future<void> setShowBrowserPageCards(bool v) async {
+    if (_showBrowserPageCards == v) return;
+    _showBrowserPageCards = v;
+    notifyListeners();
+    await _preferences.setBool(_displayShowBrowserPageCardsKey, v);
   }
 
   bool _showRegenerateConfirmDialog = true;
@@ -5801,11 +5829,13 @@ Requirements:
     copy._showToolCards = _showToolCards;
     copy._showProducedFiles = _showProducedFiles;
     copy._showReasoningLevelBadge = _showReasoningLevelBadge;
+    copy._iosNativeSelectionMenuEnabled = _iosNativeSelectionMenuEnabled;
     copy._showTotalTokens = _showTotalTokens;
     copy._autoCollapseThinking = _autoCollapseThinking;
     copy._collapseThinkingSteps = _collapseThinkingSteps;
     copy._showToolResultSummary = _showToolResultSummary;
     copy._hideToolResultImages = _hideToolResultImages;
+    copy._showBrowserPageCards = _showBrowserPageCards;
     copy._showRegenerateConfirmDialog = _showRegenerateConfirmDialog;
     copy._showMessageNavButtons = _showMessageNavButtons;
     copy._mobileMessageNavButtonsMode = _mobileMessageNavButtonsMode;

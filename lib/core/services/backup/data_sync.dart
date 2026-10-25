@@ -1535,6 +1535,8 @@ class DataSync {
       entries[_manifestEntryName] = writer.addFile(
         manifestFile,
         _manifestEntryName,
+        // 打包进度只统计写入前测得的源文件；生成的元数据不能超过总数。
+        reportProgress: false,
       );
       writer.closeSync();
       return entries;
@@ -4391,7 +4393,11 @@ class _StreamingZipWriter {
   final List<_StreamingZipEntry> _entries = <_StreamingZipEntry>[];
   bool _closed = false;
 
-  _BackupEntryMetadata addFile(File file, String entryName) {
+  _BackupEntryMetadata addFile(
+    File file,
+    String entryName, {
+    bool reportProgress = true,
+  }) {
     if (_closed) {
       throw StateError('Cannot add files after the ZIP writer is closed.');
     }
@@ -4421,7 +4427,11 @@ class _StreamingZipWriter {
       usesZip64: usesZip64Entry,
     );
 
-    final written = _writeDeflatedFile(file, entryName);
+    final written = _writeDeflatedFile(
+      file,
+      entryName,
+      reportProgress: reportProgress,
+    );
     _writeDataDescriptor(written, usesZip64: usesZip64Entry);
 
     _entries.add(
@@ -4488,7 +4498,11 @@ class _StreamingZipWriter {
     }
   }
 
-  _StreamingZipWrittenFile _writeDeflatedFile(File file, String entryName) {
+  _StreamingZipWrittenFile _writeDeflatedFile(
+    File file,
+    String entryName, {
+    required bool reportProgress,
+  }) {
     final compressedSink = _CountingOutputSink(_output);
     final inputSink = ZLibCodec(
       level: ZLibOption.defaultLevel,
@@ -4510,7 +4524,11 @@ class _StreamingZipWriter {
         uncompressedSize += read;
         hashSink.add(chunk);
         inputSink.add(chunk);
-        meter?.add(read, detail: entryName);
+        if (reportProgress) {
+          meter?.add(read, detail: entryName);
+        } else {
+          meter?.ctx?.throwIfCancelled();
+        }
       }
       hashSink.close();
       inputSink.close();

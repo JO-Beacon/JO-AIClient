@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/models/model_spec.dart';
 import '../../../shared/widgets/context_usage_ring.dart';
 import '../../../shared/widgets/long_message_editor.dart';
+import '../../../shared/widgets/app_text_selection_toolbar.dart';
 import '../services/context_usage_service.dart';
 import '../../../core/models/reasoning_request.dart';
 import '../../../core/services/api/reasoning/reasoning_level_options.dart';
@@ -589,6 +591,7 @@ class ChatInputBar extends StatefulWidget {
     this.onPickCamera,
     this.onPickPhotos,
     this.onUploadFiles,
+    this.onOpenBrowser,
     this.onToggleLearningMode,
     this.onOpenWorldBook,
     this.onClearContext,
@@ -656,6 +659,7 @@ class ChatInputBar extends StatefulWidget {
   final VoidCallback? onPickCamera;
   final VoidCallback? onPickPhotos;
   final VoidCallback? onUploadFiles;
+  final VoidCallback? onOpenBrowser;
   final VoidCallback? onToggleLearningMode;
   final VoidCallback? onOpenWorldBook;
   final VoidCallback? onClearContext;
@@ -2158,12 +2162,13 @@ class _ChatInputBarState extends State<ChatInputBar>
     TextSelectionToolbarAnchors anchors,
     List<ContextMenuButtonItem> defaultItems,
     VoidCallback hideToolbar,
+    VoidCallback onNativeDismiss,
   ) {
     // 应用生命周期转换期间抑制上下文菜单，避免闪烁
     if (_suppressContextMenu) {
       return const SizedBox.shrink();
     }
-    if (Platform.isIOS) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
       final items = <ContextMenuButtonItem>[];
       try {
         final appL10n = AppLocalizations.of(context)!;
@@ -2254,9 +2259,11 @@ class _ChatInputBarState extends State<ChatInputBar>
           );
         }
       } catch (_) {}
-      return AdaptiveTextSelectionToolbar.buttonItems(
+      return AppTextSelectionToolbar(
         anchors: anchors,
         buttonItems: items,
+        selectionContext: context,
+        onDismiss: onNativeDismiss,
       );
     }
 
@@ -2271,9 +2278,11 @@ class _ChatInputBarState extends State<ChatInputBar>
           );
         })
         .toList(growable: false);
-    return AdaptiveTextSelectionToolbar.buttonItems(
+    return AppTextSelectionToolbar(
       anchors: anchors,
       buttonItems: items,
+      selectionContext: context,
+      onDismiss: onNativeDismiss,
     );
   }
 
@@ -3144,6 +3153,24 @@ class _ChatInputBarState extends State<ChatInputBar>
                 icon: Lucide.Paperclip,
                 label: l10n.bottomToolsSheetUpload,
                 onTap: lockTap(widget.onUploadFiles),
+              ),
+            ),
+          );
+        }
+
+        if (widget.onOpenBrowser != null) {
+          actions.add(
+            _OverflowAction(
+              width: normalButtonW,
+              builder: () => _CompactIconButton(
+                tooltip: l10n.browserOpen,
+                icon: Lucide.AppWindow,
+                onTap: lockTap(widget.onOpenBrowser),
+              ),
+              menu: DesktopContextMenuItem(
+                icon: Lucide.AppWindow,
+                label: l10n.browserOpen,
+                onTap: lockTap(widget.onOpenBrowser),
               ),
             ),
           );

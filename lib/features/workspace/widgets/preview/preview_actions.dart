@@ -12,7 +12,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
 import 'package:Kelivo/shared/utils/save_file_picker.dart';
 import 'package:Kelivo/shared/widgets/snackbar.dart';
+import 'package:Kelivo/utils/platform_utils.dart';
 import 'package:Kelivo/utils/windows_explorer_arguments.dart';
+
+bool get canRevealPreviewFileInFileManager =>
+    !kIsWeb && PlatformUtils.isDesktopTarget;
 
 HttpServer? _previewBrowserServer;
 Timer? _previewBrowserServerTtl;

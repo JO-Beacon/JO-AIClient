@@ -107,6 +107,9 @@ dependencies:
   animations: ^2.0.11
   flutter_animate: ^4.5.2
   webview_flutter: ^4.13.1
+  flutter_inappwebview: ^6.1.5
+  liquid_glass_widgets:
+    path: ./dependencies/liquid_glass_widgets
   webview_flutter_wkwebview: ^3.25.1
   webview_windows: ^0.4.0
   # 本地 fork：在 pub 版 0.7.4 基础上修复中文与公式混排的字体回退，详见 dependencies/flutter_math_fork
@@ -173,6 +176,18 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 
 dependency_overrides:
+  # 保留 Android 壳的合成行为并忽略未订阅的滚动事件。
+  flutter_inappwebview_android:
+    path: dependencies/flutter_inappwebview_android
+  # 与现有 iOS 原生宿主匹配，不依赖共享弹窗脚本。
+  flutter_inappwebview_ios:
+    path: dependencies/flutter_inappwebview_ios
+  # 桌面窗格宽度为小数时给出确定的原生边界。
+  flutter_inappwebview_macos:
+    path: dependencies/flutter_inappwebview_macos
+  # 跨宿主保留 WebView2 文档，并限制原生截图尺寸。
+  flutter_inappwebview_windows:
+    path: dependencies/flutter_inappwebview_windows
   # Prevent the location from being accessed continuously on Windows
   permission_handler_windows:
     path: ./dependencies/flutter-permission-handler/permission_handler_windows
@@ -205,6 +220,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  shaders:
+    - shaders/browser_switch_lens.frag
 
   # To add assets to your application, add an assets section, like this:
   assets:

@@ -107,6 +107,16 @@ final class ToolCallPart extends MessagePart {
 
   final String payloadJson;
 
+  /// 客户端持有的浏览器缩略图是界面资源，不是模型图片 part。
+  String? get browserPreviewImage {
+    if (!payloadJson.contains('"previewImage"')) return null;
+    try {
+      return browserPreviewImageFromToolEvent(jsonDecode(payloadJson));
+    } on FormatException {
+      return null;
+    }
+  }
+
   @override
   String get kind => 'tool_call';
 
@@ -121,6 +131,18 @@ final class ToolCallPart extends MessagePart {
   @override
   int get hashCode => payloadJson.hashCode;
 }
+
+String? browserPreviewImageFromToolEvent(Object? event) => switch (event) {
+  {
+    'name': 'browser',
+    'metadata': {
+      'browser': {'previewImage': final String uri},
+    },
+  }
+      when uri.trim().isNotEmpty =>
+    uri,
+  _ => null,
+};
 
 /// 一次模型响应在客户端工具执行之前的结束点。
 ///

@@ -146,6 +146,14 @@ Widget buildSharedChatSurface(
   }
 }
 
+/// 聊天时间线内紧凑卡片和胶囊使用的静默填充色。
+Color chatQuietFill(BuildContext context) {
+  final theme = Theme.of(context);
+  return theme.colorScheme.onSurface.withValues(
+    alpha: theme.brightness == Brightness.dark ? 0.06 : 0.04,
+  );
+}
+
 /// 气泡内的前景色板，各强度一次算好，避免逐处重算。
 class ChatSurfaceForegroundPalette {
   const ChatSurfaceForegroundPalette({
