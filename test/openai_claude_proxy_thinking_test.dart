@@ -342,7 +342,7 @@ void main() {
       },
     );
 
-    test('non-Claude upstreams replay the block sequence verbatim', () async {
+    test('non-Claude upstreams also reassemble fragmented reasoning', () async {
       late Map<String, dynamic> requestBody;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() async {
@@ -387,7 +387,9 @@ void main() {
 
       expect(chunks.isGenerationDone, isTrue);
       final messages = (requestBody['messages'] as List).cast<Map>();
-      expect((messages[1]['reasoning_details'] as List), hasLength(2));
+      expect(messages[1]['reasoning_details'], [
+        {'type': 'reasoning.text', 'text': 'part A part B', 'index': 0},
+      ]);
     });
 
     test('streamed reasoning_details deltas are accumulated in order', () async {

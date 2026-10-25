@@ -13843,6 +13843,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get browserActionExtract => '提取正文';
 
   @override
+  String get browserActionScreenshot => '截取页面';
+
+  @override
   String get browserActionForward => '前进';
 
   @override
@@ -13874,6 +13877,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get browserActionType => '输入文字';
+
+  @override
+  String get browserActionSelect => '选择选项';
 
   @override
   String get browserActionUnknown => '浏览器操作';
@@ -14352,6 +14358,72 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get displaySettingsPageIosNativeSelectionMenuSubtitle =>
       '用于输入框和消息选区；如遇卡顿可关闭，恢复原菜单。';
+
+  @override
+  String get toolApprovalByFullAccess => '已自动执行';
+
+  @override
+  String get toolApprovalDenied => '已拒绝';
+
+  @override
+  String get toolPermissionEnabledSnack => '已为此对话启用完全访问';
+
+  @override
+  String get toolPermissionFullAccess => '完全访问';
+
+  @override
+  String get toolPermissionFullAccessDesc =>
+      '允许此对话直接访问本机文件、运行命令及使用已启用的联网工具，不再逐次询问。';
+
+  @override
+  String get toolPermissionFullAccessDescMobile =>
+      '允许此对话在沙箱和已授权文件夹内自动执行工具，不再逐次询问。';
+
+  @override
+  String get toolPermissionRequestApproval => '请求批准';
+
+  @override
+  String get toolPermissionRequestApprovalDesc =>
+      '工作区外文件访问、桌面命令和其他需要授权的工具将在执行前询问。';
+
+  @override
+  String get toolPermissionResetSnack => '已更换工作区 · 此对话权限已恢复为请求批准';
+
+  @override
+  String get toolPermissionSaveFailed => '保存失败，权限未更改。';
+
+  @override
+  String get toolPermissionTitle => '权限';
+
+  @override
+  String get toolPermissionUndo => '撤销';
+
+  @override
+  String get toolApprovalSwitchToFullAccess => '切换到完全访问';
+
+  @override
+  String get toolApprovalRequestedPath => '请求路径';
+
+  @override
+  String get toolApprovalRealTarget => '实际目标';
+
+  @override
+  String get toolApprovalScopeOnce => '仅授权本次调用';
+
+  @override
+  String get wsDeniedPathOutside => '目标不在授权区域内，已拒绝。';
+
+  @override
+  String get wsDeniedMountReadonly => '只读挂载，不能写入。';
+
+  @override
+  String get wsDeniedSkillsReadonly => '技能目录只读。';
+
+  @override
+  String get wsPathChanged => '审批期间目标已变化。';
+
+  @override
+  String get wsContextChanged => '对话上下文已变化，请求失效。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -28193,6 +28265,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get browserActionExtract => '提取正文';
 
   @override
+  String get browserActionScreenshot => '截取页面';
+
+  @override
   String get browserActionForward => '前进';
 
   @override
@@ -28224,6 +28299,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get browserActionType => '输入文字';
+
+  @override
+  String get browserActionSelect => '选择选项';
 
   @override
   String get browserActionUnknown => '浏览器操作';
@@ -28702,6 +28780,72 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String get displaySettingsPageIosNativeSelectionMenuSubtitle =>
       '用于输入框和消息选区；如遇卡顿可关闭，恢复原菜单。';
+
+  @override
+  String get toolApprovalByFullAccess => '已自动执行';
+
+  @override
+  String get toolApprovalDenied => '已拒绝';
+
+  @override
+  String get toolPermissionEnabledSnack => '已为此对话启用完全访问';
+
+  @override
+  String get toolPermissionFullAccess => '完全访问';
+
+  @override
+  String get toolPermissionFullAccessDesc =>
+      '允许此对话直接访问本机文件、运行命令及使用已启用的联网工具，不再逐次询问。';
+
+  @override
+  String get toolPermissionFullAccessDescMobile =>
+      '允许此对话在沙箱和已授权文件夹内自动执行工具，不再逐次询问。';
+
+  @override
+  String get toolPermissionRequestApproval => '请求批准';
+
+  @override
+  String get toolPermissionRequestApprovalDesc =>
+      '工作区外文件访问、桌面命令和其他需要授权的工具将在执行前询问。';
+
+  @override
+  String get toolPermissionResetSnack => '已更换工作区 · 此对话权限已恢复为请求批准';
+
+  @override
+  String get toolPermissionSaveFailed => '保存失败，权限未更改。';
+
+  @override
+  String get toolPermissionTitle => '权限';
+
+  @override
+  String get toolPermissionUndo => '撤销';
+
+  @override
+  String get toolApprovalSwitchToFullAccess => '切换到完全访问';
+
+  @override
+  String get toolApprovalRequestedPath => '请求路径';
+
+  @override
+  String get toolApprovalRealTarget => '实际目标';
+
+  @override
+  String get toolApprovalScopeOnce => '仅授权本次调用';
+
+  @override
+  String get wsDeniedPathOutside => '目标不在授权区域内，已拒绝。';
+
+  @override
+  String get wsDeniedMountReadonly => '只读挂载，不能写入。';
+
+  @override
+  String get wsDeniedSkillsReadonly => '技能目录只读。';
+
+  @override
+  String get wsPathChanged => '审批期间目标已变化。';
+
+  @override
+  String get wsContextChanged => '对话上下文已变化，请求失效。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -42550,6 +42694,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get browserActionExtract => '擷取正文';
 
   @override
+  String get browserActionScreenshot => '擷取畫面';
+
+  @override
   String get browserActionForward => '下一頁';
 
   @override
@@ -42581,6 +42728,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get browserActionType => '輸入文字';
+
+  @override
+  String get browserActionSelect => '選擇選項';
 
   @override
   String get browserActionUnknown => '瀏覽器操作';
@@ -43059,4 +43209,70 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String get displaySettingsPageIosNativeSelectionMenuSubtitle =>
       '用於輸入框和訊息選取範圍；如遇卡頓可關閉，恢復原選單。';
+
+  @override
+  String get toolApprovalByFullAccess => '已自動執行';
+
+  @override
+  String get toolApprovalDenied => '已拒絕';
+
+  @override
+  String get toolPermissionEnabledSnack => '已為此對話啟用完全存取';
+
+  @override
+  String get toolPermissionFullAccess => '完全存取';
+
+  @override
+  String get toolPermissionFullAccessDesc =>
+      '允許此對話直接存取本機檔案、執行命令及使用已啟用的聯網工具，不再逐次詢問。';
+
+  @override
+  String get toolPermissionFullAccessDescMobile =>
+      '允許此對話在沙盒和已授權資料夾內自動執行工具，不再逐次詢問。';
+
+  @override
+  String get toolPermissionRequestApproval => '請求批准';
+
+  @override
+  String get toolPermissionRequestApprovalDesc =>
+      '工作區外檔案存取、桌面命令和其他需要授權的工具將在執行前詢問。';
+
+  @override
+  String get toolPermissionResetSnack => '已更換工作區 · 此對話權限已恢復為請求批准';
+
+  @override
+  String get toolPermissionSaveFailed => '儲存失敗，權限未變更。';
+
+  @override
+  String get toolPermissionTitle => '權限';
+
+  @override
+  String get toolPermissionUndo => '復原';
+
+  @override
+  String get toolApprovalSwitchToFullAccess => '切換到完全存取';
+
+  @override
+  String get toolApprovalRequestedPath => '請求路徑';
+
+  @override
+  String get toolApprovalRealTarget => '實際目標';
+
+  @override
+  String get toolApprovalScopeOnce => '僅授權本次呼叫';
+
+  @override
+  String get wsDeniedPathOutside => '目標不在授權區域內，已拒絕。';
+
+  @override
+  String get wsDeniedMountReadonly => '唯讀掛載，無法寫入。';
+
+  @override
+  String get wsDeniedSkillsReadonly => '技能目錄唯讀。';
+
+  @override
+  String get wsPathChanged => '審批期間目標已變化。';
+
+  @override
+  String get wsContextChanged => '對話上下文已變化，請求失效。';
 }

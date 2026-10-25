@@ -16,6 +16,8 @@ import 'package:Kelivo/core/services/workspace/workspace_tools_service.dart';
 import 'package:Kelivo/utils/mcp_structured_image.dart';
 import 'package:Kelivo/utils/sandbox_path_resolver.dart';
 
+import '../../../support/claude_test_api.dart' show FakePathProviderPlatform;
+
 void main() {
   late Directory tmp;
   late PathProviderPlatform originalPaths;
@@ -183,7 +185,7 @@ void main() {
       jsonDecode(
         (await view('/workspace/link.png', ctx: ctx)).content,
       )['error'],
-      'path_error',
+      'path_outside',
     );
   }, skip: Platform.isWindows);
 
@@ -331,23 +333,4 @@ void main() {
     expect(decoded.getPixel(0, 0).r, 255);
     expect(decoded.getPixel(0, 0).b, 0);
   });
-}
-
-/// 本仓库没有共享的 path_provider 假实现，这里就地定义一份。
-class FakePathProviderPlatform extends PathProviderPlatform {
-  FakePathProviderPlatform(this.path);
-
-  final String path;
-
-  @override
-  Future<String?> getApplicationDocumentsPath() async => path;
-
-  @override
-  Future<String?> getApplicationSupportPath() async => path;
-
-  @override
-  Future<String?> getApplicationCachePath() async => '$path/cache';
-
-  @override
-  Future<String?> getTemporaryPath() async => '$path/tmp';
 }

@@ -10,6 +10,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import 'package:Kelivo/core/models/tool_permission_mode.dart';
 import '../models/composer_draft.dart';
 import '../models/token_usage.dart';
 import '../models/conversation.dart';
@@ -4393,14 +4394,19 @@ class ChatDatabaseRepository {
   /// 只有当 map 真的变化时才顺带推进 [updatedAt]。
   Future<void> updateConversationExtras(
     String conversationId,
-    Map<String, dynamic> Function(Map<String, dynamic> current) update,
-  ) {
+    Map<String, dynamic> Function(Map<String, dynamic> current) update, {
+    Conversation? expectedOwner,
+  }) {
     return _db.transaction(() async {
       final row = await (_db.select(
         _db.conversationRows,
       )..where((t) => t.id.equals(conversationId))).getSingleOrNull();
       if (row == null) {
         throw StateError('conversation_not_found');
+      }
+      if (expectedOwner != null &&
+          row.assistantId != expectedOwner.assistantId) {
+        throw StateError('context_changed');
       }
       final current = _decodeExtrasJson(row.extrasJson);
       final next = update(Map<String, dynamic>.from(current));
@@ -4595,7 +4601,7 @@ class ChatDatabaseRepository {
                 messageIds: [
                   for (final message in kept) messageIdMap[message.id]!,
                 ],
-                extras: source.extras,
+                extras: ToolPermissionMode.withoutGrant(source.extras),
               ),
             ),
           );
@@ -4645,6 +4651,7 @@ class ChatDatabaseRepository {
       );
       final duplicatedAt = DateTime.now();
       final duplicate = source.copyWith(
+        extras: ToolPermissionMode.withoutGrant(source.extras),
         id: targetId,
         createdAt: duplicatedAt,
         updatedAt: duplicatedAt,
@@ -4800,6 +4807,10 @@ class ChatDatabaseRepository {
                 ..limit(1))
               .getSingleOrNull();
       if (activeRun != null) return false;
+      await updateConversationExtras(
+        conversationId,
+        ToolPermissionMode.withoutGrant,
+      );
       await (_db.delete(_db.messagePromptRows)..where(
             (row) =>
                 row.conversationId.equals(conversationId) &

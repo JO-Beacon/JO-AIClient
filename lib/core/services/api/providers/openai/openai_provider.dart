@@ -29,6 +29,7 @@ import 'openai_request_shaping.dart'
         applyOpenAIResolvedRequest,
         openaiUsageFromObj,
         mergeOpenAICompatibleUsage;
+import 'reasoning_details_replay.dart';
 import '../../reasoning/reasoning_dialects.dart' show ReasoningTransport;
 import '../../../model_spec/model_spec_resolver.dart';
 import 'responses_api.dart';
@@ -53,59 +54,6 @@ Uri _openAICompatibleUrl(ProviderConfig config) {
   }
   final path = config.chatPath ?? '/chat/completions';
   return Uri.parse('$rawBase$path');
-}
-
-/// Accumulates streamed `reasoning_details` entries.
-///
-/// OpenRouter streams the array as ordered deltas (each chunk may carry one
-/// or more new entries) that must be concatenated and replayed unmodified
-/// and in the original order, so chunks are appended by default and identical
-/// consecutive deltas are preserved. Some other providers instead resend the
-/// full array-so-far with each chunk; for those (when [allowSnapshots] is
-/// set) a chunk that positively looks like such a cumulative snapshot (same
-/// entries plus new ones appended) switches the accumulator to snapshot
-/// mode, and later chunks replace the buffer instead of appending
-/// duplicates. For OpenRouter itself [allowSnapshots] is cleared because its
-/// documented semantics are always delta-style concatenation.
-class _ReasoningDetailsAccumulator {
-  _ReasoningDetailsAccumulator({this.allowSnapshots = true});
-
-  /// Whether cumulative-snapshot detection is enabled (false for OpenRouter,
-  /// whose documented semantics are delta-style concatenation).
-  final bool allowSnapshots;
-  List<dynamic> _details = const <dynamic>[];
-  bool _snapshotMode = false;
-
-  /// The accumulated entries, or null when nothing was captured.
-  List<dynamic>? get detailsOrNull => _details.isEmpty ? null : _details;
-
-  void add(List<dynamic> incoming) {
-    if (incoming.isEmpty) return;
-    if (_details.isEmpty) {
-      _details = List<dynamic>.of(incoming);
-      return;
-    }
-    final prefixMatches = allowSnapshots && _hasCurrentAsPrefix(incoming);
-    if (prefixMatches && incoming.length > _details.length) {
-      // Positive evidence of a cumulative snapshot: same prefix, but longer.
-      _snapshotMode = true;
-      _details = List<dynamic>.of(incoming);
-      return;
-    }
-    if (_snapshotMode && prefixMatches) {
-      // Snapshot-style resend of the same array; keep the buffer as-is.
-      return;
-    }
-    _details = <dynamic>[..._details, ...incoming];
-  }
-
-  bool _hasCurrentAsPrefix(List<dynamic> incoming) {
-    if (incoming.length < _details.length) return false;
-    for (var i = 0; i < _details.length; i++) {
-      if (jsonEncode(_details[i]) != jsonEncode(incoming[i])) return false;
-    }
-    return true;
-  }
 }
 
 Stream<StreamChunk> sendOpenAIStream(
@@ -957,7 +905,9 @@ Stream<StreamChunk> sendOpenAIStream(
         ids: ids,
         content: visible.content,
         reasoning: openaiReasoningText(firstMessage),
-        reasoningDetails: firstMessage?['reasoning_details'],
+        reasoningDetails: mergeReasoningDetails(
+          firstMessage?['reasoning_details'],
+        ),
         usage: firstUsage,
         totalTokens: firstUsage?.totalTokens ?? 0,
         finishReason: (firstChoice['finish_reason'] ?? '').toString().isEmpty
@@ -983,9 +933,6 @@ Stream<StreamChunk> sendOpenAIStream(
   final int approxPromptTokens = approxTokensFromChars(approxPromptChars);
   int approxCompletionChars = 0;
   String reasoningBuffer = '';
-  final reasoningDetailsBuffer = _ReasoningDetailsAccumulator(
-    allowSnapshots: reasoningDetailsAllowSnapshots,
-  );
   String assistantContentBuffer = '';
 
   // Track potential tool calls (OpenAI Chat Completions)
@@ -1208,8 +1155,7 @@ Stream<StreamChunk> sendOpenAIStream(
       firstToolAcc: toolAcc,
       firstAssistantContent: assistantContentBuffer,
       firstReasoning: reasoningBuffer,
-      firstReasoningDetails:
-          chatDecoder.reasoningDetails ?? reasoningDetailsBuffer.detailsOrNull,
+      firstReasoningDetails: chatDecoder.reasoningDetails,
       onToolCall: effectiveOnToolCall,
       userImagePaths: userImagePaths,
       canImageInput: canImageInput,
@@ -1267,8 +1213,7 @@ Stream<StreamChunk> sendOpenAIStream(
       (approxPromptTokens + approxTokensFromChars(approxCompletionChars));
   yield* emitDone(
     ids: StreamChunkIds('finish'),
-    reasoningDetails:
-        chatDecoder?.reasoningDetails ?? reasoningDetailsBuffer.detailsOrNull,
+    reasoningDetails: chatDecoder?.reasoningDetails,
     usage: usage,
     totalTokens: approxTotal,
   );

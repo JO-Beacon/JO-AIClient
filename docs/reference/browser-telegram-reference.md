@@ -151,7 +151,7 @@ Safari behavior. The historical complete-app recording supports improved opening
 closing/collapse discontinuities. The later page/pane revision replaces direct
 scroll-to-size mapping with a direction-triggered critically damped transition;
 its visual acceptance is assigned to the user. See the
-[validation history](browser.md#revised-ui-validation) for each checkpoint.
+[validation history](browser-implementation.md#revised-ui-validation) for each checkpoint.
 
 ## Edge refraction and renderer boundary
 
@@ -254,7 +254,7 @@ the menu while tap-open stayed visible. **That change was rolled back.** The
 earlier widget and native-renderer integration tests injected Flutter pointers
 and did not cover this operating-system cancellation. After rollback, actual
 CUA 700ms long press remained open and open-menu row-to-Bookmarks drag selection
-succeeded. The [open-state screenshot](../build/browser_validation/telegram-ios-retained-longpress.png)
+succeeded. The [open-state screenshot](../../build/browser_validation/telegram-ios-retained-longpress.png)
 records that recovery; it is not a frame-rate or physical-device acceptance.
 
 The preceding readiness checkpoint passed 245 focused tests. Both iOS and Android readiness integration
@@ -274,11 +274,11 @@ one test tab, Cmd-W closed that tab without closing the window, and Cmd-R
 reloaded the local page. `BrowserWindowChrome` scopes a native key-event bridge
 to the active browser route, consumes the original Command event to avoid
 double dispatch, and rechecks route ownership for queued callbacks. The
-[find-panel screenshot](../build/browser_validation/telegram-macos-shortcut-find.png)
+[find-panel screenshot](../../build/browser_validation/telegram-macos-shortcut-find.png)
 supports the runtime record. This is a keyboard interaction result, not an
 optical or frame-rate acceptance result.
 
-The [new complete-app recording](../build/browser_validation/telegram-ios-ready.mov)
+The [new complete-app recording](../../build/browser_validation/telegram-ios-ready.mov)
 uses matched 700ms long presses for the first and repeat opening in one app
 instance. Both now show a circle, growing blurred ellipses and a sharp panel;
 neither shows bare or duplicated ellipses. A blank-circle frame still appears
@@ -292,11 +292,11 @@ Its fixture scrolling requests ±100 CSS pixels smoothly; the predecessor used
 curve did not change. A collapse image step of about 348 → 140px remains at
 141.350 → 141.353333s, in 600px-wide decoded frames. This is not physical input,
 a matched scroll-performance before/after, or evidence of a particular thread
-stall. The [PTS review](../build/browser_validation/telegram_ready_audit/review.md)
-and [8.15s normal-speed excerpt](../build/browser_validation/telegram-ios-ready-edited-normal-speed.mov)
+stall. The [PTS review](../../build/browser_validation/telegram_ready_audit/review.md)
+and [8.15s normal-speed excerpt](../../build/browser_validation/telegram-ios-ready-edited-normal-speed.mov)
 retain both improvements and unresolved observations.
 
-The subsequent [diagnostic scroll audit](../build/browser_validation/telegram_offstage_diagnostic_audit/review.md)
+The subsequent [diagnostic scroll audit](../../build/browser_validation/telegram_offstage_diagnostic_audit/review.md)
 records the retained collapse path under the same ±100px fixture input:
 348 → 140px at 347.755 → 347.758333s and 215 → 378px during expansion at
 379.310 → 379.325s, again in 600px-wide decoded images. Its menu-period
@@ -325,8 +325,8 @@ these captures, so residual time cannot be called JIT. The observations do
 not establish a consistent improvement or the cause of native scheduling
 stalls. Three rounds are a small sample, and this warm fixture cannot serve
 as a before/after for older full-app recordings or as physical-device evidence.
-The [complete comparison](../build/browser_validation/complete-before-after-comparison.md)
+The [complete comparison](../../build/browser_validation/complete-before-after-comparison.md)
 retains phase maxima, P90, counts and exact outlier windows. The simulator-data
 loss from earlier validation remains documented in
-[the validation incident](browser.md#telegram-derived-interaction-revision);
+[the validation incident](browser-implementation.md#telegram-derived-interaction-revision);
 these later successful runs did not restore that data.

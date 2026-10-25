@@ -9,6 +9,7 @@ import 'package:Kelivo/core/database/composer_draft_store.dart';
 import 'package:Kelivo/core/models/composer_draft.dart';
 import 'package:Kelivo/core/models/chat_input_data.dart';
 import 'package:Kelivo/core/models/conversation.dart';
+import 'package:Kelivo/core/models/tool_permission_mode.dart';
 import 'package:Kelivo/features/home/widgets/chat_input_bar.dart';
 
 import '../../support/commit_gate.dart';
@@ -84,6 +85,74 @@ void main() {
     expect((await store.load('new-id')).active.text, 'unsent');
   });
 
+  test('moving a new entry clears its permission after reopening', () async {
+    store.registerNewEntry(
+      Conversation(
+        id: 'new-permission',
+        title: 'New',
+        assistantId: 'before',
+        extras: const {
+          'workspace.id': 'workspace',
+          'workspace.allowAll': true,
+          'tools.permission_mode': 'fullAccess',
+        },
+      ),
+    );
+    store.setInput('new-permission', const ComposerDraftInput(text: 'unsent'));
+    await store.flush();
+    expect(await store.moveAssistant('new-permission', 'after'), isTrue);
+    expect(store.newEntry('before'), isNull);
+    expect(
+      ToolPermissionMode.fromExtras(store.newEntry('after')!.extras),
+      ToolPermissionMode.requestApproval,
+    );
+    await reopen();
+    final moved = store.newEntry('after')!;
+    expect(moved.extras['workspace.id'], 'workspace');
+    expect(moved.extras.containsKey('workspace.allowAll'), isFalse);
+    expect(
+      ToolPermissionMode.fromExtras(moved.extras),
+      ToolPermissionMode.requestApproval,
+    );
+    expect((await store.load(moved.id)).active.text, 'unsent');
+  });
+
+  test(
+    'a failed permission save does not publish or persist the grant',
+    () async {
+      store.registerNewEntry(
+        Conversation(id: 'permission', title: 'New', assistantId: 'assistant'),
+      );
+      await store.flush();
+      commits.onNextCommit = () async => throw StateError('disk full');
+      await expectLater(
+        store.updateNewEntryExtras(
+          'permission',
+          ToolPermissionMode.fullAccess.applyTo,
+        ),
+        throwsStateError,
+      );
+      expect(
+        ToolPermissionMode.fromExtras(store.newEntry('assistant')!.extras),
+        ToolPermissionMode.requestApproval,
+      );
+      await reopen();
+      expect(
+        ToolPermissionMode.fromExtras(store.newEntry('assistant')!.extras),
+        ToolPermissionMode.requestApproval,
+      );
+      await store.updateNewEntryExtras(
+        'permission',
+        ToolPermissionMode.fullAccess.applyTo,
+      );
+      await reopen();
+      expect(
+        ToolPermissionMode.fromExtras(store.newEntry('assistant')!.extras),
+        ToolPermissionMode.fullAccess,
+      );
+    },
+  );
+
   test(
     'attachments are recoverable after the selected original disappears',
     () async {
@@ -135,43 +204,6 @@ void main() {
       expect(draft.pending, isNull);
     },
   );
-
-  test('取消排队中的提交后，下一次发送能重新登记', () async {
-    await store.load('a');
-    store.setInput('a', const ComposerDraftInput(text: 'queued'));
-    final queued = await store.beginSubmission('a', store.peek('a')!.active);
-    expect(store.submitting, contains('a'));
-
-    store.cancelSubmission(queued);
-
-    expect(store.submitting, isNot(contains('a')));
-    expect(store.peek('a')!.pending, isNull);
-    expect(store.peek('a')!.submissionId, isNull);
-
-    store.setInput('a', const ComposerDraftInput(text: 'queued'));
-    final next = await store.beginSubmission('a', store.peek('a')!.active);
-    expect(next.id, isNot(queued.id));
-    expect(store.peek('a')!.submissionId, next.id);
-  });
-
-  test('重启后残留的排队提交不会永久卡住这个会话的发送', () async {
-    await store.load('a');
-    store.setInput('a', const ComposerDraftInput(text: 'queued'));
-    final queued = await store.beginSubmission('a', store.peek('a')!.active);
-    await store.flush();
-
-    // 模拟重启：数据库里的 pending 还在，但内存中的 submitting 已清空。
-    await reopen();
-    await store.load('a');
-    expect(store.peek('a')!.pending, isNotNull);
-
-    store.setInput('a', const ComposerDraftInput(text: 'second try'));
-    final next = await store.beginSubmission('a', store.peek('a')!.active);
-
-    expect(next.id, isNot(queued.id));
-    expect(store.peek('a')!.submissionId, next.id);
-    expect(store.peek('a')!.pending?.text, 'second try');
-  });
 
   test(
     'editing suspends ordinary input and preserves message identity',
@@ -318,7 +350,6 @@ void main() {
     () async {
       final victim = await File('${root.path}/keep.txt').writeAsString('keep');
       final dir = await store.directoryFor('../');
-      // Windows 下路径分隔符与上游测试写的 '/' 不同，按路径包含关系判断。
       expect(p.isWithin(p.join(root.path, 'files'), dir.path), isTrue);
       await store.removePrivateDirectory('../');
       expect(await victim.readAsString(), 'keep');

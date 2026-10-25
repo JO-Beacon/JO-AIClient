@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:Kelivo/core/models/tool_permission_mode.dart';
 import 'package:sqlite3/sqlite3.dart' as composer_sqlite;
 import 'package:xml/xml.dart';
 
@@ -3163,7 +3164,7 @@ class DataSync {
         (entry as Map).cast<String, dynamic>(),
       );
       return conversation.copyWith(
-        extras: {...conversation.extras}..remove('workspace.allowAll'),
+        extras: ToolPermissionMode.withoutGrant(conversation.extras),
       );
     }).toList();
 

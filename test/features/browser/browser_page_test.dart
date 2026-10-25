@@ -168,24 +168,9 @@ void main() {
 
   Future<Uint8List> previewFixture(
     WidgetTester tester, {
-    ui.Color? color,
+    int width = 8,
   }) async => (await tester.runAsync(() async {
-    final image = color == null
-        ? await createTestImage(width: 8, height: 8, cache: false)
-        : await (() async {
-            final recorder = ui.PictureRecorder();
-            final canvas = Canvas(recorder);
-            canvas.drawRect(
-              const Rect.fromLTWH(0, 0, 8, 8),
-              Paint()..color = color,
-            );
-            final picture = recorder.endRecording();
-            try {
-              return await picture.toImage(8, 8);
-            } finally {
-              picture.dispose();
-            }
-          })();
+    final image = await createTestImage(width: width, height: 8, cache: false);
     try {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       return data!.buffer.asUint8List();
@@ -201,10 +186,7 @@ void main() {
     expect(find.byType(InkResponse), findsNothing);
     final item = find.text(label);
     await tester.ensureVisible(item);
-    await tester.runAsync(() async {
-      await tester.tap(item);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    });
+    await tester.tap(item);
     await tester.pumpAndSettle();
   }
 
@@ -365,6 +347,27 @@ void main() {
     },
   );
 
+  browserTestWidgets('identical captured pixels reuse the cached preview', (
+    tester,
+  ) async {
+    await service.initialize();
+    final tab = await service.createTab(url: 'https://preview.example');
+    await mount(tester);
+    final engine = engines[tab.id]!;
+    engine.previewBytes = await previewFixture(tester);
+    await service.refreshActivePreview();
+    final first = service.previewForTab(tab.id);
+    // cache: false creates a new byte buffer, not different image content.
+    final identicalPixels = await previewFixture(tester);
+    expect(identicalPixels, isNot(same(first)));
+    expect(listEquals(first, identicalPixels), isTrue);
+    engine.previewBytes = identicalPixels;
+    final captures = engine.screenshotCalls;
+    await service.refreshActivePreview(fresh: true);
+    expect(engine.screenshotCalls, captures + 1);
+    expect(service.previewForTab(tab.id), same(first));
+  });
+
   browserTestWidgets(
     'tabs capture the current page before starting the card flight',
     (tester) async {
@@ -376,10 +379,8 @@ void main() {
       await service.refreshActivePreview();
       final old = service.previewForTab(tab.id);
       engine.onChanged(_scroll(200));
-      final current = await previewFixture(
-        tester,
-        color: const ui.Color(0xFF00FF00),
-      );
+      final current = await previewFixture(tester, width: 9);
+      expect(listEquals(old, current), isFalse);
       engine.previewBytes = current;
       await tester.runAsync(
         () => precacheImage(
@@ -460,7 +461,7 @@ void main() {
       expect(service.activeTab!.url, contains('q=flutter'));
       expect(service.activeTab!.ownerSessionId, 'chat-a');
       expect(find.byKey(const ValueKey('fakeNativeView')), findsOneWidget);
-      expect(find.text('Kelivo'), findsNothing);
+      expect(find.text('JO-AIClient'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -523,7 +524,7 @@ void main() {
         expect(engines[selected.id], same(engine));
         expect(engine.navigations, navigations);
         expect(find.byKey(const ValueKey('fakeNativeView')), findsOneWidget);
-        expect(find.text('Kelivo'), findsNothing);
+        expect(find.text('JO-AIClient'), findsNothing);
 
         // Docking must also honor the explicit handoff if global selection
         // changes while the outgoing route finishes detaching.
@@ -732,7 +733,7 @@ void main() {
     await mount(tester);
     expect(service.activeTab!.url, 'about:blank');
     expect(find.byKey(const ValueKey('fakeNativeView')), findsOneWidget);
-    expect(find.text('Kelivo'), findsNothing);
+    expect(find.text('JO-AIClient'), findsNothing);
   });
 
   browserTestWidgets(
@@ -1093,10 +1094,8 @@ void main() {
           expect(find.byType(BrowserTransitionSnapshot), findsNothing);
           expect(cache.statusForKey(provider).pending, isTrue);
           if (replaceWhilePending) {
-            engine.previewBytes = await previewFixture(
-              tester,
-              color: const ui.Color(0xFF0000FF),
-            );
+            engine.previewBytes = await previewFixture(tester, width: 9);
+            expect(listEquals(capturedBytes, engine.previewBytes), isFalse);
             await service.refreshActivePreview();
             await tester.pump();
             expect(service.previewForTab(tab.id), same(engine.previewBytes));
@@ -3772,7 +3771,10 @@ class _Engine extends BrowserEngine {
   @override
   Future<void> stop() async {}
   @override
-  Future<void> waitForLoad(Duration timeout) async {}
+  Future<void> waitForLoad(
+    Duration timeout, {
+    BrowserLoadStage stage = BrowserLoadStage.load,
+  }) async {}
   @override
   Future<Object?> evaluate(String source, {bool awaitPromise = false}) async =>
       null;

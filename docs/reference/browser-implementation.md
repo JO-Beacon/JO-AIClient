@@ -239,7 +239,7 @@ The supplied `deliverable(1)` notes and Safari screenshots informed the floating
 controls and motion direction. The optical implementation supersedes the
 initial blur-and-rim prototype; it does not claim that a painted highlight is
 refraction. Renderer provenance and local changes are recorded in
-[the vendored package notes](../dependencies/liquid_glass_widgets/UPSTREAM.md).
+[the vendored package notes](../../dependencies/liquid_glass_widgets/UPSTREAM.md).
 Relevant platform references are [Apple's Liquid Glass overview](https://developer.apple.com/videos/play/wwdc2025/219/),
 [UIKit custom glass](https://developer.apple.com/videos/play/wwdc2025/284/),
 [menu guidance](https://developer.apple.com/design/human-interface-guidelines/menus),
@@ -601,12 +601,12 @@ the browser route to verify retained DOM state.
   this OS cancellation path; their passing results did not cover it.
 - After the rollback, actual CUA **700ms long press remained open**, and dragging
   inside the open menu across rows to the Bookmarks footer reached Bookmarks.
-  The [retained long-press screenshot](../build/browser_validation/telegram-ios-retained-longpress.png)
+  The [retained long-press screenshot](../../build/browser_validation/telegram-ios-retained-longpress.png)
   preserves the open state. This verifies recovery of those real input flows,
   not smooth frame delivery or physical-device behavior.
 - Closing/scroll geometry remains unresolved. The readiness recording below
   retains its close discontinuity. The later
-  [Offstage diagnostic scroll audit](../build/browser_validation/telegram_offstage_diagnostic_audit/review.md)
+  [Offstage diagnostic scroll audit](../../build/browser_validation/telegram_offstage_diagnostic_audit/review.md)
   examines only the final ±100px fixture actions, whose collapse implementation
   is retained: **348 → 140px** at **347.755 → 347.758333s**, and expansion
   **215 → 378px** at **379.310 → 379.325s** in 600px-wide decoded frames. Its
@@ -641,10 +641,10 @@ the browser route to verify retained DOM state.
   repeating it preserved the query and returned focus to that field. Cmd-L
   focused the address, Cmd-T created exactly one test tab, Cmd-W closed only
   that tab while the window remained open, and Cmd-R reloaded the local page.
-  The [find-panel screenshot](../build/browser_validation/telegram-macos-shortcut-find.png)
+  The [find-panel screenshot](../../build/browser_validation/telegram-macos-shortcut-find.png)
   records its visible state. These runtime checks establish the native-focus
   shortcut behavior, not animation smoothness or general website reliability.
-- The new complete-app [readiness recording](../build/browser_validation/telegram-ios-ready.mov)
+- The new complete-app [readiness recording](../../build/browser_validation/telegram-ios-ready.mov)
   uses the same **700ms long press** for the first opening after launch and a
   repeat in the same instance. Sequential source-frame inspection shows
   circle → lifted ellipse → larger blurred ellipse → sharp panel in both.
@@ -667,12 +667,12 @@ the browser route to verify retained DOM state.
   378px**. These are surface bounds in 600px-wide decoded images, not CSS sizes
   or measured thread stalls. The changed input prevents treating these clips
   as a matched scrolling performance before/after. No physical scrolling was
-  performed. [PTS contacts and review](../build/browser_validation/telegram_ready_audit/review.md)
-  and the [8.15s, 1× edited clip](../build/browser_validation/telegram-ios-ready-edited-normal-speed.mov)
+  performed. [PTS contacts and review](../../build/browser_validation/telegram_ready_audit/review.md)
+  and the [8.15s, 1× edited clip](../../build/browser_validation/telegram-ios-ready-edited-normal-speed.mov)
   preserve the evidence; the clip removes idle time with six documented cuts.
-- The preceding [235-test-build recording](../build/browser_validation/telegram-ios-latest.mov)
+- The preceding [235-test-build recording](../../build/browser_validation/telegram-ios-latest.mov)
   is retained as historical evidence in its
-  [review](../build/browser_validation/telegram_latest_audit/review.md). It had
+  [review](../../build/browser_validation/telegram_latest_audit/review.md). It had
   one long-press opening and one click opening, a roughly 247ms multi-frame
   outside close, and ±480px fixture scrolling. It cannot verify this readiness
   revision or provide a matched scrolling performance comparison.
@@ -771,8 +771,8 @@ the browser route to verify retained DOM state.
   fixture is neither a matched comparison with the older complete-app traces
   nor a physical-device performance result. Phase completeness, per-phase
   count/max/P90, and exact outlier windows are retained in the
-  [comparison report](../build/browser_validation/complete-before-after-comparison.md)
-  and [JSON](../build/browser_validation/complete-before-after-comparison.json).
+  [comparison report](../../build/browser_validation/complete-before-after-comparison.md)
+  and [JSON](../../build/browser_validation/complete-before-after-comparison.json).
 - To repeat the material probe, run
   `flutter drive -d <simulator> --keep-app-running --no-dds
   --driver=test_driver/integration_test.dart
@@ -841,12 +841,12 @@ the browser route to verify retained DOM state.
   inserted. A stable glass radius of `1000` and cached iOS capsule configuration
   reduce redundant updates. Neither change establishes a fix for the recorded
   cold-collapse jump or the Metal stall.
-- The final installed app's [normal-speed iOS recording](../build/browser_validation/ios-final-shared-ui.mov)
+- The final installed app's [normal-speed iOS recording](../../build/browser_validation/ios-final-shared-ui.mov)
   was sequentially decoded. Both fixture-button collapse/restore rounds completed.
   The earlier 360-to-151-pixel jump was not reproduced exactly, but adjacent
   frames still show approximately 378-to-226 and 360-to-224-pixel changes before
   further intermediate widths (measured in 600-pixel-wide decoded frames).
-  [The two-round contact sheet](../build/browser_validation/ios_final_audit/collapse-both-rounds.jpg)
+  [The two-round contact sheet](../../build/browser_validation/ios_final_audit/collapse-both-rounds.jpg)
   preserves this remaining visual discontinuity. These local `build/` artifacts
   do not establish a cold-stall fix, physical finger-scroll behavior, or device
   performance.
@@ -866,8 +866,8 @@ the browser route to verify retained DOM state.
   clicked Apply and correctly reported **Hello browser qa two**. The final tool
   call was a snapshot with no `include_text` override. Opening the same browser
   confirmed the displayed result matched the model's answer. Local evidence:
-  [model answer](../build/browser_validation/ios-live-agent-answer-final.png) and
-  [actual webpage](../build/browser_validation/ios-live-agent-result-final.png).
+  [model answer](../../build/browser_validation/ios-live-agent-answer-final.png) and
+  [actual webpage](../../build/browser_validation/ios-live-agent-result-final.png).
   This establishes one real-provider local-page flow, not general website or
   model reliability.
 - The supplied 49.5-second reference recording was inspected at 8 frames/second

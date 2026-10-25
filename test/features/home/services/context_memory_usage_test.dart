@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:Kelivo/core/models/token_usage.dart';
 import 'package:Kelivo/core/models/memory_entry.dart';
+import 'package:Kelivo/core/models/token_usage.dart';
 import 'package:Kelivo/core/providers/memory_provider_v2.dart';
 import 'package:Kelivo/core/services/memory/memory_repository.dart';
 import 'package:Kelivo/core/database/business_data.dart';
@@ -59,8 +59,9 @@ class _Chat extends ChatService {
   @override
   Future<void> updateConversationExtras(
     String id,
-    Map<String, dynamic> Function(Map<String, dynamic>) update,
-  ) async {
+    Map<String, dynamic> Function(Map<String, dynamic>) update, {
+    Conversation? expectedOwner,
+  }) async {
     await repository.updateConversationExtras(id, update);
     conversations[id] = (await repository.getConversation(id))!;
     revisions[id] = contextRevision(id) + 1;
@@ -370,7 +371,7 @@ void main() {
     });
   });
 
-  testWidgets('full injection types invalidate the cached memory bucket', (
+  testWidgets('full injection toggles refresh the cached memory bucket', (
     tester,
   ) async {
     await mount(tester);
@@ -461,6 +462,8 @@ void main() {
     'delete',
     'scope',
     'limit',
+    'fullInjection',
+    'limitedInjection',
   ]) {
     for (final force in [false, true]) {
       testWidgets(
@@ -473,6 +476,9 @@ void main() {
             await putMemory('m1', 'first fact');
             await putMemory('m2', 'second fact');
             await settings.setMemoryInjectionMaxItems(1);
+            if (change == 'limitedInjection') {
+              await settings.setMemoryFullInjectionTypes({MemoryType.identity});
+            }
             final g = generation();
             final usage = usageService(g);
             if (!force) usage.setActiveConversation('one');
@@ -498,6 +504,12 @@ void main() {
                   await putMemory('m1', 'first fact', assistantId: 'other');
                 case 'limit':
                   await settings.setMemoryInjectionMaxItems(2);
+                case 'fullInjection':
+                  await settings.setMemoryFullInjectionTypes({
+                    MemoryType.identity,
+                  });
+                case 'limitedInjection':
+                  await settings.setMemoryFullInjectionTypes({});
               }
               final rebuilt = await preview(g);
               await usage.refresh('one', force: force);
@@ -586,6 +598,80 @@ void main() {
     });
   });
 
+  testWidgets(
+    'memory provider changes refresh an open panel without a manual refresh',
+    (tester) async {
+      await mount(tester);
+      await tester.runAsync(() async {
+        await seedUser('hello');
+        await putProfile('short');
+        final g = generation();
+        final usage = usageService(g)..setActiveConversation('one');
+        try {
+          await usage.refresh('one', force: true);
+          final updated = Completer<void>();
+          usage.addListener(() {
+            if (usage.current?.state == ContextUsageState.estimated &&
+                usage.current!.buckets.memory > 1400 &&
+                !updated.isCompleted) {
+              updated.complete();
+            }
+          });
+          await putProfile(List.filled(1000, 'word').join(' '));
+          await memories.reloadCurrentScope();
+          await updated.future.timeout(const Duration(seconds: 5));
+        } finally {
+          usage.dispose();
+        }
+      });
+    },
+  );
+  testWidgets('a cache hit does not cancel forced exact recalibration', (
+    tester,
+  ) async {
+    await mount(tester);
+    await tester.runAsync(() async {
+      await seedUser('hello');
+      await putProfile('short');
+      final g = generation();
+      final usage = usageService(g);
+      try {
+        await record(usage, await prepare(g));
+        await usage.refresh('one', force: true);
+        final assembling = Completer<void>();
+        final resume = Completer<void>();
+        var assembled = false;
+        usage.bindAssembler(({
+          required conversationId,
+          required providerKey,
+          required modelId,
+          required assistantId,
+        }) async {
+          assembling.complete();
+          await resume.future;
+          assembled = true;
+          return const ContextAssemblyPreview(
+            systemText: '',
+            injectionsText: '',
+            historyText: 'replacement',
+            tools: [],
+            images: [],
+          );
+        });
+        final pending = usage.refresh('one', force: true);
+        await assembling.future;
+        await usage.refresh('one');
+        resume.complete();
+        await pending;
+        expect(assembled, isTrue);
+        expect(usage.snapshot('one')!.state, ContextUsageState.exact);
+        expect(usage.snapshot('one')!.buckets.history, 10);
+        expect(usage.snapshot('one')!.buckets.memory, 0);
+      } finally {
+        usage.dispose();
+      }
+    });
+  });
   for (final changed in [false, true]) {
     for (final exact in [false, true]) {
       testWidgets(

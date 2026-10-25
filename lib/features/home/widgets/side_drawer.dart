@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:Kelivo/features/chat/widgets/tool_permission_widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import '../../../icons/lucide_adapter.dart';
@@ -4489,6 +4490,7 @@ class _ChatTileState extends State<_ChatTile> {
                         ),
                       ),
                     ],
+                    ToolPermissionBadge(conversationId: widget.chat.id),
                     if (widget.loading) ...[
                       const SizedBox(width: 8),
                       _LoadingDot(),

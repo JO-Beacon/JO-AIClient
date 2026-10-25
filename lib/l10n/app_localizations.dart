@@ -25824,6 +25824,12 @@ abstract class AppLocalizations {
   /// **'Extract text'**
   String get browserActionExtract;
 
+  /// No description provided for @browserActionScreenshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture screenshot'**
+  String get browserActionScreenshot;
+
   /// No description provided for @browserActionForward.
   ///
   /// In en, this message translates to:
@@ -25889,6 +25895,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type'**
   String get browserActionType;
+
+  /// No description provided for @browserActionSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select option'**
+  String get browserActionSelect;
 
   /// No description provided for @browserActionUnknown.
   ///
@@ -26777,6 +26789,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Applies to input and messages. Turn off if menus feel slow.'**
   String get displaySettingsPageIosNativeSelectionMenuSubtitle;
+
+  /// No description provided for @toolApprovalByFullAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Ran automatically'**
+  String get toolApprovalByFullAccess;
+
+  /// No description provided for @toolApprovalDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Denied'**
+  String get toolApprovalDenied;
+
+  /// No description provided for @toolPermissionEnabledSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access enabled for this chat'**
+  String get toolPermissionEnabledSnack;
+
+  /// No description provided for @toolPermissionFullAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access'**
+  String get toolPermissionFullAccess;
+
+  /// No description provided for @toolPermissionFullAccessDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Lets this conversation access files on this device, run commands, and use enabled online tools without asking each time.'**
+  String get toolPermissionFullAccessDesc;
+
+  /// No description provided for @toolPermissionFullAccessDescMobile.
+  ///
+  /// In en, this message translates to:
+  /// **'Lets this conversation run tools automatically inside the sandbox and authorized folders, without asking each time.'**
+  String get toolPermissionFullAccessDescMobile;
+
+  /// No description provided for @toolPermissionRequestApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for approval'**
+  String get toolPermissionRequestApproval;
+
+  /// No description provided for @toolPermissionRequestApprovalDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'JO-AIClient will ask before accessing files outside the workspace, running desktop commands, or using other tools that need approval.'**
+  String get toolPermissionRequestApprovalDesc;
+
+  /// No description provided for @toolPermissionResetSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace changed · permission reset to Ask for approval'**
+  String get toolPermissionResetSnack;
+
+  /// No description provided for @toolPermissionSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save. Permission unchanged.'**
+  String get toolPermissionSaveFailed;
+
+  /// No description provided for @toolPermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get toolPermissionTitle;
+
+  /// No description provided for @toolPermissionUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get toolPermissionUndo;
+
+  /// No description provided for @toolApprovalSwitchToFullAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to full access'**
+  String get toolApprovalSwitchToFullAccess;
+
+  /// No description provided for @toolApprovalRequestedPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested path'**
+  String get toolApprovalRequestedPath;
+
+  /// No description provided for @toolApprovalRealTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Actual target'**
+  String get toolApprovalRealTarget;
+
+  /// No description provided for @toolApprovalScopeOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to this call only'**
+  String get toolApprovalScopeOnce;
+
+  /// No description provided for @wsDeniedPathOutside.
+  ///
+  /// In en, this message translates to:
+  /// **'Target is outside the authorized area. Denied.'**
+  String get wsDeniedPathOutside;
+
+  /// No description provided for @wsDeniedMountReadonly.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only mount. Can’t write.'**
+  String get wsDeniedMountReadonly;
+
+  /// No description provided for @wsDeniedSkillsReadonly.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills folder is read-only.'**
+  String get wsDeniedSkillsReadonly;
+
+  /// No description provided for @wsPathChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Target changed while awaiting approval.'**
+  String get wsPathChanged;
+
+  /// No description provided for @wsContextChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation context changed. Request expired.'**
+  String get wsContextChanged;
 }
 
 class _AppLocalizationsDelegate

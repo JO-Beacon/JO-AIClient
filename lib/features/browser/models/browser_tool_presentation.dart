@@ -56,7 +56,7 @@ class BrowserToolAction {
   bool get failed =>
       !loading &&
       (result['ok'] == false || browserMetadata['status'] == 'error');
-  String get error => _string(result['error']);
+  String get error => _string(result['error_code'] ?? result['error']);
   String? get tabId {
     final id = _string(
       browserMetadata['tabId'] ??
@@ -147,8 +147,10 @@ String browserActionLabel(AppLocalizations l, String action) =>
       'render' => l.browserActionRender,
       'extract' => l.browserActionExtract,
       'snapshot' => l.browserActionSnapshot,
+      'screenshot' => l.browserActionScreenshot,
       'click' => l.browserActionClick,
       'type' => l.browserActionType,
+      'select_option' => l.browserActionSelect,
       'press' => l.browserActionPress,
       'scroll' => l.browserActionScroll,
       'wait' => l.browserActionWait,
@@ -168,8 +170,10 @@ IconData browserActionIcon(String action) => switch (action) {
   'render' => LucideIcons.code,
   'extract' => LucideIcons.fileText,
   'snapshot' => LucideIcons.scanEye,
+  'screenshot' => LucideIcons.camera,
   'click' => LucideIcons.mousePointerClick,
   'type' => LucideIcons.keyboard,
+  'select_option' => LucideIcons.list,
   'press' => LucideIcons.cornerDownLeft,
   'scroll' => LucideIcons.arrowUpDown,
   'wait' => LucideIcons.hourglass,

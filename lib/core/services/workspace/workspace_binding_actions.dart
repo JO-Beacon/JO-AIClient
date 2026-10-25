@@ -3,38 +3,6 @@ import 'package:Kelivo/core/models/workspace.dart';
 import 'package:Kelivo/core/models/workspace_binding.dart';
 import 'package:Kelivo/core/providers/assistant_provider.dart';
 import 'package:Kelivo/core/services/chat/chat_service.dart';
-import 'package:Kelivo/features/home/services/tool_approval_service.dart';
-
-/// 先落盘当前会话的“允许全部”，再放行该工作区下等待中的 Shell 审批。
-///
-/// 顺序不能反：审批一旦放行，工具就会立刻执行；如果绑定没先写进去，
-/// 同一轮生成里的下一次 Shell 又会回到待审批状态。
-Future<void> setConversationWorkspaceAllowAll(
-  ChatService chat, {
-  required String conversationId,
-  required String workspaceId,
-  required bool allowAll,
-  ToolApprovalService? approvals,
-}) async {
-  await chat.updateConversationExtras(conversationId, (extras) {
-    final binding = WorkspaceBinding.fromExtras(extras);
-    if (binding.workspaceId != workspaceId) return extras;
-    return WorkspaceBinding(
-      workspaceId: workspaceId,
-      cwd: binding.cwd,
-      toolsUsed: binding.toolsUsed,
-      allowAll: allowAll,
-    ).applyTo(extras);
-  });
-  final current = chat.getConversation(conversationId);
-  if (!allowAll || current == null) return;
-  final binding = WorkspaceBinding.fromExtras(current.extras);
-  if (binding.workspaceId != workspaceId || !binding.allowAll) return;
-  approvals?.approveWorkspaceShells(
-    conversationId: conversationId,
-    workspaceId: workspaceId,
-  );
-}
 
 /// Conversation extras applied when starting a chat with [assistant].
 Map<String, dynamic> workspaceExtrasForNewConversation({

@@ -14519,6 +14519,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserActionExtract => 'Extract text';
 
   @override
+  String get browserActionScreenshot => 'Capture screenshot';
+
+  @override
   String get browserActionForward => 'Forward';
 
   @override
@@ -14550,6 +14553,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get browserActionType => 'Type';
+
+  @override
+  String get browserActionSelect => 'Select option';
 
   @override
   String get browserActionUnknown => 'Browser action';
@@ -15068,4 +15074,73 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get displaySettingsPageIosNativeSelectionMenuSubtitle =>
       'Applies to input and messages. Turn off if menus feel slow.';
+
+  @override
+  String get toolApprovalByFullAccess => 'Ran automatically';
+
+  @override
+  String get toolApprovalDenied => 'Denied';
+
+  @override
+  String get toolPermissionEnabledSnack => 'Full access enabled for this chat';
+
+  @override
+  String get toolPermissionFullAccess => 'Full access';
+
+  @override
+  String get toolPermissionFullAccessDesc =>
+      'Lets this conversation access files on this device, run commands, and use enabled online tools without asking each time.';
+
+  @override
+  String get toolPermissionFullAccessDescMobile =>
+      'Lets this conversation run tools automatically inside the sandbox and authorized folders, without asking each time.';
+
+  @override
+  String get toolPermissionRequestApproval => 'Ask for approval';
+
+  @override
+  String get toolPermissionRequestApprovalDesc =>
+      'JO-AIClient will ask before accessing files outside the workspace, running desktop commands, or using other tools that need approval.';
+
+  @override
+  String get toolPermissionResetSnack =>
+      'Workspace changed · permission reset to Ask for approval';
+
+  @override
+  String get toolPermissionSaveFailed => 'Couldn’t save. Permission unchanged.';
+
+  @override
+  String get toolPermissionTitle => 'Permissions';
+
+  @override
+  String get toolPermissionUndo => 'Undo';
+
+  @override
+  String get toolApprovalSwitchToFullAccess => 'Switch to full access';
+
+  @override
+  String get toolApprovalRequestedPath => 'Requested path';
+
+  @override
+  String get toolApprovalRealTarget => 'Actual target';
+
+  @override
+  String get toolApprovalScopeOnce => 'Applies to this call only';
+
+  @override
+  String get wsDeniedPathOutside =>
+      'Target is outside the authorized area. Denied.';
+
+  @override
+  String get wsDeniedMountReadonly => 'Read-only mount. Can’t write.';
+
+  @override
+  String get wsDeniedSkillsReadonly => 'Skills folder is read-only.';
+
+  @override
+  String get wsPathChanged => 'Target changed while awaiting approval.';
+
+  @override
+  String get wsContextChanged =>
+      'Conversation context changed. Request expired.';
 }

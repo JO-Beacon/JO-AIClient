@@ -1,4 +1,5 @@
 import '../../models/conversation_prompt_settings.dart';
+import '../../models/tool_permission_mode.dart';
 import '../world_book_activation.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -215,7 +216,7 @@ class ChatService extends ChangeNotifier {
     if (extras == null || extras.isEmpty) {
       return const <String, dynamic>{};
     }
-    return Map<String, dynamic>.from(extras);
+    return ToolPermissionMode.withoutGrant(extras);
   }
 
   /// 新会话要继承的东西：工作区绑定、会话级提示词选择，
@@ -230,7 +231,6 @@ class ChatService extends ChangeNotifier {
         WorkspaceBinding(
           workspaceId: source.workspaceId,
           cwd: source.cwd,
-          allowAll: source.allowAll,
         ).applyTo({
           if (sourceExtras.containsKey(WorldBookActivation.extrasKey))
             WorldBookActivation.extrasKey:
@@ -2788,10 +2788,15 @@ class ChatService extends ChangeNotifier {
   /// 读取 extras，套用 [update]，写回并刷新缓存。
   Future<void> updateConversationExtras(
     String conversationId,
-    Map<String, dynamic> Function(Map<String, dynamic> current) update,
-  ) async {
+    Map<String, dynamic> Function(Map<String, dynamic> current) update, {
+    Conversation? expectedOwner,
+  }) async {
     final draft = _draftConversations[conversationId];
     if (draft != null) {
+      if (expectedOwner != null &&
+          draft.assistantId != expectedOwner.assistantId) {
+        throw StateError('context_changed');
+      }
       _draftConversations[conversationId] = draft.copyWith(
         extras: update(Map<String, dynamic>.from(draft.extras)),
       );
@@ -2800,7 +2805,11 @@ class ChatService extends ChangeNotifier {
       return;
     }
     if (!_initialized) return;
-    await _repo.updateConversationExtras(conversationId, update);
+    await _repo.updateConversationExtras(
+      conversationId,
+      update,
+      expectedOwner: expectedOwner,
+    );
     await _refreshConversation(conversationId);
     _bumpContextRevision(conversationId);
     notifyListeners();
@@ -5543,8 +5552,11 @@ class ChatService extends ChangeNotifier {
       if (draft.assistantId == assistantId) {
         return _MoveConversationResult.unchanged;
       }
-      draft.assistantId = assistantId;
-      draft.updatedAt = DateTime.now();
+      _draftConversations[conversationId] = draft.copyWith(
+        assistantId: assistantId,
+        updatedAt: DateTime.now(),
+        extras: ToolPermissionMode.withoutGrant(draft.extras),
+      );
       _bumpContextRevision(conversationId);
       if (notify) notifyListeners();
       return _MoveConversationResult.moved;
@@ -5562,9 +5574,12 @@ class ChatService extends ChangeNotifier {
       updatedAt: updatedAt,
     );
     if (!moved) return _MoveConversationResult.busy;
-    c.assistantId = assistantId;
-    c.updatedAt = updatedAt;
-    c.injectedMemoryHash = null;
+    _conversationsCache[conversationId] = c.copyWith(
+      assistantId: assistantId,
+      updatedAt: updatedAt,
+      clearInjectedMemoryHash: true,
+      extras: ToolPermissionMode.withoutGrant(c.extras),
+    );
     _bumpContextRevision(conversationId);
     if (notify) {
       _bumpConversationListRevision();

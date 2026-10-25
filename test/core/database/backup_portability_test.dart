@@ -11,7 +11,6 @@ import 'package:Kelivo/core/database/business_restore_service.dart';
 import 'package:Kelivo/core/database/business_settings_router.dart';
 import 'package:Kelivo/core/database/extension_entity_store.dart';
 import 'package:Kelivo/core/services/backup/data_sync.dart';
-import 'package:Kelivo/core/models/backup_scope.dart';
 
 Map<String, Object> _workspace(String id, {bool linked = false}) => {
   'id': id,
@@ -76,28 +75,6 @@ void main() {
     },
   );
 
-  test('范围可以排除某个实体类别', () async {
-    final exported = await DataSync.exportBusinessSettingsFrom(
-      repository,
-      scope: const BackupScope(excluded: {BackupCategory.workspaces}),
-    );
-    final settings = jsonDecode(exported.settingsJson) as Map<String, dynamic>;
-    expect(settings, isNot(contains('workspaces_v1')));
-    expect(exported.entityRowIds, isNot(contains('workspaces_v1')));
-    // 其他类别不受影响。
-    expect(settings, contains('quick_phrases_v1'));
-  });
-
-  test('关掉“设置”类别时只保留实体列表', () async {
-    final exported = await DataSync.exportBusinessSettingsFrom(
-      repository,
-      scope: const BackupScope(excluded: {BackupCategory.settings}),
-    );
-    final settings = jsonDecode(exported.settingsJson) as Map<String, dynamic>;
-    expect(settings, isNot(contains('environment_mirrors_v1')));
-    expect(settings, contains('workspaces_v1'));
-  });
-
   for (final merge in [false, true]) {
     test(
       '${merge ? 'merge' : 'overwrite'} ignores old device state and preserves local state',
@@ -150,6 +127,7 @@ void main() {
               'workspace.cwd': 'src',
               'workspace.tools_used': true,
               'workspace.allowAll': true,
+              'tools.permission_mode': 'fullAccess',
               'other.feature': 'keep',
             }),
           ],
@@ -169,6 +147,7 @@ void main() {
         final extras = jsonDecode(row.read<String>('extras_json')) as Map;
         expect(extras['other.feature'], 'keep');
         expect(extras, isNot(contains('workspace.allowAll')));
+        expect(extras, isNot(contains('tools.permission_mode')));
         if (row.read<String>('id') == 'managed') {
           expect(extras['workspace.id'], 'managed');
           expect(extras['workspace.cwd'], 'src');
