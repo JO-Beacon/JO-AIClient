@@ -1,10 +1,10 @@
 # 当前发布索引
 
-当前代码版本：`0.1.17+17`（开发版，未发布；`0.1.16+16` 已于 2026-09-28 打 tag）。当前实现基座：Kelivo `1.3.2+81`（tag `v1.3.2`，commit `b1702b3a`，2026-10-26）。
+当前代码版本：`0.1.17+17`（当前发布版，2026-10-29；`0.1.16+16` 已于 2026-09-28 打 tag）。当前实现基座：Kelivo `1.3.2+81`（tag `v1.3.2`，commit `b1702b3a`，2026-10-26）。
 
 | 版本 | 状态 | 发布正文 |
 | --- | --- | --- |
-| `0.1.17+17` | 当前开发版，未发布 | [.github/release-notes/0.1.17+17.md](.github/release-notes/0.1.17+17.md) |
+| `0.1.17+17` | 当前发布版（2026-10-29） | [.github/release-notes/0.1.17+17.md](.github/release-notes/0.1.17+17.md) |
 | `0.1.16+16` | 已打 tag（2026-09-28） | [.github/release-notes/0.1.16+16.md](.github/release-notes/0.1.16+16.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.16%2B16) |
 | `0.1.15+15` | 已发布（2026-09-12） | [.github/release-notes/0.1.15+15.md](.github/release-notes/0.1.15+15.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.15%2B15) |
 | `0.1.14+14` | 已发布（2026-09-07） | [.github/release-notes/0.1.14+14.md](.github/release-notes/0.1.14+14.md) · [GitHub Release](https://github.com/JO-Beacon/JO-AIClient/releases/tag/0.1.14%2B14) |
