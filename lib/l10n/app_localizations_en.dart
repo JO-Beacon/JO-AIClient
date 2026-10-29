@@ -130,7 +130,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageSpaceRefreshTooltip => 'Refresh';
 
   @override
-  String get storageSpaceLoadFailed => 'Failed to load storage usage';
+  String get storageSpaceLoadFailed =>
+      'Could not load files or check which files are in use. Please refresh and try again.';
 
   @override
   String get storageSpaceTotalLabel => 'Used';
@@ -189,9 +190,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Completed restore snapshots';
 
   @override
-  String get storageSpaceCategoryAssistantData => 'Assistants';
-
-  @override
   String get storageSpaceCategoryCache => 'Cache';
 
   @override
@@ -232,12 +230,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storageSpaceSubChatSharedMemory => 'Shared memory index';
-
-  @override
-  String get storageSpaceSubAssistantAvatars => 'Avatars';
-
-  @override
-  String get storageSpaceSubAssistantImages => 'Images';
 
   @override
   String get storageSpaceSubCacheAvatars => 'Avatar cache';
@@ -346,16 +338,61 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get storageSpaceSourceLabel => 'Source';
+  String get storageSpaceImageTypeLabel => 'Type';
 
   @override
-  String get storageSpaceSourceAll => 'All';
+  String get storageSpaceImageTypeAll => 'All';
 
   @override
-  String get storageSpaceSourceUserUpload => 'User uploads';
+  String get storageSpaceImageTypeChat => 'Chat images';
 
   @override
-  String get storageSpaceSourceAssistant => 'Assistant';
+  String get storageSpaceImageTypeTool => 'Tool images';
+
+  @override
+  String get storageSpaceImageTypeAvatar => 'Avatars & backgrounds';
+
+  @override
+  String get storageSpaceImageInUse => 'In use';
+
+  @override
+  String get storageSpaceImageInUseHint =>
+      'This file is still referenced by a message, tool result, avatar, background, or icon. Remove the reference or use Force Delete Mode.';
+
+  @override
+  String get storageSpaceImagesHint =>
+      'Deleting images affects chat history and tool results. Files still in use are protected.';
+
+  @override
+  String storageSpaceDeleteImagesConfirmMessage(int count) {
+    return 'Delete $count images? Related chat images, tool screenshots, and conversation copies will no longer be available. Files still in use will be kept.';
+  }
+
+  @override
+  String storageSpaceDeletedUploadsPartial(int deleted, int kept) {
+    return 'Deleted $deleted items; kept $kept items that are in use or could not be deleted.';
+  }
+
+  @override
+  String get storageSpaceForceDelete => 'Force Delete Mode';
+
+  @override
+  String get storageSpaceForceDeleteHint =>
+      'Force Delete Mode: files still in use can be selected. Deletion requires a second confirmation.';
+
+  @override
+  String get storageSpaceForceDeleteExit => 'Exit Force Delete Mode';
+
+  @override
+  String get storageSpaceForceDeleteTitle => 'Force delete in-use files?';
+
+  @override
+  String storageSpaceForceDeleteMessage(int count) {
+    return 'Force delete $count files that are still referenced? Chat history may lose images or attachments, and later requests may fail to read them. This cannot be undone.';
+  }
+
+  @override
+  String get storageSpaceForceDeleteConfirm => 'Delete Anyway';
 
   @override
   String get storageSpaceSortLabel => 'Sort';
@@ -538,17 +575,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageSelectSheetClearButton => 'Clear Translation';
 
   @override
-  String get homePageClearContext => 'Temporarily Mask Context';
-
-  @override
-  String contextMessageCount(int count) {
-    return '$count messages';
-  }
-
-  @override
-  String contextMessageCountLimited(int actual, int configured) {
-    return '$actual/$configured messages';
-  }
+  String get homePageClearContext => 'Clear Context';
 
   @override
   String get homePageDefaultAssistant => 'Default Assistant';
@@ -2356,6 +2383,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backupPageBackupNow => 'Backup Now';
 
   @override
+  String get backupPageIosSystemBackupNote =>
+      'JO-AIClient\'s local data is set to be excluded from iCloud device backups. Export a backup file before changing devices or deleting the app.';
+
+  @override
   String get backupPageLocalBackup => 'Local Backup';
 
   @override
@@ -2652,23 +2683,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bottomToolsSheetUpload => 'Upload';
 
   @override
-  String get bottomToolsSheetClearContext => 'Temporarily Mask Context';
-
-  @override
-  String get contextManagementMaskContext => 'Temporarily Mask Context';
-
-  @override
-  String get contextManagementRestoreContext => 'Restore Context';
+  String get bottomToolsSheetClearContext => 'Clear Context';
 
   @override
   String get compressContext => 'Compress Context';
 
   @override
-  String get compressContextDesc => 'Summarize and start a new chat';
+  String get compressContextDesc =>
+      'Summarize earlier messages and continue in this chat.';
 
   @override
   String get clearContextDesc =>
-      'Temporarily mask earlier messages and only send messages after the boundary to the model.';
+      'Mark a context boundary. Earlier messages stay visible but are no longer sent.';
 
   @override
   String get contextManagement => 'Context Management';
@@ -5028,6 +5054,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutPageAppName => 'JO-AIClient';
 
   @override
+  String get aboutPageAppNamePortable => 'JO-AIClient Portable';
+
+  @override
   String get aboutPageKelivoSectionTitle => 'About Kelivo';
 
   @override
@@ -5076,6 +5105,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String aboutPagePlatformOther(String os) {
     return 'Other ($os)';
+  }
+
+  @override
+  String get portableDataMigrationTitle => 'Existing data found';
+
+  @override
+  String get portableDataMigrationMessage =>
+      'The portable build stores its data in the data folder next to the program. Existing installed data was found. Copy it into the portable data folder? The original data will not be deleted.';
+
+  @override
+  String get portableDataMigrationCopy => 'Copy and Continue';
+
+  @override
+  String get portableDataMigrationExit => 'Exit';
+
+  @override
+  String get portableDataMigrationBusy =>
+      'Copying data. Please keep the app open…';
+
+  @override
+  String portableDataMigrationFailed(String error) {
+    return 'Migration failed: $error';
   }
 
   @override
@@ -5413,15 +5464,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get displaySettingsPageChatFontSizeTitle => 'Chat Font Size';
 
   @override
-  String get displaySettingsPageAutoScrollEnableTitle =>
-      'Auto-scroll to bottom';
+  String get displaySettingsPageAutoScrollEnableTitle => 'Auto-follow bottom';
 
   @override
-  String get displaySettingsPageAutoScrollIdleTitle => 'Auto-Scroll Back Delay';
+  String get displaySettingsPageAutoScrollSubtitle =>
+      'While streaming, follow new content when at the bottom. Scrolling up pauses following until you return to the bottom. When off, new content does not scroll automatically.';
 
   @override
-  String get displaySettingsPageAutoScrollIdleSubtitle =>
-      'Wait time after user scroll before jumping to bottom';
+  String get displaySettingsPageAutoScrollEnabledLabel => 'On';
 
   @override
   String get displaySettingsPageAutoScrollDisabledLabel => 'Off';
@@ -13836,6 +13886,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'thinking + output_config.effort';
 
   @override
+  String get modelSpecFormDialectAnthropicBetweenTools =>
+      'Anthropic adaptive / between_tools';
+
+  @override
+  String get modelSpecFormDialectAnthropicBetweenToolsSubtitle =>
+      'Adaptive thinking; Off uses between_tools';
+
+  @override
   String get modelSpecFormDialectAnthropicEffort => 'Anthropic effort';
 
   @override
@@ -15143,4 +15201,529 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wsContextChanged =>
       'Conversation context changed. Request expired.';
+
+  @override
+  String get dataDirectoryTitle => 'Data directory';
+
+  @override
+  String get dataDirectoryChange => 'Change directory';
+
+  @override
+  String get dataDirectoryChoose => 'Choose an empty local folder';
+
+  @override
+  String get dataDirectoryHint =>
+      'Choose an empty folder on a local drive. Chat history, attachments and app-managed files move after a restart. Small device settings and system caches stay in their system locations.';
+
+  @override
+  String get dataDirectoryPendingHint =>
+      'The move is scheduled for the next restart. Your current data remains in place until copying and verification finish. Destination:';
+
+  @override
+  String get dataDirectoryRestart => 'Restart and move data';
+
+  @override
+  String get dataDirectoryCancelMove =>
+      'Cancel move and keep original directory';
+
+  @override
+  String get dataDirectoryPreviousHint =>
+      'The original copy was retained. Once the new directory has started successfully, you can remove the old copy to free disk space. Clean it before changing directories again.';
+
+  @override
+  String get dataDirectoryCleanPrevious => 'Clean up original copy';
+
+  @override
+  String get dataDirectoryCleanConfirm =>
+      'Remove the retained copy from the directory below? Data in the current directory will be kept. Files changed since the move will not be deleted.';
+
+  @override
+  String get dataDirectoryMoving =>
+      'Moving and verifying data… Please keep JO-AIClient open.';
+
+  @override
+  String get dataDirectoryStartupFailed => 'Unable to open the data directory';
+
+  @override
+  String get dataDirectoryRetry => 'Retry';
+
+  @override
+  String get dataDirectoryUnavailable =>
+      'The data directory is unavailable. Reconnect the drive or restore the folder to its original location, then retry. No empty database will be created.';
+
+  @override
+  String get dataDirectoryIdentityMismatch =>
+      'This folder does not match the configured data directory. Restore the original folder and retry.';
+
+  @override
+  String get dataDirectoryNotEmpty =>
+      'Choose an empty folder. Existing files will not be overwritten.';
+
+  @override
+  String get dataDirectoryOverlap =>
+      'Choose a separate folder outside the current data directory. Its parent folders and the drive root cannot be used.';
+
+  @override
+  String get dataDirectoryLocalOnly =>
+      'Choose a local drive rather than a network share.';
+
+  @override
+  String get dataDirectoryFinishPrevious =>
+      'Finish or cancel the pending move, and clean up the retained copy before choosing another directory.';
+
+  @override
+  String get dataDirectoryPendingRestore =>
+      'A backup restore is pending. Cancel the directory move and restart to finish restoring, then try the move again.';
+
+  @override
+  String get dataDirectorySourceChanged =>
+      'The original data has changed since the copy was made. It has been kept. Cancel the pending move before starting a new one; retained copies can be inspected manually.';
+
+  @override
+  String get dataDirectoryCopyChanged =>
+      'The destination contains unexpected or changed files. The original data has been kept. Check the destination before retrying.';
+
+  @override
+  String get dataDirectoryGenericError =>
+      'The operation could not finish. Check available disk space, folder permissions and whether another JO-AIClient process is running, then retry. Existing data has been kept.';
+
+  @override
+  String get dataDirectoryCancelHint =>
+      'Cancelling keeps any files already copied to the destination. You can inspect and remove that partial copy yourself.';
+
+  @override
+  String get portableDataDirectoryPendingMove =>
+      'The installed app has an unfinished data directory move. Open the installed app and finish or cancel it, then retry.';
+
+  @override
+  String get portableDataDirectoryUnavailable =>
+      'The installed data directory is unavailable. Reconnect the drive or restore the folder, then retry.';
+
+  @override
+  String get portableDataDirectoryInvalid =>
+      'The installed data directory could not be validated. No portable data was created.';
+
+  @override
+  String get portableDataDirectoryBusy =>
+      'The installed app may still be running. Close it, then retry.';
+
+  @override
+  String get portableDataDirectoryChanged =>
+      'The installed data changed while it was being copied. No portable data was created; retry.';
+
+  @override
+  String get portableDataDirectoryPendingRestore =>
+      'A backup restore is pending in the installed app. Finish or cancel it before creating portable data.';
+
+  @override
+  String get chatInputBarQueuedPaused => 'Paused';
+
+  @override
+  String get compressAdjust => 'Adjust';
+
+  @override
+  String get compressAdvanced => 'Advanced';
+
+  @override
+  String get compressAdvancedOff => 'Re-read originals off';
+
+  @override
+  String get compressAdvancedOn => 'Re-read originals on';
+
+  @override
+  String compressApproxTokens(String value) {
+    return 'Approx. $value tokens';
+  }
+
+  @override
+  String get compressIncludeAttachments => 'Attachment text & tool results';
+
+  @override
+  String get compressIncludeAttachmentsDesc =>
+      'Include available attachment text and bounded tool records. Truncation is marked; images are not reinterpreted.';
+
+  @override
+  String compressIncludeManual(int count) {
+    return 'Include manual edits · $count';
+  }
+
+  @override
+  String compressKeepDescription(int count) {
+    return 'Keep the latest $count user messages with their replies and tools. Earlier history is summarized; attachment-only messages also count.';
+  }
+
+  @override
+  String get compressModelGlobal => 'Global setting · fixed when started';
+
+  @override
+  String get compressNothingNew =>
+      'Nothing new to compress since the last summary';
+
+  @override
+  String get compressOverSnack =>
+      'The summary would exceed the context limit and was not applied.';
+
+  @override
+  String get compressRegenerate => 'Recompress';
+
+  @override
+  String get compressReread => 'Re-read compressed originals';
+
+  @override
+  String get compressRereadAll => 'All originals in segment';
+
+  @override
+  String get compressRereadDesc =>
+      'Recover details lost across summaries. Uses more tokens.';
+
+  @override
+  String get compressRereadLastLayer => 'Expand last layer';
+
+  @override
+  String get compressStaleSnack =>
+      'Chat history changed; the summary was not applied.';
+
+  @override
+  String get compressTaskAbandon => 'Dismiss';
+
+  @override
+  String get compressTaskAdjustRetry => 'Adjust options and retry';
+
+  @override
+  String compressTaskElapsed(int i, int n, int seconds) {
+    return 'Part $i/$n · ${seconds}s elapsed';
+  }
+
+  @override
+  String get compressTaskMerging => 'Merging summaries';
+
+  @override
+  String get compressTaskRetry => 'Retry';
+
+  @override
+  String get compressTaskWaiting => 'Waiting for the current reply';
+
+  @override
+  String get compressTaskWaitingApproval => 'Waiting for tool approval';
+
+  @override
+  String get compressUsageInput => 'Summary input';
+
+  @override
+  String get compressUsageNext => 'Next request';
+
+  @override
+  String compressUsageOriginal(String value) {
+    return 'was $value';
+  }
+
+  @override
+  String get compressUsageSummary => 'Est. summary';
+
+  @override
+  String get contextBudgetExceeded =>
+      'The estimated context exceeds this model’s limit. Shorten the summary, compress again, or choose a model with a larger context.';
+
+  @override
+  String get contextChangeWaiting =>
+      'Waiting for the current reply and tools to finish before applying this change.';
+
+  @override
+  String get contextChanged =>
+      'History changed. Reopen this action to review its current scope.';
+
+  @override
+  String get contextClearDetails =>
+      'Earlier chat history is excluded from future requests. System instructions, memory and tool definitions still apply.';
+
+  @override
+  String get contextDetailAfterUndo => 'After undo';
+
+  @override
+  String get contextDetailClearTitle => 'Context cleared';
+
+  @override
+  String get contextDetailContinueNewChat => 'Continue in new chat';
+
+  @override
+  String get contextDetailCurrent => 'Current context';
+
+  @override
+  String get contextDetailEdited => 'Manually edited';
+
+  @override
+  String get contextDetailExcluded => 'Excluded history';
+
+  @override
+  String get contextDetailInUse => 'In use';
+
+  @override
+  String get contextDetailKept => 'Kept';
+
+  @override
+  String contextDetailKeptCount(int count) {
+    return 'Latest $count user messages, replies and tools';
+  }
+
+  @override
+  String get contextDetailLegacy => 'Converted from legacy clear';
+
+  @override
+  String get contextDetailModel => 'Model · time';
+
+  @override
+  String get contextDetailNext => 'Next request';
+
+  @override
+  String contextDetailParts(int count) {
+    return '$count segments';
+  }
+
+  @override
+  String contextDetailRange(String from, String to, int count) {
+    return 'Messages $from–$to · $count user messages';
+  }
+
+  @override
+  String get contextDetailRead => 'Read';
+
+  @override
+  String get contextDetailReplaced => 'Replaced';
+
+  @override
+  String get contextDetailSummaryLabel => 'Summary used in later requests';
+
+  @override
+  String get contextDetailSuperseded => 'Superseded by a later summary';
+
+  @override
+  String get contextDetailTitle => 'Summary';
+
+  @override
+  String get contextDetailViewOriginals => 'View originals';
+
+  @override
+  String get contextDividerCompressed => 'Context compressed';
+
+  @override
+  String get contextDividerEdited => 'edited';
+
+  @override
+  String get contextDividerFailed => 'Compression failed';
+
+  @override
+  String get contextDividerRunning => 'Compressing context';
+
+  @override
+  String get contextDone => 'Done';
+
+  @override
+  String contextEditCharacters(int count) {
+    return '$count characters';
+  }
+
+  @override
+  String get contextEditEmpty =>
+      'Summary cannot be empty. Use Clear context to exclude all earlier history.';
+
+  @override
+  String get contextEditPending => 'Saved; applies after the current reply';
+
+  @override
+  String contextEditPreview(String value) {
+    return 'Approx. $value tokens after saving. Editing does not change active context.';
+  }
+
+  @override
+  String get contextEditTitle => 'Edit summary';
+
+  @override
+  String get contextEditUnknownPreview =>
+      'Usage is unavailable; it will be checked again before saving.';
+
+  @override
+  String contextHistoryWindowNote(int count) {
+    return 'Recent history is still limited by the chat’s $count-message sending window.';
+  }
+
+  @override
+  String get contextImpactClearTitle => 'Undo earlier clear?';
+
+  @override
+  String contextImpactConfirm(int count) {
+    return 'Undo $count nodes';
+  }
+
+  @override
+  String get contextImpactDeleteDescription =>
+      'Delete the originals and undo related summaries so removed content is not sent again. Other messages and independent nodes are unchanged.';
+
+  @override
+  String get contextImpactDeleteTitle => 'Delete compressed originals?';
+
+  @override
+  String get contextImpactDescription =>
+      'Related summaries will be undone together. Original messages and independent nodes are kept; no model is called automatically.';
+
+  @override
+  String get contextImpactEditTitle => 'Save earlier summary?';
+
+  @override
+  String get contextImpactKeep => 'Unchanged';
+
+  @override
+  String get contextImpactSave => 'Save';
+
+  @override
+  String contextImpactSaveConfirm(int count) {
+    return 'Save and undo $count nodes';
+  }
+
+  @override
+  String get contextImpactSourceDescription =>
+      'Change the originals and undo their summaries and dependent nodes together. Other messages and independent nodes are kept; no model is called.';
+
+  @override
+  String get contextImpactSourceTitle => 'Change compressed originals?';
+
+  @override
+  String get contextImpactUndoAlso => 'Also undone';
+
+  @override
+  String get contextImpactUndoOne => 'Undo';
+
+  @override
+  String get contextImpactUndoTitle => 'Undo earlier compression?';
+
+  @override
+  String contextImpactUsage(String from, String to) {
+    return 'Approx. $from → $to tokens';
+  }
+
+  @override
+  String get contextKeepInvalid => 'Enter a positive number of user messages.';
+
+  @override
+  String get contextMore => 'More';
+
+  @override
+  String get contextOperationHidden => 'Excluded by a later clear';
+
+  @override
+  String get contextOperationUndone => 'Undone';
+
+  @override
+  String get contextOriginalMessages => 'View original messages';
+
+  @override
+  String get contextOverLimitWarning =>
+      'Undo may exceed the context limit. You can still undo and recompress; sending checks the limit again.';
+
+  @override
+  String contextRangeInfo(int count, int keep) {
+    return 'Replaces $count messages; keeps $keep recent user messages and their replies.';
+  }
+
+  @override
+  String get contextRestore => 'Restore';
+
+  @override
+  String contextSampledInfo(int count) {
+    return 'Only the selected $count characters were read; the summary replaces the entire selected history range.';
+  }
+
+  @override
+  String get contextSourceScopeHint =>
+      'Only history after the latest clear is included. This may include older messages outside the normal send window.';
+
+  @override
+  String get contextSummaryEmpty =>
+      'The summary cannot be empty. Use Clear context to exclude history.';
+
+  @override
+  String get contextSummaryHint =>
+      'This is the summary used in subsequent requests. Saving changes does not rewrite existing replies. Attachments contribute only available text; images are not reinterpreted.';
+
+  @override
+  String get contextSummaryNotSmaller =>
+      'The summary is not shorter than its input. Review it before applying.';
+
+  @override
+  String get contextTaskCancel => 'Cancel compression';
+
+  @override
+  String get contextTaskCancelled => 'Compression cancelled';
+
+  @override
+  String get contextTaskCompleted => 'Compression complete';
+
+  @override
+  String get contextTaskInterrupted =>
+      'Compression interrupted; input is preserved';
+
+  @override
+  String get contextTaskReview => 'Review the summary before applying';
+
+  @override
+  String get contextTaskWait =>
+      'Waiting for the current reply and tools to finish';
+
+  @override
+  String get contextUndoClearTooltip => 'Undo this clear';
+
+  @override
+  String get contextUndoCompressTooltip => 'Undo this compression';
+
+  @override
+  String contextUndoneSnack(String from, String to) {
+    return 'Undone · $from → $to';
+  }
+
+  @override
+  String get contextViewGenerated => 'View generated summary';
+
+  @override
+  String get chatInputBarQueuedAfterCompress => 'Sends after compression';
+
+  @override
+  String get chatInputBarQueuedCompressionCancelled =>
+      'Compression cancelled; sending stays paused';
+
+  @override
+  String get chatInputBarQueuedCompressionFailed =>
+      'Compression failed; sending stays paused';
+
+  @override
+  String get compressCancelledSnack =>
+      'Compression cancelled. Current context is unchanged.';
+
+  @override
+  String get compressCopyResult => 'Copy result';
+
+  @override
+  String get compressDiscardedSnack =>
+      'Context cleared; the running compression was discarded.';
+
+  @override
+  String compressFailedSnack(String reason) {
+    return 'Compression failed: $reason';
+  }
+
+  @override
+  String compressSuccessSnack(String from, String to) {
+    return 'Context compressed · $from → $to';
+  }
+
+  @override
+  String get contextOpenNewChat => 'Open new chat';
+
+  @override
+  String contextMessageCount(int count) {
+    return '$count messages';
+  }
+
+  @override
+  String contextMessageCountLimited(int actual, int configured) {
+    return '$actual/$configured messages';
+  }
 }

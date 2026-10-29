@@ -88,6 +88,10 @@ import 'core/database/chat_database_gateway.dart';
 import 'core/services/chat/chat_service.dart';
 import 'core/services/migration/migration_chain_state.dart';
 import 'core/services/app_exit_flush.dart';
+import 'core/services/storage/portable_data_directory.dart';
+import 'core/services/storage/windows_data_directory.dart';
+import 'shared/widgets/windows_data_directory_startup.dart';
+import 'core/app_build_identity.dart';
 import 'core/services/backup/restore_archive_pruner.dart';
 import 'core/services/backup/associated_backup_path.dart';
 import 'core/services/backup/restore_business_lease.dart';
@@ -189,6 +193,14 @@ Future<void> main(List<String> arguments) async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
       WindowsPasteFix.instance.install();
+      if (!await ensurePortableDataDirectory()) {
+        exit(0);
+      }
+      if (Platform.isWindows && !kIsPortableBuild) {
+        await initializeWindowsDataDirectory(
+          showWindow: _initRestoreFailureWindow,
+        );
+      }
       FlutterLogger.stage('main entered');
       // 日志开关原本要等读完偏好设置才生效，启动全程因此没有记录。这里在最
       // 早的时刻同步解析一次数据目录与开关，让启动脚印从一开始就能落盘。
@@ -549,6 +561,13 @@ Future<void> main(List<String> arguments) async {
           return;
         }
       }
+      if (Platform.isWindows && !kIsPortableBuild) {
+        try {
+          await (await WindowsDataDirectory.instance).confirmStartup();
+        } catch (error) {
+          stderr.writeln('[DataDirectoryConfirmation] $error');
+        }
+      }
       // 桌面退出钩子：在进程退出前排空已排队的偏好写入。
       _installExitFlush(businessPreferences);
       // 业务租约就绪后，计划任务可跨设备配置。
@@ -640,7 +659,7 @@ Future<void> _initRestoreFailureWindow() async {
   try {
     await windowManager.ensureInitialized();
     await windowManager.waitUntilReadyToShow(
-      const WindowOptions(title: 'JO-AIClient'),
+      const WindowOptions(title: kDefaultWindowTitle),
       () async {
         await windowManager.show();
         await windowManager.focus();
@@ -687,8 +706,10 @@ class _RestoreProgressApp extends StatelessWidget {
     final palette = ThemePalettes.defaultPalette;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      onGenerateTitle: (context) =>
-          AppLocalizations.of(context)!.aboutPageAppName,
+      onGenerateTitle: (context) => appDisplayName(
+        AppLocalizations.of(context)!.aboutPageAppName,
+        AppLocalizations.of(context)!.aboutPageAppNamePortable,
+      ),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: buildLightThemeForScheme(palette.light),
@@ -736,8 +757,10 @@ class _DatabaseConflictApp extends StatelessWidget {
     final palette = ThemePalettes.defaultPalette;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      onGenerateTitle: (context) =>
-          AppLocalizations.of(context)!.aboutPageAppName,
+      onGenerateTitle: (context) => appDisplayName(
+        AppLocalizations.of(context)!.aboutPageAppName,
+        AppLocalizations.of(context)!.aboutPageAppNamePortable,
+      ),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: buildLightThemeForScheme(palette.light),
@@ -772,8 +795,10 @@ class _RestoreFailureApp extends StatelessWidget {
     final palette = ThemePalettes.defaultPalette;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      onGenerateTitle: (context) =>
-          AppLocalizations.of(context)!.aboutPageAppName,
+      onGenerateTitle: (context) => appDisplayName(
+        AppLocalizations.of(context)!.aboutPageAppName,
+        AppLocalizations.of(context)!.aboutPageAppNamePortable,
+      ),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: buildLightThemeForScheme(palette.light),
@@ -842,7 +867,7 @@ Future<void> _initDesktopWindow() async {
             false);
     // 初始化并按持久化的大小和位置显示桌面窗口
     await DesktopWindowController.instance.initializeAndShow(
-      title: 'JO-AIClient',
+      title: kDefaultWindowTitle,
       linuxHideTitleBar: linuxHideTitleBar,
     );
   } catch (_) {
@@ -966,6 +991,43 @@ class _WorkspaceStackHolder extends ChangeNotifier {
     mirrors = stack.mirrors;
     dependencies = stack.dependencies;
     notifyListeners();
+  }
+}
+
+class _AppWindowTitle extends StatefulWidget {
+  const _AppWindowTitle({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_AppWindowTitle> createState() => _AppWindowTitleState();
+}
+
+class _AppWindowTitleState extends State<_AppWindowTitle> {
+  String? _title;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final title = appDisplayName(
+      l10n.aboutPageAppName,
+      l10n.aboutPageAppNamePortable,
+    );
+    if (_title != title) {
+      _title = title;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (kIsWeb) return;
+        final isDesktop =
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.linux;
+        if (!isDesktop) return;
+        try {
+          await windowManager.setTitle(title);
+        } catch (_) {}
+      });
+    }
+    return widget.child;
   }
 }
 
@@ -1382,7 +1444,10 @@ class MyApp extends StatelessWidget {
               // debugPrint('[Theme/App] Dark scaffoldBg=${dark.colorScheme.surface.value.toRadixString(16)} card≈${dark.colorScheme.surface.value.toRadixString(16)} shadow=${dark.colorScheme.shadow.value.toRadixString(16)}');
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
-                title: 'JO-AIClient',
+                onGenerateTitle: (context) => appDisplayName(
+                  AppLocalizations.of(context)!.aboutPageAppName,
+                  AppLocalizations.of(context)!.aboutPageAppNamePortable,
+                ),
                 navigatorKey: rootNavigatorKey,
                 // 应用 UI 语言；null 表示跟随系统（遵循 iOS 的应用内语言设置）
                 locale: settings.appLocaleForMaterialApp,
@@ -1499,14 +1564,16 @@ class MyApp extends StatelessWidget {
                     ),
                   );
                   // 在整棵 widget 树中，为未显式指定字体的 Text 强制使用应用字体
-                  return AnnotatedRegion<SystemUiOverlayStyle>(
-                    value: overlay,
-                    child: effectiveAppFont == null
-                        ? appWithOverlays
-                        : DefaultTextStyle.merge(
-                            style: TextStyle(fontFamily: effectiveAppFont),
-                            child: appWithOverlays,
-                          ),
+                  return _AppWindowTitle(
+                    child: AnnotatedRegion<SystemUiOverlayStyle>(
+                      value: overlay,
+                      child: effectiveAppFont == null
+                          ? appWithOverlays
+                          : DefaultTextStyle.merge(
+                              style: TextStyle(fontFamily: effectiveAppFont),
+                              child: appWithOverlays,
+                            ),
+                    ),
                   );
                 },
               );

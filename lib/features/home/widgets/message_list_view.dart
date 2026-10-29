@@ -12,15 +12,18 @@ import 'package:provider/provider.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 import '../../../core/models/chat_message.dart';
+import '../../../core/models/context_compression_task.dart';
+import '../../../core/models/context_operation.dart';
 import '../../../core/models/message_part.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/assistant_regex.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../core/services/logging/flutter_logger.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../../utils/assistant_regex.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../chat/widgets/chat_message_widget.dart';
+import '../../chat/widgets/context_compression_status.dart';
+import '../../chat/widgets/context_node_divider.dart';
 import '../../chat/widgets/timeline_projection.dart';
 import '../../chat/widgets/timeline_visibility.dart';
 import '../../chat/utils/thinking_tag_parser.dart';
@@ -145,7 +148,13 @@ class MessageListView extends StatefulWidget {
 
     /// 会话是否正在生成中。影响流式指示与部分卡片的可见性。
     this.isConversationGenerating = false,
-    this.truncCollapsedIndex = -1,
+    this.contextOperations = const [],
+    this.contextTask,
+    this.contextTaskRevision,
+    this.contextTaskWaitingForApproval = false,
+    this.onOpenContextTask,
+    this.onOpenContextOperation,
+    this.onUndoContextOperation,
     required this.reasoning,
     required this.reasoningSegments,
     required this.contentSplits,
@@ -268,8 +277,15 @@ class MessageListView extends StatefulWidget {
   /// 会话是否正在生成中（本仓库自有）。
   final bool isConversationGenerating;
 
-  /// 预计算的截断下标（折叠消息空间内，-1 表示无）。
-  final int truncCollapsedIndex;
+  /// 在当前活动路径上生效的上下文操作（清除/压缩）。
+  final List<ContextOperation> contextOperations;
+  final ContextCompressionTask? contextTask;
+  final String? contextTaskRevision;
+  final bool contextTaskWaitingForApproval;
+  final void Function(ContextCompressionTask task, Offset anchor)?
+  onOpenContextTask;
+  final ValueChanged<ContextOperation>? onOpenContextOperation;
+  final ValueChanged<ContextOperation>? onUndoContextOperation;
 
   final Map<String, stream_ctrl.ReasoningData> reasoning;
   final Map<String, List<stream_ctrl.ReasoningSegmentData>> reasoningSegments;
@@ -412,6 +428,22 @@ class _MessageListViewState extends State<MessageListView> {
 
   bool get _hasFooter => _showsFooter(widget);
 
+  bool _taskAt(int index) {
+    final task = widget.contextTask;
+    if (task == null ||
+        !compressionShowsDivider(task) ||
+        widget.selecting ||
+        index < 0 ||
+        index >= _effectiveRenderModels.length) {
+      return false;
+    }
+    return task.anchorGroupId == null
+        ? !widget.hasMoreAfter && index == _effectiveRenderModels.length - 1
+        : task.anchorGroupId ==
+              (_effectiveRenderModels[index].message.groupId ??
+                  _effectiveRenderModels[index].message.id);
+  }
+
   static bool _showsFooter(MessageListView view) =>
       view.footer != null &&
       !view.hasMoreAfter &&
@@ -486,6 +518,19 @@ class _MessageListViewState extends State<MessageListView> {
       _awaitingAttachFlush = _toolExtentQueue.pendingIds.isNotEmpty;
       _scheduleAttachAwareFlush();
     }
+    if (oldWidget.contextTaskRevision != widget.contextTaskRevision ||
+        !listEquals(
+          oldWidget.contextOperations
+              .map((op) => (op.id, op.revoked, op.anchorGroupId))
+              .toList(),
+          widget.contextOperations
+              .map((op) => (op.id, op.revoked, op.anchorGroupId))
+              .toList(),
+        )) {
+      if (widget.listController.isAttached) {
+        widget.listController.invalidateAllExtents();
+      }
+    }
     final oldRenderModels = _effectiveRenderModels;
     _refreshRenderModels();
     _synchronizeExtentCache(oldWidget, oldRenderModels);
@@ -499,10 +544,7 @@ class _MessageListViewState extends State<MessageListView> {
   void _refreshRenderModels() {
     _effectiveRenderModels =
         widget.renderModels ??
-        MessageRenderModelProjector.project(
-          messages: widget.messages,
-          contextDividerIndex: widget.truncCollapsedIndex,
-        );
+        MessageRenderModelProjector.project(messages: widget.messages);
     _slotIndexById = <String, int>{
       for (var index = 0; index < _effectiveRenderModels.length; index++)
         _effectiveRenderModels[index].slotId: index,
@@ -733,7 +775,21 @@ class _MessageListViewState extends State<MessageListView> {
         _hasFooter && index == _effectiveRenderModels.length - 1
         ? _footerExtent
         : 0;
-    return _estimateMessageExtent(index, crossAxisExtent) + footerExtent;
+    final nodes = index >= _effectiveRenderModels.length
+        ? 0
+        : widget.contextOperations
+              .where(
+                (operation) =>
+                    !operation.revoked &&
+                    operation.anchorGroupId ==
+                        (_effectiveRenderModels[index].message.groupId ??
+                            _effectiveRenderModels[index].message.id),
+              )
+              .length;
+    return _estimateMessageExtent(index, crossAxisExtent) +
+        footerExtent +
+        (nodes + (_taskAt(index) ? 1 : 0)) *
+            (28 + widget.dividerPadding.vertical);
   }
 
   double _estimateMessageExtent(int? index, double crossAxisExtent) {
@@ -1799,41 +1855,6 @@ class _MessageListViewState extends State<MessageListView> {
     super.dispose();
   }
 
-  /// 构建显示在截断位置的分隔线控件。
-  Widget _buildContextDivider(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final cs = Theme.of(context).colorScheme;
-    final label = l10n.homePageClearContext;
-    return Row(
-      children: [
-        Expanded(
-          child: Divider(
-            color: cs.outlineVariant.withValues(alpha: 0.6),
-            height: 1,
-            thickness: 1,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.onSurface.withValues(alpha: 0.6),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Divider(
-            color: cs.outlineVariant.withValues(alpha: 0.6),
-            height: 1,
-            thickness: 1,
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // 条目按“系统缩放 × 聊天缩放”渲染（见 _buildMessageItem 里的
@@ -2494,10 +2515,55 @@ class _MessageListViewState extends State<MessageListView> {
             ),
           ],
         ),
-        if (model.showContextDivider)
+        for (final operation in widget.contextOperations)
+          if (!operation.revoked &&
+              operation.anchorGroupId == (message.groupId ?? message.id))
+            Padding(
+              padding: widget.dividerPadding,
+              child: ContextOperationDivider(
+                key: ValueKey('context-node-${operation.id}'),
+                operation: operation,
+                hiddenByClear: widget.contextOperations
+                    .skipWhile((op) => op.id != operation.id)
+                    .skip(1)
+                    .any(
+                      (op) =>
+                          !op.revoked &&
+                          !op.isCompression &&
+                          op.sourceGroups.contains(operation.anchorGroupId),
+                    ),
+                superseded: widget.contextOperations.any(
+                  (other) =>
+                      !other.revoked &&
+                      other.dependencies.contains(operation.id),
+                ),
+                onOpen: () => widget.onOpenContextOperation?.call(operation),
+                onUndo: widget.onUndoContextOperation == null
+                    ? null
+                    : () => widget.onUndoContextOperation!(operation),
+              ),
+            ),
+        if (_taskAt(index))
           Padding(
             padding: widget.dividerPadding,
-            child: _buildContextDivider(context),
+            child: Builder(
+              builder: (anchorContext) => ContextOperationDivider.task(
+                key: ValueKey('context-task-${widget.contextTask!.id}'),
+                task: widget.contextTask!,
+                waitingForApproval: widget.contextTaskWaitingForApproval,
+                onOpen: () {
+                  final box = anchorContext.findRenderObject() as RenderBox?;
+                  if (box != null) {
+                    widget.onOpenContextTask?.call(
+                      widget.contextTask!,
+                      box.localToGlobal(
+                        Offset(box.size.width / 2, box.size.height),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
           ),
         if (_hasFooter && index == _effectiveRenderModels.length - 1)
           SizedBox(height: _footerExtent, child: widget.footer),

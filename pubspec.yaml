@@ -150,6 +150,7 @@ dependencies:
     path: ./dependencies/terminal_view
 
 dev_dependencies:
+  vector_graphics_compiler: ^1.3.0
   flutter_test:
     sdk: flutter
   integration_test:
@@ -176,6 +177,9 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 
 dependency_overrides:
+  # Bound SVG geometry expansion and native pattern bitmap allocations.
+  vector_graphics_compiler:
+    path: dependencies/vector_graphics_compiler
   # 保留 Android 壳的合成行为并忽略未订阅的滚动事件。
   flutter_inappwebview_android:
     path: dependencies/flutter_inappwebview_android

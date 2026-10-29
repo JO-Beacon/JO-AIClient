@@ -9,6 +9,7 @@ import '../../../core/models/avatar_transform.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../shared/widgets/avatar_image_editor.dart';
+import '../../../shared/widgets/cached_avatar_image.dart';
 import '../../../shared/widgets/emoji_text.dart';
 import '../../../utils/avatar_cache.dart';
 import '../../../utils/sandbox_path_resolver.dart';
@@ -82,43 +83,67 @@ class AssistantAvatar extends StatelessWidget {
     Widget avatar;
     if (avatarValue.isNotEmpty) {
       if (avatarValue.startsWith('http')) {
-        avatar = FutureBuilder<String?>(
-          future: AvatarCache.getPath(avatarValue),
-          builder: (context, snapshot) {
-            final path = snapshot.data;
-            if (path != null && File(path).existsSync()) {
-              return ClipOval(
-                child: AvatarImage(
-                  path: path,
+        avatar = transform == null
+            ? CachedAvatarImage(
+                source: avatarValue,
+                isNetwork: true,
+                size: size,
+                fallback: _AssistantInitialAvatar(
+                  cs: cs,
+                  name: name,
                   size: size,
-                  transform: transform,
                 ),
+              )
+            : FutureBuilder<String?>(
+                future: AvatarCache.getPath(avatarValue),
+                builder: (context, snapshot) {
+                  final path = snapshot.data;
+                  if (path != null && File(path).existsSync()) {
+                    return ClipOval(
+                      child: AvatarImage(
+                        path: path,
+                        size: size,
+                        transform: transform,
+                      ),
+                    );
+                  }
+                  return ClipOval(
+                    child: Image.network(
+                      avatarValue,
+                      width: size,
+                      height: size,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _AssistantInitialAvatar(
+                        cs: cs,
+                        name: name,
+                        size: size,
+                      ),
+                    ),
+                  );
+                },
               );
-            }
-            return ClipOval(
-              child: Image.network(
-                avatarValue,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    _AssistantInitialAvatar(cs: cs, name: name, size: size),
-              ),
-            );
-          },
-        );
       } else if (!kIsWeb &&
           (avatarValue.startsWith('/') || avatarValue.contains(':'))) {
         final fixedPath = SandboxPathResolver.fix(avatarValue);
         final file = File(fixedPath);
         if (file.existsSync()) {
-          avatar = ClipOval(
-            child: AvatarImage(
-              path: fixedPath,
-              size: size,
-              transform: transform,
-            ),
-          );
+          avatar = transform == null
+              ? CachedAvatarImage(
+                  source: fixedPath,
+                  size: size,
+                  fallback: _AssistantInitialAvatar(
+                    cs: cs,
+                    name: name,
+                    size: size,
+                  ),
+                )
+              : ClipOval(
+                  child: AvatarImage(
+                    path: fixedPath,
+                    size: size,
+                    transform: transform,
+                  ),
+                );
         } else {
           avatar = _AssistantInitialAvatar(cs: cs, name: name, size: size);
         }

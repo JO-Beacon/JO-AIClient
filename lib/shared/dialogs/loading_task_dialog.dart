@@ -20,14 +20,19 @@ Future<T> runWithLoadingTaskDialog<T>({
   String Function(BackupPhase phase)? phaseLabelBuilder,
 }) async {
   assert(task != null || cancellableTask != null);
-  final overlay = Overlay.of(context, rootOverlay: true);
+  final navigator = Navigator.of(context, rootNavigator: true);
   final progress = ValueNotifier<ProgressUpdate?>(null);
   // 有 flow 时把“阶段内进度”换算成整条流水线的总体进度，否则沿用原始比值。
   final timeline = flow == null ? null : BackupProgressTimeline(flow);
   final cancelToken = BackupCancelToken();
-  late final OverlayEntry entry;
-  entry = OverlayEntry(
-    builder: (_) {
+  // 用普通路由承载加载层，而不是直接塞进 Overlay。这样任务进行中弹出的
+  // 密码框等路由会排在加载层之上，不会被全屏 ModalBarrier 挡住输入。
+  final route = PageRouteBuilder<void>(
+    opaque: false,
+    barrierDismissible: false,
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+    pageBuilder: (_, _, _) {
       final loadingLayer = Stack(
         fit: StackFit.expand,
         children: [
@@ -52,15 +57,23 @@ Future<T> runWithLoadingTaskDialog<T>({
           ),
         ],
       );
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        return Positioned.fill(top: 40, child: loadingLayer);
-      }
-      return loadingLayer;
+      return PopScope(
+        canPop: false,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (defaultTargetPlatform == TargetPlatform.windows)
+              Positioned.fill(top: 40, child: loadingLayer)
+            else
+              loadingLayer,
+          ],
+        ),
+      );
     },
   );
-  overlay.insert(entry);
+  navigator.push(route);
 
-  // Overlay 的插入及其首次绘制发生在下一帧。如果在此之前开始同步前缀操作，
+  // 路由的插入及其首次绘制发生在下一帧。如果在此之前开始同步前缀操作，
   // 窗口可能会保持视觉空白。
   await WidgetsBinding.instance.endOfFrame;
 
@@ -77,7 +90,7 @@ Future<T> runWithLoadingTaskDialog<T>({
     }
     return await regularTask((update) => progress.value = update);
   } finally {
-    if (entry.mounted) entry.remove();
+    if (route.isActive) navigator.removeRoute(route);
     cancelToken.dispose();
     progress.dispose();
   }

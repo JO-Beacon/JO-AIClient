@@ -1,7 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'desktop_overlay_backdrop.dart';
 
 import '../core/models/assistant.dart';
 import '../features/workspace/pages/skills_page.dart';
@@ -171,8 +171,8 @@ class _SkillsPopover extends StatelessWidget {
     return ClipRRect(
       key: desktopSkillsPopoverKey,
       borderRadius: radius,
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: DesktopOverlayBackdrop(
+        sigma: 20,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: AppOverlayColors.desktopPopoverSurface(cs),

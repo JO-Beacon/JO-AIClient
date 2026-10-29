@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'desktop_overlay_backdrop.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'dart:ui' as ui;
 import '../icons/lucide_adapter.dart';
 import '../shared/widgets/ios_tactile.dart';
 import '../core/services/haptics.dart';
@@ -105,8 +105,8 @@ Future<void> showDesktopContextMenuAt(
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                        child: DesktopOverlayBackdrop(
+                          sigma: 14,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               color:

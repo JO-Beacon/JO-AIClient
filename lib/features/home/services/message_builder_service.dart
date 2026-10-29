@@ -197,9 +197,8 @@ class MessageBuilderService {
         : 64;
     final history = conversation == null
         ? <ChatMessage>[]
-        : await chatService.loadSelectedContextMessages(
+        : await chatService.loadEffectiveContextMessages(
             conversation.id,
-            truncateIndex: conversation.truncateIndex,
             limit: limit,
           );
     if (history.any((m) => m.isStreaming)) throw StateError('in_flight');
@@ -2196,9 +2195,8 @@ class MessageBuilderService {
           historyMessages != null &&
           historyMessages.isNotEmpty &&
           chatService.initialized) {
-        final fullHistory = await chatService.loadSelectedContextMessages(
+        final fullHistory = await chatService.loadEffectiveContextMessages(
           conversation.id,
-          truncateIndex: -1,
           limit: await chatService.resolveMessageCount(conversation.id),
           throughRevisionId: historyMessages.last.id,
         );

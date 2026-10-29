@@ -1281,6 +1281,20 @@ class _BackupPageState extends State<BackupPage> {
           ),
         ],
       ),
+      if (Platform.isIOS)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Text(
+            l10n.backupPageIosSystemBackupNote,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
       header(l10n.backupLedgerTitle),
       _LocalSettingsLedgerMobileSection(l10n: l10n),
       header(l10n.backupPageKelivoCompatibleBackup),

@@ -10,7 +10,10 @@ param(
   [ValidateSet("x64", "arm64")]
   [string] $SetupArch = "x64",
 
-  [string] $InnoSetupCompiler = ""
+  [string] $InnoSetupCompiler = "",
+
+  # 兼容版等非默认构建的产物后缀，例如 -compat。
+  [string] $OutputSuffix = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -95,6 +98,7 @@ $arguments = @(
   "/DAppVersion=$AppVersion",
   "/DSourceDir=$sourceDirResolved",
   "/DOutputDir=$outputDirResolved",
+  "/DOutputSuffix=$OutputSuffix",
   "/DIconSource=$iconSource",
   "/DSetupArch=$SetupArch"
 )

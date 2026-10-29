@@ -134,6 +134,19 @@ class ContextEstimateResult {
   final int workspace;
   final int search;
   final int mcpTools;
+
+  int get total =>
+      system +
+      injections +
+      history +
+      tools +
+      attachments +
+      memory +
+      worldBook +
+      skills +
+      workspace +
+      search +
+      mcpTools;
 }
 
 ContextEstimateResult estimateContextBuckets(ContextEstimateJob job) {

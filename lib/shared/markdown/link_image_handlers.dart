@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'markdown_image_sources.dart';
+export 'markdown_image_sources.dart';
+
 import 'package:flutter/material.dart';
 import 'package:markstream/markstream.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,6 +14,8 @@ import 'package:Kelivo/icons/lucide_adapter.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
 import 'package:Kelivo/shared/widgets/snackbar.dart';
 import 'package:Kelivo/utils/sandbox_path_resolver.dart';
+import 'package:Kelivo/utils/svg_image_provider.dart';
+import 'package:open_filex/open_filex.dart';
 
 /// Source is read lazily when opening the gallery, avoiding another parse on
 /// every streaming frame. Existing image widgets only rebuild for a new scope.
@@ -80,78 +85,6 @@ class KelivoLinkHandler implements LinkHandler {
   }
 }
 
-/// Local paths with spaces are parsed directly, without changing source spans.
-/// Standard links, escaped labels and URL/title parsing remain in the core.
-class LocalImagePathSyntax extends InlineSyntax {
-  const LocalImagePathSyntax();
-  static final _local = RegExp(r'^(?:/|file://|[A-Za-z]:[\\/])');
-  @override
-  Set<int> get startCharacters => const {33};
-  @override
-  InlineSyntaxMatch? match(InlineSyntaxContext context, int offset) {
-    final text = context.text;
-    if (!text.startsWith('![', offset)) return null;
-    var closeLabel = offset + 2;
-    while (closeLabel < text.length && text[closeLabel] != ']') {
-      if (text[closeLabel] == '\n' || text[closeLabel] == '\r') return null;
-      if (text[closeLabel] == '\\') closeLabel++;
-      closeLabel++;
-    }
-    if (closeLabel >= text.length || !text.startsWith('](', closeLabel)) {
-      return null;
-    }
-    final start = closeLabel + 2;
-    var end = start, depth = 0;
-    String? quote;
-    while (end < text.length) {
-      final c = text[end];
-      if (c == '\n' || c == '\r') return null;
-      if (quote != null) {
-        if (c == '\\') {
-          end += 2;
-          continue;
-        }
-        if (c == quote) quote = null;
-        end++;
-        continue;
-      }
-      if ((c == '"' || c == "'") && end > start && text[end - 1] == ' ') {
-        quote = c;
-        end++;
-        continue;
-      }
-      if (c == '(') depth++;
-      if (c == ')') {
-        if (depth == 0) break;
-        depth--;
-      }
-      end++;
-    }
-    if (end >= text.length) return null;
-    var destination = text.substring(start, end).trim();
-    if (!_local.hasMatch(destination) || !destination.contains(' ')) {
-      return null;
-    }
-    String? title;
-    final titleMatch = RegExp(r'''\s+["'](.*)["']$''').firstMatch(destination);
-    if (titleMatch != null) {
-      title = titleMatch[1];
-      destination = destination.substring(0, titleMatch.start).trimRight();
-    }
-    return InlineSyntaxMatch(
-      end: end + 1,
-      node: ImageNode(
-        span: context.span(offset, end + 1),
-        children: InlineParser(
-          options: context.options,
-        ).parseFragments(context.textNodes(offset + 2, closeLabel)),
-        destination: destination,
-        title: title,
-      ),
-    );
-  }
-}
-
 class KelivoImageBuilder implements ImageBuilder {
   const KelivoImageBuilder();
   static final _dimensions = RegExp(r'^(?:(\d+)(?:x(\d+))?|x(\d+))$');
@@ -172,7 +105,13 @@ class KelivoImageBuilder implements ImageBuilder {
   }
 }
 
-ImageProvider? markdownImageProvider(String source) {
+ImageProvider? markdownImageProvider(
+  String source, {
+  Color currentColor = const Color(0xff000000),
+}) {
+  if (isSvgImageSource(source)) {
+    return SvgImageProvider(source, currentColor: currentColor);
+  }
   if (source.startsWith('http://') || source.startsWith('https://')) {
     return NetworkImage(source);
   }
@@ -244,7 +183,13 @@ class _MarkdownImageState extends State<_MarkdownImage> {
   @override
   Widget build(BuildContext context) {
     if (_file == null) {
-      return _image(widget.url, markdownImageProvider(widget.url));
+      return _image(
+        widget.url,
+        markdownImageProvider(
+          widget.url,
+          currentColor: widget.theme.colors.ink,
+        ),
+      );
     }
     return FutureBuilder<File?>(
       future: _file,
@@ -263,7 +208,15 @@ class _MarkdownImageState extends State<_MarkdownImage> {
           );
         }
         final file = snapshot.data;
-        return file == null ? _broken() : _image(file.path, FileImage(file));
+        return file == null
+            ? _broken()
+            : _image(
+                file.path,
+                markdownImageProvider(
+                  file.path,
+                  currentColor: widget.theme.colors.ink,
+                ),
+              );
       },
     );
   }
@@ -306,7 +259,26 @@ class _MarkdownImageState extends State<_MarkdownImage> {
                 width: width,
                 height: height,
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stack) => _broken(),
+                errorBuilder: (context, error, stack) => isSvgImageSource(url)
+                    ? GestureDetector(
+                        onTap: () async {
+                          if (url.startsWith('http://') ||
+                              url.startsWith('https://')) {
+                            await const KelivoLinkHandler().open(
+                              context,
+                              LinkNode(
+                                span: const SourceSpan(0, 0),
+                                children: const [],
+                                destination: url,
+                              ),
+                            );
+                          } else if (!url.startsWith('data:')) {
+                            await OpenFilex.open(SandboxPathResolver.fix(url));
+                          }
+                        },
+                        child: _broken(),
+                      )
+                    : _broken(),
               ),
             );
           },
@@ -319,31 +291,27 @@ class _MarkdownImageState extends State<_MarkdownImage> {
     final source = MarkdownLinkScope.read(context)?.source;
     final urls = <String>[];
     if (source != null) {
-      final pending = <MarkdownNode>[
-        MarkdownParser(
-          inlineSyntaxes: const [LocalImagePathSyntax()],
-        ).parse(source),
-      ];
-      while (pending.isNotEmpty) {
-        final node = pending.removeLast();
-        final destination = node is ImageNode
-            ? node.destination
-            : node is HtmlElementNode && node.tag == 'img'
-            ? node.attributes['src']
-            : null;
-        if (destination != null &&
-            (node is ImageNode || isSafeHtmlUrl(destination, image: true)) &&
-            KelivoLink.tryParse(destination) == null) {
-          urls.add(destination);
-        }
-        pending.addAll(node.children.reversed);
-      }
+      urls.addAll(
+        markdownImageSources(
+          source,
+        ).where((url) => KelivoLink.tryParse(url) == null),
+      );
     }
     if (!urls.contains(url)) urls.insert(0, url);
     Navigator.of(context).push(
       PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) =>
-            ImageViewerPage(images: urls, initialIndex: urls.indexOf(url)),
+        pageBuilder: (_, __, ___) => ImageViewerPage(
+          images: urls,
+          initialIndex: urls.indexOf(url),
+          imageProviders: {
+            for (final source in urls)
+              if (isSvgImageSource(source))
+                source: SvgImageProvider(
+                  source,
+                  currentColor: widget.theme.colors.ink,
+                ),
+          },
+        ),
         transitionDuration: const Duration(milliseconds: 360),
         reverseTransitionDuration: const Duration(milliseconds: 280),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(

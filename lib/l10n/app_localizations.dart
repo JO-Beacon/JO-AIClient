@@ -319,7 +319,7 @@ abstract class AppLocalizations {
   /// No description provided for @storageSpaceLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to load storage usage'**
+  /// **'Could not load files or check which files are in use. Please refresh and try again.'**
   String get storageSpaceLoadFailed;
 
   /// No description provided for @storageSpaceTotalLabel.
@@ -418,12 +418,6 @@ abstract class AppLocalizations {
   /// **'Completed restore snapshots'**
   String get storageSpaceSubCompletedRestoreRuns;
 
-  /// No description provided for @storageSpaceCategoryAssistantData.
-  ///
-  /// In en, this message translates to:
-  /// **'Assistants'**
-  String get storageSpaceCategoryAssistantData;
-
   /// No description provided for @storageSpaceCategoryCache.
   ///
   /// In en, this message translates to:
@@ -501,18 +495,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Shared memory index'**
   String get storageSpaceSubChatSharedMemory;
-
-  /// No description provided for @storageSpaceSubAssistantAvatars.
-  ///
-  /// In en, this message translates to:
-  /// **'Avatars'**
-  String get storageSpaceSubAssistantAvatars;
-
-  /// No description provided for @storageSpaceSubAssistantImages.
-  ///
-  /// In en, this message translates to:
-  /// **'Images'**
-  String get storageSpaceSubAssistantImages;
 
   /// No description provided for @storageSpaceSubCacheAvatars.
   ///
@@ -688,29 +670,101 @@ abstract class AppLocalizations {
   /// **'{count} items'**
   String storageSpaceUploadsCount(int count);
 
-  /// No description provided for @storageSpaceSourceLabel.
+  /// No description provided for @storageSpaceImageTypeLabel.
   ///
   /// In en, this message translates to:
-  /// **'Source'**
-  String get storageSpaceSourceLabel;
+  /// **'Type'**
+  String get storageSpaceImageTypeLabel;
 
-  /// No description provided for @storageSpaceSourceAll.
+  /// No description provided for @storageSpaceImageTypeAll.
   ///
   /// In en, this message translates to:
   /// **'All'**
-  String get storageSpaceSourceAll;
+  String get storageSpaceImageTypeAll;
 
-  /// No description provided for @storageSpaceSourceUserUpload.
+  /// No description provided for @storageSpaceImageTypeChat.
   ///
   /// In en, this message translates to:
-  /// **'User uploads'**
-  String get storageSpaceSourceUserUpload;
+  /// **'Chat images'**
+  String get storageSpaceImageTypeChat;
 
-  /// No description provided for @storageSpaceSourceAssistant.
+  /// No description provided for @storageSpaceImageTypeTool.
   ///
   /// In en, this message translates to:
-  /// **'Assistant'**
-  String get storageSpaceSourceAssistant;
+  /// **'Tool images'**
+  String get storageSpaceImageTypeTool;
+
+  /// No description provided for @storageSpaceImageTypeAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatars & backgrounds'**
+  String get storageSpaceImageTypeAvatar;
+
+  /// No description provided for @storageSpaceImageInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get storageSpaceImageInUse;
+
+  /// No description provided for @storageSpaceImageInUseHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is still referenced by a message, tool result, avatar, background, or icon. Remove the reference or use Force Delete Mode.'**
+  String get storageSpaceImageInUseHint;
+
+  /// No description provided for @storageSpaceImagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting images affects chat history and tool results. Files still in use are protected.'**
+  String get storageSpaceImagesHint;
+
+  /// No description provided for @storageSpaceDeleteImagesConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {count} images? Related chat images, tool screenshots, and conversation copies will no longer be available. Files still in use will be kept.'**
+  String storageSpaceDeleteImagesConfirmMessage(int count);
+
+  /// No description provided for @storageSpaceDeletedUploadsPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted {deleted} items; kept {kept} items that are in use or could not be deleted.'**
+  String storageSpaceDeletedUploadsPartial(int deleted, int kept);
+
+  /// No description provided for @storageSpaceForceDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Force Delete Mode'**
+  String get storageSpaceForceDelete;
+
+  /// No description provided for @storageSpaceForceDeleteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Force Delete Mode: files still in use can be selected. Deletion requires a second confirmation.'**
+  String get storageSpaceForceDeleteHint;
+
+  /// No description provided for @storageSpaceForceDeleteExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit Force Delete Mode'**
+  String get storageSpaceForceDeleteExit;
+
+  /// No description provided for @storageSpaceForceDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Force delete in-use files?'**
+  String get storageSpaceForceDeleteTitle;
+
+  /// No description provided for @storageSpaceForceDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Force delete {count} files that are still referenced? Chat history may lose images or attachments, and later requests may fail to read them. This cannot be undone.'**
+  String storageSpaceForceDeleteMessage(int count);
+
+  /// No description provided for @storageSpaceForceDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Anyway'**
+  String get storageSpaceForceDeleteConfirm;
 
   /// No description provided for @storageSpaceSortLabel.
   ///
@@ -1075,20 +1129,8 @@ abstract class AppLocalizations {
   /// No description provided for @homePageClearContext.
   ///
   /// In en, this message translates to:
-  /// **'Temporarily Mask Context'**
+  /// **'Clear Context'**
   String get homePageClearContext;
-
-  /// No description provided for @contextMessageCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} messages'**
-  String contextMessageCount(int count);
-
-  /// No description provided for @contextMessageCountLimited.
-  ///
-  /// In en, this message translates to:
-  /// **'{actual}/{configured} messages'**
-  String contextMessageCountLimited(int actual, int configured);
 
   /// No description provided for @homePageDefaultAssistant.
   ///
@@ -4354,6 +4396,12 @@ abstract class AppLocalizations {
   /// **'Backup Now'**
   String get backupPageBackupNow;
 
+  /// No description provided for @backupPageIosSystemBackupNote.
+  ///
+  /// In en, this message translates to:
+  /// **'JO-AIClient\'s local data is set to be excluded from iCloud device backups. Export a backup file before changing devices or deleting the app.'**
+  String get backupPageIosSystemBackupNote;
+
   /// No description provided for @backupPageLocalBackup.
   ///
   /// In en, this message translates to:
@@ -4909,20 +4957,8 @@ abstract class AppLocalizations {
   /// No description provided for @bottomToolsSheetClearContext.
   ///
   /// In en, this message translates to:
-  /// **'Temporarily Mask Context'**
+  /// **'Clear Context'**
   String get bottomToolsSheetClearContext;
-
-  /// No description provided for @contextManagementMaskContext.
-  ///
-  /// In en, this message translates to:
-  /// **'Temporarily Mask Context'**
-  String get contextManagementMaskContext;
-
-  /// No description provided for @contextManagementRestoreContext.
-  ///
-  /// In en, this message translates to:
-  /// **'Restore Context'**
-  String get contextManagementRestoreContext;
 
   /// No description provided for @compressContext.
   ///
@@ -4933,13 +4969,13 @@ abstract class AppLocalizations {
   /// No description provided for @compressContextDesc.
   ///
   /// In en, this message translates to:
-  /// **'Summarize and start a new chat'**
+  /// **'Summarize earlier messages and continue in this chat.'**
   String get compressContextDesc;
 
   /// No description provided for @clearContextDesc.
   ///
   /// In en, this message translates to:
-  /// **'Temporarily mask earlier messages and only send messages after the boundary to the model.'**
+  /// **'Mark a context boundary. Earlier messages stay visible but are no longer sent.'**
   String get clearContextDesc;
 
   /// No description provided for @contextManagement.
@@ -9187,6 +9223,12 @@ abstract class AppLocalizations {
   /// **'JO-AIClient'**
   String get aboutPageAppName;
 
+  /// No description provided for @aboutPageAppNamePortable.
+  ///
+  /// In en, this message translates to:
+  /// **'JO-AIClient Portable'**
+  String get aboutPageAppNamePortable;
+
   /// No description provided for @aboutPageKelivoSectionTitle.
   ///
   /// In en, this message translates to:
@@ -9276,6 +9318,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Other ({os})'**
   String aboutPagePlatformOther(String os);
+
+  /// No description provided for @portableDataMigrationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing data found'**
+  String get portableDataMigrationTitle;
+
+  /// No description provided for @portableDataMigrationMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The portable build stores its data in the data folder next to the program. Existing installed data was found. Copy it into the portable data folder? The original data will not be deleted.'**
+  String get portableDataMigrationMessage;
+
+  /// No description provided for @portableDataMigrationCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy and Continue'**
+  String get portableDataMigrationCopy;
+
+  /// No description provided for @portableDataMigrationExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit'**
+  String get portableDataMigrationExit;
+
+  /// No description provided for @portableDataMigrationBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying data. Please keep the app open…'**
+  String get portableDataMigrationBusy;
+
+  /// No description provided for @portableDataMigrationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration failed: {error}'**
+  String portableDataMigrationFailed(String error);
 
   /// No description provided for @aboutPageWebsite.
   ///
@@ -9832,20 +9910,20 @@ abstract class AppLocalizations {
   /// No description provided for @displaySettingsPageAutoScrollEnableTitle.
   ///
   /// In en, this message translates to:
-  /// **'Auto-scroll to bottom'**
+  /// **'Auto-follow bottom'**
   String get displaySettingsPageAutoScrollEnableTitle;
 
-  /// No description provided for @displaySettingsPageAutoScrollIdleTitle.
+  /// No description provided for @displaySettingsPageAutoScrollSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Auto-Scroll Back Delay'**
-  String get displaySettingsPageAutoScrollIdleTitle;
+  /// **'While streaming, follow new content when at the bottom. Scrolling up pauses following until you return to the bottom. When off, new content does not scroll automatically.'**
+  String get displaySettingsPageAutoScrollSubtitle;
 
-  /// No description provided for @displaySettingsPageAutoScrollIdleSubtitle.
+  /// No description provided for @displaySettingsPageAutoScrollEnabledLabel.
   ///
   /// In en, this message translates to:
-  /// **'Wait time after user scroll before jumping to bottom'**
-  String get displaySettingsPageAutoScrollIdleSubtitle;
+  /// **'On'**
+  String get displaySettingsPageAutoScrollEnabledLabel;
 
   /// No description provided for @displaySettingsPageAutoScrollDisabledLabel.
   ///
@@ -24642,6 +24720,18 @@ abstract class AppLocalizations {
   /// **'thinking + output_config.effort'**
   String get modelSpecFormDialectAnthropicAdaptiveEffortSubtitle;
 
+  /// No description provided for @modelSpecFormDialectAnthropicBetweenTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Anthropic adaptive / between_tools'**
+  String get modelSpecFormDialectAnthropicBetweenTools;
+
+  /// No description provided for @modelSpecFormDialectAnthropicBetweenToolsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive thinking; Off uses between_tools'**
+  String get modelSpecFormDialectAnthropicBetweenToolsSubtitle;
+
   /// No description provided for @modelSpecFormDialectAnthropicEffort.
   ///
   /// In en, this message translates to:
@@ -26915,6 +27005,876 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Conversation context changed. Request expired.'**
   String get wsContextChanged;
+
+  /// No description provided for @dataDirectoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data directory'**
+  String get dataDirectoryTitle;
+
+  /// No description provided for @dataDirectoryChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change directory'**
+  String get dataDirectoryChange;
+
+  /// No description provided for @dataDirectoryChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an empty local folder'**
+  String get dataDirectoryChoose;
+
+  /// No description provided for @dataDirectoryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an empty folder on a local drive. Chat history, attachments and app-managed files move after a restart. Small device settings and system caches stay in their system locations.'**
+  String get dataDirectoryHint;
+
+  /// No description provided for @dataDirectoryPendingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The move is scheduled for the next restart. Your current data remains in place until copying and verification finish. Destination:'**
+  String get dataDirectoryPendingHint;
+
+  /// No description provided for @dataDirectoryRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart and move data'**
+  String get dataDirectoryRestart;
+
+  /// No description provided for @dataDirectoryCancelMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel move and keep original directory'**
+  String get dataDirectoryCancelMove;
+
+  /// No description provided for @dataDirectoryPreviousHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The original copy was retained. Once the new directory has started successfully, you can remove the old copy to free disk space. Clean it before changing directories again.'**
+  String get dataDirectoryPreviousHint;
+
+  /// No description provided for @dataDirectoryCleanPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean up original copy'**
+  String get dataDirectoryCleanPrevious;
+
+  /// No description provided for @dataDirectoryCleanConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the retained copy from the directory below? Data in the current directory will be kept. Files changed since the move will not be deleted.'**
+  String get dataDirectoryCleanConfirm;
+
+  /// No description provided for @dataDirectoryMoving.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving and verifying data… Please keep JO-AIClient open.'**
+  String get dataDirectoryMoving;
+
+  /// No description provided for @dataDirectoryStartupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open the data directory'**
+  String get dataDirectoryStartupFailed;
+
+  /// No description provided for @dataDirectoryRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get dataDirectoryRetry;
+
+  /// No description provided for @dataDirectoryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The data directory is unavailable. Reconnect the drive or restore the folder to its original location, then retry. No empty database will be created.'**
+  String get dataDirectoryUnavailable;
+
+  /// No description provided for @dataDirectoryIdentityMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder does not match the configured data directory. Restore the original folder and retry.'**
+  String get dataDirectoryIdentityMismatch;
+
+  /// No description provided for @dataDirectoryNotEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an empty folder. Existing files will not be overwritten.'**
+  String get dataDirectoryNotEmpty;
+
+  /// No description provided for @dataDirectoryOverlap.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a separate folder outside the current data directory. Its parent folders and the drive root cannot be used.'**
+  String get dataDirectoryOverlap;
+
+  /// No description provided for @dataDirectoryLocalOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a local drive rather than a network share.'**
+  String get dataDirectoryLocalOnly;
+
+  /// No description provided for @dataDirectoryFinishPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish or cancel the pending move, and clean up the retained copy before choosing another directory.'**
+  String get dataDirectoryFinishPrevious;
+
+  /// No description provided for @dataDirectoryPendingRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'A backup restore is pending. Cancel the directory move and restart to finish restoring, then try the move again.'**
+  String get dataDirectoryPendingRestore;
+
+  /// No description provided for @dataDirectorySourceChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The original data has changed since the copy was made. It has been kept. Cancel the pending move before starting a new one; retained copies can be inspected manually.'**
+  String get dataDirectorySourceChanged;
+
+  /// No description provided for @dataDirectoryCopyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The destination contains unexpected or changed files. The original data has been kept. Check the destination before retrying.'**
+  String get dataDirectoryCopyChanged;
+
+  /// No description provided for @dataDirectoryGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'The operation could not finish. Check available disk space, folder permissions and whether another JO-AIClient process is running, then retry. Existing data has been kept.'**
+  String get dataDirectoryGenericError;
+
+  /// No description provided for @dataDirectoryCancelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelling keeps any files already copied to the destination. You can inspect and remove that partial copy yourself.'**
+  String get dataDirectoryCancelHint;
+
+  /// No description provided for @portableDataDirectoryPendingMove.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed app has an unfinished data directory move. Open the installed app and finish or cancel it, then retry.'**
+  String get portableDataDirectoryPendingMove;
+
+  /// No description provided for @portableDataDirectoryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed data directory is unavailable. Reconnect the drive or restore the folder, then retry.'**
+  String get portableDataDirectoryUnavailable;
+
+  /// No description provided for @portableDataDirectoryInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed data directory could not be validated. No portable data was created.'**
+  String get portableDataDirectoryInvalid;
+
+  /// No description provided for @portableDataDirectoryBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed app may still be running. Close it, then retry.'**
+  String get portableDataDirectoryBusy;
+
+  /// No description provided for @portableDataDirectoryChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed data changed while it was being copied. No portable data was created; retry.'**
+  String get portableDataDirectoryChanged;
+
+  /// No description provided for @portableDataDirectoryPendingRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'A backup restore is pending in the installed app. Finish or cancel it before creating portable data.'**
+  String get portableDataDirectoryPendingRestore;
+
+  /// No description provided for @chatInputBarQueuedPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get chatInputBarQueuedPaused;
+
+  /// No description provided for @compressAdjust.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust'**
+  String get compressAdjust;
+
+  /// No description provided for @compressAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get compressAdvanced;
+
+  /// No description provided for @compressAdvancedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-read originals off'**
+  String get compressAdvancedOff;
+
+  /// No description provided for @compressAdvancedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-read originals on'**
+  String get compressAdvancedOn;
+
+  /// No description provided for @compressApproxTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Approx. {value} tokens'**
+  String compressApproxTokens(String value);
+
+  /// No description provided for @compressIncludeAttachments.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment text & tool results'**
+  String get compressIncludeAttachments;
+
+  /// No description provided for @compressIncludeAttachmentsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Include available attachment text and bounded tool records. Truncation is marked; images are not reinterpreted.'**
+  String get compressIncludeAttachmentsDesc;
+
+  /// No description provided for @compressIncludeManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Include manual edits · {count}'**
+  String compressIncludeManual(int count);
+
+  /// No description provided for @compressKeepDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the latest {count} user messages with their replies and tools. Earlier history is summarized; attachment-only messages also count.'**
+  String compressKeepDescription(int count);
+
+  /// No description provided for @compressModelGlobal.
+  ///
+  /// In en, this message translates to:
+  /// **'Global setting · fixed when started'**
+  String get compressModelGlobal;
+
+  /// No description provided for @compressNothingNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing new to compress since the last summary'**
+  String get compressNothingNew;
+
+  /// No description provided for @compressOverSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'The summary would exceed the context limit and was not applied.'**
+  String get compressOverSnack;
+
+  /// No description provided for @compressRegenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Recompress'**
+  String get compressRegenerate;
+
+  /// No description provided for @compressReread.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-read compressed originals'**
+  String get compressReread;
+
+  /// No description provided for @compressRereadAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All originals in segment'**
+  String get compressRereadAll;
+
+  /// No description provided for @compressRereadDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Recover details lost across summaries. Uses more tokens.'**
+  String get compressRereadDesc;
+
+  /// No description provided for @compressRereadLastLayer.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand last layer'**
+  String get compressRereadLastLayer;
+
+  /// No description provided for @compressStaleSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat history changed; the summary was not applied.'**
+  String get compressStaleSnack;
+
+  /// No description provided for @compressTaskAbandon.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get compressTaskAbandon;
+
+  /// No description provided for @compressTaskAdjustRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust options and retry'**
+  String get compressTaskAdjustRetry;
+
+  /// No description provided for @compressTaskElapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Part {i}/{n} · {seconds}s elapsed'**
+  String compressTaskElapsed(int i, int n, int seconds);
+
+  /// No description provided for @compressTaskMerging.
+  ///
+  /// In en, this message translates to:
+  /// **'Merging summaries'**
+  String get compressTaskMerging;
+
+  /// No description provided for @compressTaskRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get compressTaskRetry;
+
+  /// No description provided for @compressTaskWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the current reply'**
+  String get compressTaskWaiting;
+
+  /// No description provided for @compressTaskWaitingApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for tool approval'**
+  String get compressTaskWaitingApproval;
+
+  /// No description provided for @compressUsageInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary input'**
+  String get compressUsageInput;
+
+  /// No description provided for @compressUsageNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next request'**
+  String get compressUsageNext;
+
+  /// No description provided for @compressUsageOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'was {value}'**
+  String compressUsageOriginal(String value);
+
+  /// No description provided for @compressUsageSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Est. summary'**
+  String get compressUsageSummary;
+
+  /// No description provided for @contextBudgetExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'The estimated context exceeds this model’s limit. Shorten the summary, compress again, or choose a model with a larger context.'**
+  String get contextBudgetExceeded;
+
+  /// No description provided for @contextChangeWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the current reply and tools to finish before applying this change.'**
+  String get contextChangeWaiting;
+
+  /// No description provided for @contextChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'History changed. Reopen this action to review its current scope.'**
+  String get contextChanged;
+
+  /// No description provided for @contextClearDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier chat history is excluded from future requests. System instructions, memory and tool definitions still apply.'**
+  String get contextClearDetails;
+
+  /// No description provided for @contextDetailAfterUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'After undo'**
+  String get contextDetailAfterUndo;
+
+  /// No description provided for @contextDetailClearTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Context cleared'**
+  String get contextDetailClearTitle;
+
+  /// No description provided for @contextDetailContinueNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue in new chat'**
+  String get contextDetailContinueNewChat;
+
+  /// No description provided for @contextDetailCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current context'**
+  String get contextDetailCurrent;
+
+  /// No description provided for @contextDetailEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'Manually edited'**
+  String get contextDetailEdited;
+
+  /// No description provided for @contextDetailExcluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Excluded history'**
+  String get contextDetailExcluded;
+
+  /// No description provided for @contextDetailInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get contextDetailInUse;
+
+  /// No description provided for @contextDetailKept.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept'**
+  String get contextDetailKept;
+
+  /// No description provided for @contextDetailKeptCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest {count} user messages, replies and tools'**
+  String contextDetailKeptCount(int count);
+
+  /// No description provided for @contextDetailLegacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Converted from legacy clear'**
+  String get contextDetailLegacy;
+
+  /// No description provided for @contextDetailModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model · time'**
+  String get contextDetailModel;
+
+  /// No description provided for @contextDetailNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next request'**
+  String get contextDetailNext;
+
+  /// No description provided for @contextDetailParts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} segments'**
+  String contextDetailParts(int count);
+
+  /// No description provided for @contextDetailRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages {from}–{to} · {count} user messages'**
+  String contextDetailRange(String from, String to, int count);
+
+  /// No description provided for @contextDetailRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get contextDetailRead;
+
+  /// No description provided for @contextDetailReplaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Replaced'**
+  String get contextDetailReplaced;
+
+  /// No description provided for @contextDetailSummaryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary used in later requests'**
+  String get contextDetailSummaryLabel;
+
+  /// No description provided for @contextDetailSuperseded.
+  ///
+  /// In en, this message translates to:
+  /// **'Superseded by a later summary'**
+  String get contextDetailSuperseded;
+
+  /// No description provided for @contextDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get contextDetailTitle;
+
+  /// No description provided for @contextDetailViewOriginals.
+  ///
+  /// In en, this message translates to:
+  /// **'View originals'**
+  String get contextDetailViewOriginals;
+
+  /// No description provided for @contextDividerCompressed.
+  ///
+  /// In en, this message translates to:
+  /// **'Context compressed'**
+  String get contextDividerCompressed;
+
+  /// No description provided for @contextDividerEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'edited'**
+  String get contextDividerEdited;
+
+  /// No description provided for @contextDividerFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression failed'**
+  String get contextDividerFailed;
+
+  /// No description provided for @contextDividerRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressing context'**
+  String get contextDividerRunning;
+
+  /// No description provided for @contextDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get contextDone;
+
+  /// No description provided for @contextEditCharacters.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} characters'**
+  String contextEditCharacters(int count);
+
+  /// No description provided for @contextEditEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary cannot be empty. Use Clear context to exclude all earlier history.'**
+  String get contextEditEmpty;
+
+  /// No description provided for @contextEditPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved; applies after the current reply'**
+  String get contextEditPending;
+
+  /// No description provided for @contextEditPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Approx. {value} tokens after saving. Editing does not change active context.'**
+  String contextEditPreview(String value);
+
+  /// No description provided for @contextEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit summary'**
+  String get contextEditTitle;
+
+  /// No description provided for @contextEditUnknownPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage is unavailable; it will be checked again before saving.'**
+  String get contextEditUnknownPreview;
+
+  /// No description provided for @contextHistoryWindowNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent history is still limited by the chat’s {count}-message sending window.'**
+  String contextHistoryWindowNote(int count);
+
+  /// No description provided for @contextImpactClearTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo earlier clear?'**
+  String get contextImpactClearTitle;
+
+  /// No description provided for @contextImpactConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo {count} nodes'**
+  String contextImpactConfirm(int count);
+
+  /// No description provided for @contextImpactDeleteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the originals and undo related summaries so removed content is not sent again. Other messages and independent nodes are unchanged.'**
+  String get contextImpactDeleteDescription;
+
+  /// No description provided for @contextImpactDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete compressed originals?'**
+  String get contextImpactDeleteTitle;
+
+  /// No description provided for @contextImpactDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Related summaries will be undone together. Original messages and independent nodes are kept; no model is called automatically.'**
+  String get contextImpactDescription;
+
+  /// No description provided for @contextImpactEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save earlier summary?'**
+  String get contextImpactEditTitle;
+
+  /// No description provided for @contextImpactKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Unchanged'**
+  String get contextImpactKeep;
+
+  /// No description provided for @contextImpactSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get contextImpactSave;
+
+  /// No description provided for @contextImpactSaveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and undo {count} nodes'**
+  String contextImpactSaveConfirm(int count);
+
+  /// No description provided for @contextImpactSourceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the originals and undo their summaries and dependent nodes together. Other messages and independent nodes are kept; no model is called.'**
+  String get contextImpactSourceDescription;
+
+  /// No description provided for @contextImpactSourceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change compressed originals?'**
+  String get contextImpactSourceTitle;
+
+  /// No description provided for @contextImpactUndoAlso.
+  ///
+  /// In en, this message translates to:
+  /// **'Also undone'**
+  String get contextImpactUndoAlso;
+
+  /// No description provided for @contextImpactUndoOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get contextImpactUndoOne;
+
+  /// No description provided for @contextImpactUndoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo earlier compression?'**
+  String get contextImpactUndoTitle;
+
+  /// No description provided for @contextImpactUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'Approx. {from} → {to} tokens'**
+  String contextImpactUsage(String from, String to);
+
+  /// No description provided for @contextKeepInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a positive number of user messages.'**
+  String get contextKeepInvalid;
+
+  /// No description provided for @contextMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get contextMore;
+
+  /// No description provided for @contextOperationHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Excluded by a later clear'**
+  String get contextOperationHidden;
+
+  /// No description provided for @contextOperationUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone'**
+  String get contextOperationUndone;
+
+  /// No description provided for @contextOriginalMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'View original messages'**
+  String get contextOriginalMessages;
+
+  /// No description provided for @contextOverLimitWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo may exceed the context limit. You can still undo and recompress; sending checks the limit again.'**
+  String get contextOverLimitWarning;
+
+  /// No description provided for @contextRangeInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Replaces {count} messages; keeps {keep} recent user messages and their replies.'**
+  String contextRangeInfo(int count, int keep);
+
+  /// No description provided for @contextRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get contextRestore;
+
+  /// No description provided for @contextSampledInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the selected {count} characters were read; the summary replaces the entire selected history range.'**
+  String contextSampledInfo(int count);
+
+  /// No description provided for @contextSourceScopeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only history after the latest clear is included. This may include older messages outside the normal send window.'**
+  String get contextSourceScopeHint;
+
+  /// No description provided for @contextSummaryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The summary cannot be empty. Use Clear context to exclude history.'**
+  String get contextSummaryEmpty;
+
+  /// No description provided for @contextSummaryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the summary used in subsequent requests. Saving changes does not rewrite existing replies. Attachments contribute only available text; images are not reinterpreted.'**
+  String get contextSummaryHint;
+
+  /// No description provided for @contextSummaryNotSmaller.
+  ///
+  /// In en, this message translates to:
+  /// **'The summary is not shorter than its input. Review it before applying.'**
+  String get contextSummaryNotSmaller;
+
+  /// No description provided for @contextTaskCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel compression'**
+  String get contextTaskCancel;
+
+  /// No description provided for @contextTaskCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression cancelled'**
+  String get contextTaskCancelled;
+
+  /// No description provided for @contextTaskCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression complete'**
+  String get contextTaskCompleted;
+
+  /// No description provided for @contextTaskInterrupted.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression interrupted; input is preserved'**
+  String get contextTaskInterrupted;
+
+  /// No description provided for @contextTaskReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the summary before applying'**
+  String get contextTaskReview;
+
+  /// No description provided for @contextTaskWait.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the current reply and tools to finish'**
+  String get contextTaskWait;
+
+  /// No description provided for @contextUndoClearTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this clear'**
+  String get contextUndoClearTooltip;
+
+  /// No description provided for @contextUndoCompressTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this compression'**
+  String get contextUndoCompressTooltip;
+
+  /// No description provided for @contextUndoneSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone · {from} → {to}'**
+  String contextUndoneSnack(String from, String to);
+
+  /// No description provided for @contextViewGenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'View generated summary'**
+  String get contextViewGenerated;
+
+  /// No description provided for @chatInputBarQueuedAfterCompress.
+  ///
+  /// In en, this message translates to:
+  /// **'Sends after compression'**
+  String get chatInputBarQueuedAfterCompress;
+
+  /// No description provided for @chatInputBarQueuedCompressionCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression cancelled; sending stays paused'**
+  String get chatInputBarQueuedCompressionCancelled;
+
+  /// No description provided for @chatInputBarQueuedCompressionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression failed; sending stays paused'**
+  String get chatInputBarQueuedCompressionFailed;
+
+  /// No description provided for @compressCancelledSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression cancelled. Current context is unchanged.'**
+  String get compressCancelledSnack;
+
+  /// No description provided for @compressCopyResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy result'**
+  String get compressCopyResult;
+
+  /// No description provided for @compressDiscardedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Context cleared; the running compression was discarded.'**
+  String get compressDiscardedSnack;
+
+  /// No description provided for @compressFailedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression failed: {reason}'**
+  String compressFailedSnack(String reason);
+
+  /// No description provided for @compressSuccessSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Context compressed · {from} → {to}'**
+  String compressSuccessSnack(String from, String to);
+
+  /// No description provided for @contextOpenNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open new chat'**
+  String get contextOpenNewChat;
+
+  /// No description provided for @contextMessageCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} messages'**
+  String contextMessageCount(int count);
+
+  /// No description provided for @contextMessageCountLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'{actual}/{configured} messages'**
+  String contextMessageCountLimited(int actual, int configured);
 }
 
 class _AppLocalizationsDelegate

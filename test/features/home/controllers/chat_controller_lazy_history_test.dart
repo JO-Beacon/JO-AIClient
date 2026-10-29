@@ -1920,20 +1920,6 @@ void main() {
       expect(controller.messages, [user, assistant]);
     });
 
-    test('maps persisted truncate index into the loaded tail window', () async {
-      final truncatedConversation = conversation.copyWith(truncateIndex: 90);
-      chatService.contextStartIndex = 90;
-      await controller.setCurrentConversationAndLoad(truncatedConversation);
-
-      expect(controller.loadedWindowTruncateIndex(), 30);
-      expect(
-        controller
-            .conversationForLoadedWindow(truncatedConversation)
-            .truncateIndex,
-        30,
-      );
-    });
-
     test(
       'model context source keeps complete history and persisted truncate index',
       () async {

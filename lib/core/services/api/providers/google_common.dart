@@ -177,6 +177,23 @@ Future<List<Map<String, dynamic>>> _googleFunctionResponsePartsFromToolMessage(
   return [part, ...result.googleImageParts];
 }
 
+/// Gemini requires every call of a parallel batch to be answered in one user
+/// turn, so a tool message following another joins its turn.
+void _addGoogleFunctionResponseParts(
+  List<Map<String, dynamic>> contents,
+  List<Map<String, dynamic>> parts,
+) {
+  final last = contents.lastOrNull;
+  final lastParts = last?['parts'];
+  if (last?['role'] == 'user' &&
+      lastParts is List<Map<String, dynamic>> &&
+      lastParts.firstOrNull?['functionResponse'] != null) {
+    lastParts.addAll(parts);
+    return;
+  }
+  contents.add({'role': 'user', 'parts': parts});
+}
+
 List<Map<String, dynamic>> _googleApiContents(
   List<Map<String, dynamic>> contents,
 ) {
@@ -353,13 +370,13 @@ Stream<StreamChunk> sendGoogleStream(
       }
       final role = roleRaw == 'assistant' ? 'model' : 'user';
       if (roleRaw == 'tool') {
-        contents.add({
-          'role': 'user',
-          'parts': await _googleFunctionResponsePartsFromToolMessage(
+        _addGoogleFunctionResponseParts(
+          contents,
+          await _googleFunctionResponsePartsFromToolMessage(
             msg,
             canImageInput: effective.input.contains(Modality.image),
           ),
-        });
+        );
         continue;
       }
       if (roleRaw == 'assistant' && msg['tool_calls'] is List) {
@@ -391,14 +408,7 @@ Stream<StreamChunk> sendGoogleStream(
       final meta = _geminiHistoryMeta(msg);
       final raw = meta.cleanedText;
       final seenSources = <String>{};
-      String normalizeSrc(String src) {
-        if (src.startsWith('http') || src.startsWith('data:')) return src;
-        try {
-          return SandboxPathResolver.fix(src);
-        } catch (_) {
-          return src;
-        }
-      }
+      String normalizeSrc(String src) => SandboxPathResolver.dedupeKey(src);
 
       // Semantic media detection only - custom attachment markers are not
       // recognized. Attachments arrive via structured media-path keys /
@@ -621,7 +631,6 @@ Stream<StreamChunk> sendGoogleStream(
     var pendingCalls = <EmitToolCall>[];
     var lastParts = <dynamic>[];
     var lastFunctionCallParts = <dynamic>[];
-    var lastText = '';
 
     yield* runProviderToolRounds(
       retryRound: retryRound,
@@ -630,7 +639,6 @@ Stream<StreamChunk> sendGoogleStream(
         pendingCalls = [];
         lastParts = [];
         lastFunctionCallParts = [];
-        lastText = '';
         final req = http.Request('POST', Uri.parse(url));
         req.headers.addAll(headers);
         final body = Map<String, dynamic>.from(baseBody);
@@ -659,43 +667,8 @@ Stream<StreamChunk> sendGoogleStream(
             .toList();
         lastParts = parts;
         lastFunctionCallParts = functionCallParts;
-        if (functionCallParts.isNotEmpty && onToolCall != null) {
-          pendingCalls = [
-            for (var idx = 0; idx < functionCallParts.length; idx++)
-              () {
-                final fc = functionCallParts[idx] as Map;
-                final call = (fc['functionCall'] as Map)
-                    .cast<String, dynamic>();
-                String? thoughtSigKey;
-                dynamic thoughtSigVal;
-                if (fc.containsKey('thoughtSignature')) {
-                  thoughtSigKey = 'thoughtSignature';
-                  thoughtSigVal = fc['thoughtSignature'];
-                } else if (fc.containsKey('thought_signature')) {
-                  thoughtSigKey = 'thought_signature';
-                  thoughtSigVal = fc['thought_signature'];
-                }
-                return emitToolCall(
-                  id: effectiveToolCallId(call['id'], 'fn', idx),
-                  name: (call['name'] ?? '').toString(),
-                  arguments:
-                      (call['args'] as Map?)?.cast<String, dynamic>() ??
-                      const <String, dynamic>{},
-                  metadata: {
-                    'google': {
-                      'part': fc.cast<String, dynamic>(),
-                      if (thoughtSigKey != null && thoughtSigVal != null)
-                        'thoughtSigKey': thoughtSigKey,
-                      if (thoughtSigKey != null && thoughtSigVal != null)
-                        'thoughtSigVal': thoughtSigVal,
-                    },
-                  },
-                );
-              }(),
-          ];
-          return;
-        }
         // Provider-hosted code execution stays on ServerTool*, not ToolCallResult.
+        final ids = StreamChunkIds('round-${currentContents.length}');
         var codeExecIdx = 0;
         for (final p in parts) {
           if (p is! Map) continue;
@@ -704,7 +677,7 @@ Stream<StreamChunk> sendGoogleStream(
             final lang = (ec['language'] ?? '').toString().toLowerCase();
             final code = (ec['code'] ?? '').toString();
             if (code.isNotEmpty) {
-              final ceId = 'code_exec_$codeExecIdx';
+              final ceId = ids.indexed('code_exec', codeExecIdx);
               codeExecIdx++;
               yield ToolCallStart(id: ceId, toolName: 'code_execution');
               yield ToolCallDelta(
@@ -718,9 +691,10 @@ Stream<StreamChunk> sendGoogleStream(
           if (cr is Map) {
             final outcome = (cr['outcome'] ?? '').toString();
             final output = (cr['output'] ?? '').toString();
-            final resultId = codeExecIdx > 0
-                ? 'code_exec_${codeExecIdx - 1}'
-                : 'code_exec_0';
+            final resultId = ids.indexed(
+              'code_exec',
+              codeExecIdx > 0 ? codeExecIdx - 1 : 0,
+            );
             yield ServerToolStart(id: resultId, toolName: 'code_execution');
             yield ServerToolEnd(
               id: resultId,
@@ -742,15 +716,36 @@ Stream<StreamChunk> sendGoogleStream(
           }
         }
         final reasoningStr = reasoningBuf.toString();
-        if (reasoningStr.isNotEmpty) {
+        if (reasoningStr.isNotEmpty || buf.isNotEmpty) {
           yield* emitDelta(
             ids: StreamChunkIds('round-${currentContents.length}'),
+            content: buf.toString(),
             reasoning: reasoningStr,
             usage: totalUsage,
             totalTokens: totalUsage?.totalTokens ?? 0,
           );
         }
-        lastText = buf.toString();
+        if (functionCallParts.isNotEmpty && onToolCall != null) {
+          pendingCalls = [
+            for (var idx = 0; idx < functionCallParts.length; idx++)
+              () {
+                final fc = functionCallParts[idx] as Map;
+                final call = (fc['functionCall'] as Map)
+                    .cast<String, dynamic>();
+                return emitToolCall(
+                  id: effectiveToolCallId(call['id'], 'fn', idx),
+                  name: (call['name'] ?? '').toString(),
+                  arguments:
+                      (call['args'] as Map?)?.cast<String, dynamic>() ??
+                      const <String, dynamic>{},
+                  metadata: {
+                    'google': {'part': fc.cast<String, dynamic>()},
+                  },
+                );
+              }(),
+          ];
+          return;
+        }
         if (persistGeminiThoughtSigs) {
           final signature = collectGeminiThoughtSignatureFromParts(parts);
           if (signature.isNotEmpty) {
@@ -803,9 +798,8 @@ Stream<StreamChunk> sendGoogleStream(
           },
         ];
       },
-      finish: () => emitDone(
+      finish: () => emitFinish(
         ids: StreamChunkIds('finish'),
-        content: lastText,
         usage: totalUsage,
         totalTokens: totalUsage?.totalTokens ?? 0,
       ),
@@ -853,13 +847,13 @@ Stream<StreamChunk> sendGoogleStream(
     }
     final role = roleRaw == 'assistant' ? 'model' : 'user';
     if (roleRaw == 'tool') {
-      contents.add({
-        'role': 'user',
-        'parts': await _googleFunctionResponsePartsFromToolMessage(
+      _addGoogleFunctionResponseParts(
+        contents,
+        await _googleFunctionResponsePartsFromToolMessage(
           msg,
           canImageInput: effective.input.contains(Modality.image),
         ),
-      });
+      );
       continue;
     }
     if (roleRaw == 'assistant' && msg['tool_calls'] is List) {
@@ -889,14 +883,7 @@ Stream<StreamChunk> sendGoogleStream(
     final meta = _geminiHistoryMeta(msg);
     final raw = meta.cleanedText;
     final seenSources = <String>{};
-    String normalizeSrc(String src) {
-      if (src.startsWith('http') || src.startsWith('data:')) return src;
-      try {
-        return SandboxPathResolver.fix(src);
-      } catch (_) {
-        return src;
-      }
-    }
+    String normalizeSrc(String src) => SandboxPathResolver.dedupeKey(src);
 
     // Only parse images if there are images to process.
     // Semantic media detection only - custom attachment markers are not
@@ -1373,42 +1360,10 @@ Stream<StreamChunk> sendGoogleStream(
     onToolCall: onToolCall,
     append: (executed) async {
       if (retryMalformed) return;
-      if (mixedBuiltInAndFunctionTools) {
-        convo.add({'role': 'model', 'parts': lastRoundModelParts});
-        final responseParts = <Map<String, dynamic>>[];
-        for (final c in lastRoundCalls) {
-          final name = (c['name'] ?? '').toString();
-          final toolResult = c['result'] as ClientToolResult?;
-          final result = await ToolResultContent.read(
-            name,
-            toolResult?.content ?? '',
-            metadata: toolResult?.metadata,
-            canImageInput: effective.input.contains(Modality.image),
-          );
-          final resText = result.text;
-          final apiId = c['apiId'] as String?;
-          Map<String, dynamic> responseObj;
-          try {
-            responseObj = (jsonDecode(resText) as Map).cast<String, dynamic>();
-          } catch (_) {
-            responseObj = {'result': resText};
-          }
-          responseParts.add({
-            'functionResponse': {
-              'name': name,
-              'response': responseObj,
-              if (apiId != null) 'id': apiId,
-            },
-          });
-          responseParts.addAll(result.googleImageParts);
-        }
-        convo.add({'role': 'user', 'parts': responseParts});
-        return;
-      }
+      convo.add({'role': 'model', 'parts': lastRoundModelParts});
+      final responseParts = <Map<String, dynamic>>[];
       for (final c in lastRoundCalls) {
         final name = (c['name'] ?? '').toString();
-        final args =
-            (c['args'] as Map<String, dynamic>? ?? const <String, dynamic>{});
         final toolResult = c['result'] as ClientToolResult?;
         final result = await ToolResultContent.read(
           name,
@@ -1416,37 +1371,23 @@ Stream<StreamChunk> sendGoogleStream(
           metadata: toolResult?.metadata,
           canImageInput: effective.input.contains(Modality.image),
         );
-        final resText = result.text;
-        final thoughtSigKey = c['thoughtSigKey'] as String?;
-        final thoughtSigVal = c['thoughtSigVal'];
-
-        final part = <String, dynamic>{
-          'functionCall': {'name': name, 'args': args},
-        };
-        if (thoughtSigKey != null && thoughtSigVal != null) {
-          part[thoughtSigKey] = thoughtSigVal;
-        }
-
-        convo.add({
-          'role': 'model',
-          'parts': [part],
-        });
+        final apiId = c['apiId'] as String?;
         Map<String, dynamic> responseObj;
         try {
-          responseObj = (jsonDecode(resText) as Map).cast<String, dynamic>();
+          responseObj = (jsonDecode(result.text) as Map).cast<String, dynamic>();
         } catch (_) {
-          responseObj = {'result': resText};
+          responseObj = {'result': result.text};
         }
-        convo.add({
-          'role': 'user',
-          'parts': [
-            {
-              'functionResponse': {'name': name, 'response': responseObj},
-            },
-            ...result.googleImageParts,
-          ],
+        responseParts.add({
+          'functionResponse': {
+            'name': name,
+            'response': responseObj,
+            if (apiId != null) 'id': apiId,
+          },
         });
+        responseParts.addAll(result.googleImageParts);
       }
+      convo.add({'role': 'user', 'parts': responseParts});
     },
     finish: () => emitDone(
       ids: StreamChunkIds('finish'),

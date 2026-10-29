@@ -26,15 +26,25 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: '3.44.9'
+  FLUTTER_VERSION: '3.47.6'
   INNO_SETUP_VERSION: '7.0.2'
   INNO_SETUP_URL: 'https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe'
   INNO_SETUP_SHA256: '5ad54ca3def786f8f4212552e54cc6d8d61329e2d24a1cfee0571d42c2684ff1'
 
 jobs:
   build-windows-x64:
-    name: Build Windows x64
+    name: Build Windows x64 (${{ matrix.renderer }})
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - renderer: Impeller
+            suffix: ''
+          - renderer: Skia
+            suffix: '-compat'
+    env:
+      PACKAGE_SUFFIX: ${{ matrix.suffix }}
 
     steps:
       - name: Checkout
@@ -77,14 +87,25 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Package portable ZIP
-        shell: pwsh
+      - name: Disable Impeller for compatibility build
+        if: matrix.renderer == 'Skia'
+        shell: python
         run: |
-          $ErrorActionPreference = 'Stop'
-          Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath "JO-AIClient-v$env:VERSION-windows-x64-portable.zip"
+          from pathlib import Path
+
+          path = Path('windows/runner/main.cpp')
+          source = path.read_bytes().decode('utf-8')
+          anchor = '  flutter::DartProject project(L"data");'
+          if source.count(anchor) != 1 or 'set_impeller_switch(' in source:
+              raise SystemExit('Unexpected Windows Impeller configuration; review the compatibility build step.')
+          source = source.replace(
+              anchor,
+              anchor + '\n  project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);',
+          )
+          path.write_bytes(source.encode('utf-8'))
+
+      - name: Build Windows (installed)
+        run: flutter build windows --release --dart-define=JO_DEPLOYMENT=installed
 
       - name: Setup Inno Setup 7
         shell: pwsh
@@ -109,7 +130,17 @@ jobs:
       - name: Package setup EXE
         shell: pwsh
         run: |
-          ./scripts/windows/build_installer.ps1 -AppVersion $env:VERSION -OutputDir . -InnoSetupCompiler "$env:INNO_SETUP_COMPILER"
+          ./scripts/windows/build_installer.ps1 -AppVersion $env:VERSION -OutputSuffix $env:PACKAGE_SUFFIX -OutputDir . -InnoSetupCompiler "$env:INNO_SETUP_COMPILER"
+
+      - name: Build Windows (portable)
+        run: flutter build windows --release --dart-define=JO_DEPLOYMENT=portable
+
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $file = "JO-AIClient-v$env:VERSION-windows-x64$env:PACKAGE_SUFFIX-portable.zip"
+          Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath $file
 
       - name: Generate SHA-256 checksums
         shell: pwsh
@@ -123,12 +154,12 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Windows-x64
+          name: Windows-x64${{ matrix.suffix }}
           path: |
-            JO-AIClient-v*-windows-x64-portable.zip
-            JO-AIClient-v*-windows-x64-portable.zip.sha256
-            JO-AIClient-v*-windows-x64-setup.exe
-            JO-AIClient-v*-windows-x64-setup.exe.sha256
+            JO-AIClient-v*-windows-x64*portable.zip
+            JO-AIClient-v*-windows-x64*portable.zip.sha256
+            JO-AIClient-v*-windows-x64*setup.exe
+            JO-AIClient-v*-windows-x64*setup.exe.sha256
           if-no-files-found: error
 
       - name: Upload assets to draft GitHub Release
@@ -141,7 +172,7 @@ jobs:
           draft: true
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
           files: |
-            JO-AIClient-v*-windows-x64-portable.zip
-            JO-AIClient-v*-windows-x64-portable.zip.sha256
-            JO-AIClient-v*-windows-x64-setup.exe
-            JO-AIClient-v*-windows-x64-setup.exe.sha256
+            JO-AIClient-v*-windows-x64*portable.zip
+            JO-AIClient-v*-windows-x64*portable.zip.sha256
+            JO-AIClient-v*-windows-x64*setup.exe
+            JO-AIClient-v*-windows-x64*setup.exe.sha256

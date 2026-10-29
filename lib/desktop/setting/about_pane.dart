@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/providers/update_provider.dart';
+import '../../core/app_build_identity.dart';
 import '../../icons/lucide_adapter.dart' as lucide;
 import '../../l10n/app_localizations.dart';
 import '../../shared/widgets/snackbar.dart';
@@ -28,8 +29,8 @@ class DesktopAboutPane extends StatefulWidget {
 enum _InfoLoadState { loading, loaded, failed }
 
 class _DesktopAboutPaneState extends State<DesktopAboutPane> {
-  static const String _upstreamKelivoVersion = '1.3.1';
-  static const String _upstreamKelivoBuildNumber = '80';
+  static const String _upstreamKelivoVersion = '1.3.2';
+  static const String _upstreamKelivoBuildNumber = '81';
 
   String _version = '';
   String _buildNumber = '';
@@ -247,6 +248,13 @@ class _DesktopAboutPaneState extends State<DesktopAboutPane> {
                   ),
                   const _DeskRowDivider(),
                   _DeskNavRow(
+                    icon: lucide.Lucide.Earth,
+                    label: l10n.aboutPageWebsite,
+                    onTap: () =>
+                        _openUrl('https://jo-beacon.github.io/JO-AIClient/'),
+                  ),
+                  const _DeskRowDivider(),
+                  _DeskNavRow(
                     icon: lucide.Lucide.FileText,
                     label: l10n.aboutPageLicense,
                     onTap: () => _openUrl(
@@ -407,7 +415,10 @@ class _AppHeaderCardState extends State<_AppHeaderCard> {
                           children: [
                             Expanded(
                               child: Text(
-                                l10n.aboutPageAppName,
+                                appDisplayName(
+                                  l10n.aboutPageAppName,
+                                  l10n.aboutPageAppNamePortable,
+                                ),
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: AppFontWeights.emphasis,

@@ -1374,6 +1374,18 @@ class _DesktopBackupPaneState extends State<DesktopBackupPane> {
             ],
           ),
           const SizedBox(height: 10),
+          if (Platform.isIOS)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                l10n.backupPageIosSystemBackupNote,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.45,
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
           _LocalSettingsLedgerSection(l10n: l10n, cs: cs),
           const SizedBox(height: 10),
           _sectionCard(

@@ -260,8 +260,6 @@ class SettingsProvider extends ChangeNotifier {
   static const String _displayAutoRetryEnabledKey =
       'display_auto_retry_enabled_v1';
   static const String _autoRetryOptionsKey = 'auto_retry_options';
-  static const String _displayAutoScrollIdleSecondsKey =
-      'display_auto_scroll_idle_seconds_v1';
   static const String _displayChatBackgroundMaskStrengthKey =
       'display_chat_background_mask_strength_v1';
   static const String _displayChatInputBackgroundOpacityLightKey =
@@ -1107,8 +1105,6 @@ class SettingsProvider extends ChangeNotifier {
     _chatFontScale =
         localPreferences.getDouble(_displayChatFontScaleKey) ?? 1.0;
     _autoScrollEnabled = prefs.getBool(_displayAutoScrollEnabledKey) ?? true;
-    _autoScrollIdleSeconds =
-        prefs.getInt(_displayAutoScrollIdleSecondsKey) ?? 8;
     _chatBackgroundMaskStrength =
         prefs.getDouble(_displayChatBackgroundMaskStrengthKey) ?? 1.0;
     _chatInputBackgroundOpacityLight =
@@ -5060,7 +5056,7 @@ Requirements:
     await prefs.setDouble(_displayChatFontScaleKey, _chatFontScale);
   }
 
-  // 显示：自动滚动回底部开关
+  // 显示：流式输出时是否跟随底部，直到用户主动上滑
   bool _autoScrollEnabled = true;
   bool get autoScrollEnabled => _autoScrollEnabled;
   Future<void> setAutoScrollEnabled(bool v) async {
@@ -5069,21 +5065,6 @@ Requirements:
     notifyListeners();
     final prefs = _preferences;
     await prefs.setBool(_displayAutoScrollEnabledKey, v);
-  }
-
-  // 显示：自动滚动回底部的空闲超时（秒）
-  int _autoScrollIdleSeconds = 8;
-  int get autoScrollIdleSeconds => _autoScrollIdleSeconds;
-  Future<void> setAutoScrollIdleSeconds(int seconds) async {
-    final v = seconds.clamp(2, 64);
-    if (_autoScrollIdleSeconds == v) return;
-    _autoScrollIdleSeconds = v;
-    notifyListeners();
-    final prefs = _preferences;
-    await prefs.setInt(
-      _displayAutoScrollIdleSecondsKey,
-      _autoScrollIdleSeconds,
-    );
   }
 
   // 显示：聊天背景遮罩强度（0.0 - 2.0，默认 1.0）
@@ -5875,7 +5856,6 @@ Requirements:
     copy._desktopMessageNavButtonsMode = _desktopMessageNavButtonsMode;
     copy._chatFontScale = _chatFontScale;
     copy._autoScrollEnabled = _autoScrollEnabled;
-    copy._autoScrollIdleSeconds = _autoScrollIdleSeconds;
     copy._enableDollarLatex = _enableDollarLatex;
     copy._enableMathRendering = _enableMathRendering;
     copy._enableUserMarkdown = _enableUserMarkdown;

@@ -199,7 +199,8 @@ class MessageGenerationService {
       messages: messages,
       currentConversation: currentConversation,
       includeToolMessages: includeToolMessages,
-      preserveToolTurns: kind == ProviderKind.openai,
+      // Claude replays its rounds from the native turn artifact instead.
+      preserveToolTurns: kind != ProviderKind.claude,
       claudeSource: kind == ProviderKind.claude
           ? (providerId: providerKey, modelId: modelId)
           : null,
@@ -358,6 +359,7 @@ class MessageGenerationService {
     required String providerKey,
     required String modelId,
     required String? assistantId,
+    List<ChatMessage>? messagesOverride,
   }) async {
     final settings = contextProvider.read<SettingsProvider>();
     Assistant? assistant;
@@ -366,7 +368,8 @@ class MessageGenerationService {
       assistant = assistantId == null ? null : assistants.getById(assistantId);
     } catch (_) {}
     final conversation = chatService.getConversation(conversationId);
-    final messages = await chatService.loadMessages(conversationId);
+    final messages =
+        messagesOverride ?? await chatService.loadMessages(conversationId);
     final packed = await assembleUnprocessedRequestContext(
       messages: messages,
       versionSelections: chatService.getVersionSelections(conversationId),

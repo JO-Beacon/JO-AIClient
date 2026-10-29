@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/models/model_spec.dart';
@@ -1238,8 +1239,11 @@ class _ChatInputBarState extends State<ChatInputBar>
     // 应用从后台恢复时短暂抑制上下文菜单，避免闪烁
     if (state == AppLifecycleState.resumed) {
       _suppressContextMenu = true;
-      // 同时取消焦点，重置可能卡住的工具栏状态
-      widget.focusNode?.unfocus();
+      // 仅 iOS 需要重置工具栏状态；桌面端切换窗口后由 Flutter
+      // 恢复焦点，不能在这里取消。
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        widget.focusNode?.unfocus();
+      }
       // 短暂延迟后重新启用上下文菜单
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
@@ -1250,7 +1254,9 @@ class _ChatInputBarState extends State<ChatInputBar>
         state == AppLifecycleState.paused) {
       // 进入后台时隐藏任何已打开的工具栏
       _suppressContextMenu = true;
-      widget.focusNode?.unfocus();
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        widget.focusNode?.unfocus();
+      }
       if (_ownsVoiceSession) unawaited(_cancelVoiceInput());
     }
   }

@@ -3,24 +3,27 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
-import '../../../core/services/chat/chat_service.dart';
 import '../../../desktop/macos_window_drag_area.dart';
+import '../../../core/services/chat/chat_service.dart';
 import '../../../core/services/haptics.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../core/services/storage/storage_usage_service.dart';
+import '../../../shared/utils/format_bytes.dart';
+import '../../../core/services/storage/storage_image_usage.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/utils/format_bytes.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
 import '../../../shared/widgets/selection_back_scope.dart';
 import '../../../shared/widgets/snackbar.dart';
-import '../../../utils/app_directories.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../utils/platform_utils.dart';
+import '../../../core/app_build_identity.dart';
+import '../widgets/windows_data_directory_tile.dart';
 import '../../backup/pages/local_snapshots_page.dart';
 import '../../chat/pages/image_viewer_page.dart';
 import '../../workspace/pages/environment_page.dart';
@@ -103,7 +106,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
       StorageUsageCategoryKey.restoreTraces,
       StorageUsageCategoryKey.displacedDatabases,
       StorageUsageCategoryKey.localSnapshots,
-      StorageUsageCategoryKey.assistantData,
       StorageUsageCategoryKey.cache,
       StorageUsageCategoryKey.logs,
       StorageUsageCategoryKey.workspaceFiles,
@@ -131,8 +133,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
         return Lucide.Database;
       case StorageUsageCategoryKey.localSnapshots:
         return Lucide.Shield;
-      case StorageUsageCategoryKey.assistantData:
-        return Lucide.Bot;
       case StorageUsageCategoryKey.cache:
         return Lucide.Boxes;
       case StorageUsageCategoryKey.logs:
@@ -166,8 +166,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
         return l10n.storageSpaceCategoryDisplacedDatabases;
       case StorageUsageCategoryKey.localSnapshots:
         return l10n.localSnapshotSectionTitle;
-      case StorageUsageCategoryKey.assistantData:
-        return l10n.storageSpaceCategoryAssistantData;
       case StorageUsageCategoryKey.cache:
         return l10n.storageSpaceCategoryCache;
       case StorageUsageCategoryKey.logs:
@@ -214,10 +212,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
       case 'app_documents':
       case 'app':
         return l10n.storageSpaceSubOtherApp;
-      case 'avatars':
-        return l10n.storageSpaceSubAssistantAvatars;
-      case 'images':
-        return l10n.storageSpaceSubAssistantImages;
       case 'avatar_cache':
         return l10n.storageSpaceSubCacheAvatars;
       case 'other_cache':
@@ -657,9 +651,9 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
         : _buildMobile(context, _report!);
 
     if (widget.embedded) {
-      // 主 IndexedStack 里的桌面页没有被 Scaffold/AppBar 包裹。
-      // 这里确保有 Material 祖先 + 正确底色，避免奇怪的文本残影
-      //（例如黄色下划线）以及浅色模式下对比度不可读。
+      // Desktop pages in the main IndexedStack are not wrapped by Scaffold/AppBar.
+      // Ensure a Material ancestor + correct background to avoid odd text artifacts
+      // (e.g., yellow underlines) and unreadable contrast in light mode.
       if (isDesktop) {
         return Material(
           color: Theme.of(context).scaffoldBackgroundColor,
@@ -693,24 +687,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
         ],
       ),
       body: body,
-    );
-  }
-
-  /// 在系统文件管理器中打开用户数据目录。
-  /// 上游没有这个入口，属本仓库自有功能。
-  Future<void> _openUserDataDirectory() async {
-    final l10n = AppLocalizations.of(context)!;
-    try {
-      final directory = await AppDirectories.getAppDataDirectory();
-      final opened = await AppDirectories.openDirectory(directory);
-      if (opened || !mounted) return;
-    } catch (_) {
-      if (!mounted) return;
-    }
-    showAppSnackBar(
-      context,
-      message: l10n.backupPageOpenUserDataFailed,
-      type: NotificationType.error,
     );
   }
 
@@ -766,6 +742,8 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (PlatformUtils.isWindows && !kIsPortableBuild)
+                const WindowsDataDirectoryTile(),
               Row(
                 children: [
                   Text(
@@ -843,15 +821,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IosTileButton(
-                  label: l10n.backupPageOpenUserDataDirectory,
-                  icon: Lucide.FolderOpen,
-                  onTap: _openUserDataDirectory,
                 ),
               ),
             ],
@@ -1787,8 +1756,8 @@ class _CategoryDetail extends StatelessWidget {
         onTap: () => onClearDisplacedDatabases?.call(),
       );
     } else if (category.key == StorageUsageCategoryKey.localSnapshots) {
-      // 只管理、不清理：这里每一项都是可恢复的副本，
-      // 列出它们的那个页面能说清每一项到底是什么。
+      // Managed rather than cleared: each of these is a restorable copy, and
+      // the screen that lists them can say what every one of them holds.
       actions = IosTileButton(
         label: l10n.localSnapshotManageCopies,
         icon: Lucide.ChevronRight,
@@ -1828,39 +1797,13 @@ class _CategoryDetail extends StatelessWidget {
 
     if (category.key == StorageUsageCategoryKey.images ||
         category.key == StorageUsageCategoryKey.files) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(fontSize: 16, fontWeight: AppFontWeights.emphasis),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 12.5,
-              color: cs.onSurface.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hint,
-            style: TextStyle(
-              fontSize: 12.5,
-              color: cs.onSurface.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _UploadManager(
-              key: ValueKey(category.key),
-              images: category.key == StorageUsageCategoryKey.images,
-              refreshReport: refreshReport,
-              fmtBytes: fmtBytes,
-            ),
-          ),
-        ],
+      return _UploadManager(
+        key: ValueKey(category.key),
+        images: category.key == StorageUsageCategoryKey.images,
+        category: category,
+        title: title,
+        refreshReport: refreshReport,
+        fmtBytes: fmtBytes,
       );
     }
 
@@ -2086,11 +2029,15 @@ class _UploadManager extends StatefulWidget {
   const _UploadManager({
     super.key,
     required this.images,
+    required this.category,
+    required this.title,
     required this.refreshReport,
     required this.fmtBytes,
   });
 
   final bool images;
+  final StorageUsageCategory category;
+  final String title;
   final Future<void> Function() refreshReport;
   final String Function(int) fmtBytes;
 
@@ -2098,16 +2045,19 @@ class _UploadManager extends StatefulWidget {
   State<_UploadManager> createState() => _UploadManagerState();
 }
 
-enum _StorageImageSourceFilter { all, userUpload, assistant }
+enum _StorageImageFilter { all, chat, tool, avatar }
 
 enum _StorageEntrySort { newest, oldest, largest, smallest }
 
 class _UploadManagerState extends State<_UploadManager> {
   bool _loading = false;
+  bool _loadFailed = false;
+  bool _deleting = false;
+  bool _forceMode = false;
   List<StorageFileEntry> _entries = const <StorageFileEntry>[];
   List<StorageFileEntry> _visibleEntries = const <StorageFileEntry>[];
   final Set<String> _selected = <String>{};
-  _StorageImageSourceFilter _sourceFilter = _StorageImageSourceFilter.all;
+  _StorageImageFilter _imageFilter = _StorageImageFilter.all;
   _StorageEntrySort _sort = _StorageEntrySort.newest;
 
   bool get _selectMode => _selected.isNotEmpty;
@@ -2122,15 +2072,18 @@ class _UploadManagerState extends State<_UploadManager> {
   void didUpdateWidget(covariant _UploadManager oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.images != widget.images) {
-      // 桌面端在“图片”与“文件”之间切换时，确保按新的筛选条件重新加载。
+      // When switching between Images <-> Files on desktop, ensure we reload with the new filter.
       setState(() {
         _selected.clear();
+        _forceMode = false;
         _entries = const <StorageFileEntry>[];
         _visibleEntries = const <StorageFileEntry>[];
         _loading = false;
-        _sourceFilter = _StorageImageSourceFilter.all;
+        _imageFilter = _StorageImageFilter.all;
         _sort = _StorageEntrySort.newest;
       });
+      _load();
+    } else if (oldWidget.category != widget.category) {
       _load();
     }
   }
@@ -2146,9 +2099,20 @@ class _UploadManagerState extends State<_UploadManager> {
       setState(() {
         _entries = list;
         _visibleEntries = _buildVisibleEntries();
-        final paths = _entries.map((e) => e.path).toSet();
+        _loadFailed = false;
+        final paths = _visibleEntries
+            .where((e) => _forceMode || !e.isInUse)
+            .map((e) => e.path)
+            .toSet();
         _selected.removeWhere((p) => !paths.contains(p));
       });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadFailed = true;
+          _selected.clear();
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -2158,12 +2122,12 @@ class _UploadManagerState extends State<_UploadManager> {
     if (!widget.images) return _entries;
 
     final entries = _entries.where((entry) {
-      return switch (_sourceFilter) {
-        _StorageImageSourceFilter.all => true,
-        _StorageImageSourceFilter.userUpload =>
-          entry.source == StorageFileSource.userUpload,
-        _StorageImageSourceFilter.assistant =>
-          entry.source == StorageFileSource.assistant,
+      return switch (_imageFilter) {
+        _StorageImageFilter.all => true,
+        _StorageImageFilter.chat => entry.imageKind == StorageImageKind.chat,
+        _StorageImageFilter.tool => entry.imageKind == StorageImageKind.tool,
+        _StorageImageFilter.avatar =>
+          entry.imageKind == StorageImageKind.avatar,
       };
     }).toList();
 
@@ -2179,10 +2143,10 @@ class _UploadManagerState extends State<_UploadManager> {
     return entries;
   }
 
-  void _setSourceFilter(_StorageImageSourceFilter filter) {
-    if (_sourceFilter == filter) return;
+  void _setImageFilter(_StorageImageFilter filter) {
+    if (_imageFilter == filter) return;
     setState(() {
-      _sourceFilter = filter;
+      _imageFilter = filter;
       _visibleEntries = _buildVisibleEntries();
       _selected.clear();
     });
@@ -2197,6 +2161,9 @@ class _UploadManagerState extends State<_UploadManager> {
   }
 
   void _toggleSelect(String path) {
+    if (_loading) return;
+    final entry = _visibleEntries.where((e) => e.path == path).firstOrNull;
+    if (entry == null || (entry.isInUse && !_forceMode)) return;
     setState(() {
       if (_selected.contains(path)) {
         _selected.remove(path);
@@ -2206,11 +2173,26 @@ class _UploadManagerState extends State<_UploadManager> {
     });
   }
 
+  void _toggleForceMode() {
+    setState(() {
+      _forceMode = !_forceMode;
+      if (!_forceMode) {
+        final inUse = _entries
+            .where((e) => e.isInUse)
+            .map((e) => e.path)
+            .toSet();
+        _selected.removeWhere(inUse.contains);
+      }
+    });
+  }
+
   void _selectAll(Iterable<StorageFileEntry> entries) {
     setState(() {
       _selected
         ..clear()
-        ..addAll(entries.map((e) => e.path));
+        ..addAll(
+          entries.where((e) => _forceMode || !e.isInUse).map((e) => e.path),
+        );
     });
   }
 
@@ -2219,18 +2201,29 @@ class _UploadManagerState extends State<_UploadManager> {
   }
 
   Future<void> _deleteSelected() async {
-    if (_selected.isEmpty) return;
+    if (_selected.isEmpty || _deleting) return;
     final l10n = AppLocalizations.of(context)!;
     // Back can clear or replace the selection while deletion awaits file I/O.
     // Keep the targets shown in this confirmation independent of that UI state.
     final pathsToDelete = _selected.toList(growable: false);
     final count = pathsToDelete.length;
+    final force = _entries.any((e) => e.isInUse && _selected.contains(e.path));
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(l10n.storageSpaceDeleteConfirmTitle),
-          content: Text(l10n.storageSpaceDeleteUploadsConfirmMessage(count)),
+          title: Text(
+            force
+                ? l10n.storageSpaceForceDeleteTitle
+                : l10n.storageSpaceDeleteConfirmTitle,
+          ),
+          content: Text(
+            force
+                ? l10n.storageSpaceForceDeleteMessage(count)
+                : widget.images
+                ? l10n.storageSpaceDeleteImagesConfirmMessage(count)
+                : l10n.storageSpaceDeleteUploadsConfirmMessage(count),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -2238,24 +2231,33 @@ class _UploadManagerState extends State<_UploadManager> {
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(l10n.homePageDelete),
+              child: Text(
+                force
+                    ? l10n.storageSpaceForceDeleteConfirm
+                    : l10n.homePageDelete,
+              ),
             ),
           ],
         );
       },
     );
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
+    setState(() => _deleting = true);
 
     try {
       final deleted = await StorageUsageService.deleteUploadFiles(
         pathsToDelete,
         images: widget.images,
+        force: force,
       );
       if (!mounted) return;
       _clearSelection();
+      if (_forceMode) setState(() => _forceMode = false);
       showAppSnackBar(
         context,
-        message: l10n.storageSpaceDeletedUploadsDone(deleted),
+        message: deleted < count
+            ? l10n.storageSpaceDeletedUploadsPartial(deleted, count - deleted)
+            : l10n.storageSpaceDeletedUploadsDone(deleted),
         type: NotificationType.success,
       );
     } catch (error) {
@@ -2266,8 +2268,9 @@ class _UploadManagerState extends State<_UploadManager> {
         type: NotificationType.error,
       );
     }
-    await _load();
+    if (mounted) setState(() => _deleting = false);
     await widget.refreshReport();
+    if (mounted) await _load();
   }
 
   Future<void> _openImageViewer(
@@ -2328,17 +2331,13 @@ class _UploadManagerState extends State<_UploadManager> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_entries.isEmpty) {
-      return Center(
-        child: Text(
-          l10n.storageSpaceNoUploads,
-          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
-        ),
-      );
+    if (_loadFailed) {
+      return Center(child: Text(l10n.storageSpaceLoadFailed));
     }
 
     final entries = _visibleEntries;
-    final actions = Wrap(
+    final hasInUse = entries.any((e) => e.isInUse);
+    final leftActions = Wrap(
       spacing: 10,
       runSpacing: 10,
       children: [
@@ -2348,31 +2347,88 @@ class _UploadManagerState extends State<_UploadManager> {
               : l10n.storageSpaceSelectAll,
           icon: _selectMode ? Lucide.XCircle : Lucide.CheckSquare,
           backgroundColor: cs.primary,
-          enabled: entries.isNotEmpty,
+          enabled:
+              !_loading &&
+              !_deleting &&
+              entries.any((e) => _forceMode || !e.isInUse),
           onTap: _selectMode ? _clearSelection : () => _selectAll(entries),
         ),
         IosTileButton(
           label: l10n.homePageDelete,
           icon: Lucide.Trash2,
           backgroundColor: cs.error,
-          enabled: _selected.isNotEmpty,
+          enabled: !_loading && !_deleting && _selected.isNotEmpty,
           onTap: _deleteSelected,
         ),
+      ],
+    );
+    final forceAction = IosTileButton(
+      label: _forceMode
+          ? l10n.storageSpaceForceDeleteExit
+          : l10n.storageSpaceForceDelete,
+      icon: _forceMode ? Lucide.XCircle : Lucide.Trash2,
+      backgroundColor: _forceMode ? cs.tertiary : cs.error,
+      enabled: !_loading && !_deleting,
+      onTap: _toggleForceMode,
+    );
+    final actions = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: leftActions),
+        if (hasInUse || _forceMode) ...[const SizedBox(width: 10), forceAction],
       ],
     );
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          widget.title,
+          style: TextStyle(fontSize: 16, fontWeight: AppFontWeights.emphasis),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.fmtBytes(
+            entries.fold<int>(0, (sum, entry) => sum + entry.bytes),
+          ),
+          key: const ValueKey('storage-visible-bytes'),
+          style: TextStyle(
+            fontSize: 12.5,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.images
+              ? l10n.storageSpaceImagesHint
+              : l10n.storageSpaceNotSafeToClearHint,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (widget.images) ...[
           _StorageImageOrganizer(
-            sourceFilter: _sourceFilter,
+            imageFilter: _imageFilter,
             sort: _sort,
-            onSourceChanged: _setSourceFilter,
+            onImageChanged: _setImageFilter,
             onSortChanged: _setSort,
           ),
           const SizedBox(height: 12),
         ],
+        if (_forceMode)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              l10n.storageSpaceForceDeleteHint,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: cs.error,
+                fontWeight: AppFontWeights.semibold,
+              ),
+            ),
+          ),
         actions,
         const SizedBox(height: 12),
         Expanded(
@@ -2419,11 +2475,15 @@ class _UploadManagerState extends State<_UploadManager> {
                       final e = entries[index];
                       final selected = _selected.contains(e.path);
                       return _ImageTile(
+                        key: ValueKey('storage-image-${p.normalize(e.path)}'),
                         path: e.path,
+                        isInUse: e.isInUse,
+                        forceSelectable: _forceMode,
                         selected: selected,
                         onToggle: () => _toggleSelect(e.path),
                         onTap: () {
-                          if (_selectMode) {
+                          if ((_selectMode || _forceMode) &&
+                              (!e.isInUse || _forceMode)) {
                             _toggleSelect(e.path);
                           } else {
                             _openImageViewer(entries, index);
@@ -2443,10 +2503,12 @@ class _UploadManagerState extends State<_UploadManager> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _FileRow(
                         entry: e,
+                        forceSelectable: _forceMode,
                         selected: selected,
                         fmtBytes: widget.fmtBytes,
                         onTap: () {
-                          if (_selectMode) {
+                          if ((_selectMode || _forceMode) &&
+                              (!e.isInUse || _forceMode)) {
                             _toggleSelect(e.path);
                           } else {
                             _openFile(e.path);
@@ -2473,15 +2535,15 @@ class _UploadManagerState extends State<_UploadManager> {
 
 class _StorageImageOrganizer extends StatelessWidget {
   const _StorageImageOrganizer({
-    required this.sourceFilter,
+    required this.imageFilter,
     required this.sort,
-    required this.onSourceChanged,
+    required this.onImageChanged,
     required this.onSortChanged,
   });
 
-  final _StorageImageSourceFilter sourceFilter;
+  final _StorageImageFilter imageFilter;
   final _StorageEntrySort sort;
-  final ValueChanged<_StorageImageSourceFilter> onSourceChanged;
+  final ValueChanged<_StorageImageFilter> onImageChanged;
   final ValueChanged<_StorageEntrySort> onSortChanged;
 
   @override
@@ -2489,21 +2551,16 @@ class _StorageImageOrganizer extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        _StorageChoiceRow<_StorageImageSourceFilter>(
-          label: l10n.storageSpaceSourceLabel,
-          value: sourceFilter,
+        _StorageChoiceRow<_StorageImageFilter>(
+          label: l10n.storageSpaceImageTypeLabel,
+          value: imageFilter,
           options: [
-            (_StorageImageSourceFilter.all, l10n.storageSpaceSourceAll),
-            (
-              _StorageImageSourceFilter.userUpload,
-              l10n.storageSpaceSourceUserUpload,
-            ),
-            (
-              _StorageImageSourceFilter.assistant,
-              l10n.storageSpaceSourceAssistant,
-            ),
+            (_StorageImageFilter.all, l10n.storageSpaceImageTypeAll),
+            (_StorageImageFilter.chat, l10n.storageSpaceImageTypeChat),
+            (_StorageImageFilter.tool, l10n.storageSpaceImageTypeTool),
+            (_StorageImageFilter.avatar, l10n.storageSpaceImageTypeAvatar),
           ],
-          onChanged: onSourceChanged,
+          onChanged: onImageChanged,
         ),
         const SizedBox(height: 8),
         _StorageChoiceRow<_StorageEntrySort>(
@@ -2615,7 +2672,10 @@ class _StorageChoiceRow<T> extends StatelessWidget {
 
 class _ImageTile extends StatelessWidget {
   const _ImageTile({
+    super.key,
     required this.path,
+    required this.isInUse,
+    required this.forceSelectable,
     required this.selected,
     required this.onToggle,
     required this.onTap,
@@ -2623,6 +2683,8 @@ class _ImageTile extends StatelessWidget {
   });
 
   final String path;
+  final bool isInUse;
+  final bool forceSelectable;
   final bool selected;
   final VoidCallback onToggle;
   final VoidCallback onTap;
@@ -2680,16 +2742,18 @@ class _ImageTile extends StatelessWidget {
                 Positioned(
                   top: 6,
                   right: 6,
-                  child: IosCheckbox(
-                    value: selected,
-                    size: 20,
-                    hitTestSize: 22,
-                    borderWidth: 1.6,
-                    activeColor: cs.primary,
-                    borderColor: cs.primary.withValues(alpha: 0.55),
-                    onChanged: (_) => onToggle(),
-                    enableHaptics: false,
-                  ),
+                  child: isInUse && !forceSelectable
+                      ? const _StorageInUseLabel()
+                      : IosCheckbox(
+                          value: selected,
+                          size: 20,
+                          hitTestSize: 22,
+                          borderWidth: 1.6,
+                          activeColor: cs.primary,
+                          borderColor: cs.primary.withValues(alpha: 0.55),
+                          onChanged: (_) => onToggle(),
+                          enableHaptics: false,
+                        ),
                 ),
               ],
             ),
@@ -2700,9 +2764,33 @@ class _ImageTile extends StatelessWidget {
   }
 }
 
+class _StorageInUseLabel extends StatelessWidget {
+  const _StorageInUseLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: AppLocalizations.of(context)!.storageSpaceImageInUseHint,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: cs.surface.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          AppLocalizations.of(context)!.storageSpaceImageInUse,
+          style: TextStyle(fontSize: 11, color: cs.onSurface),
+        ),
+      ),
+    );
+  }
+}
+
 class _FileRow extends StatelessWidget {
   const _FileRow({
     required this.entry,
+    required this.forceSelectable,
     required this.selected,
     required this.fmtBytes,
     required this.onTap,
@@ -2711,6 +2799,7 @@ class _FileRow extends StatelessWidget {
   });
 
   final StorageFileEntry entry;
+  final bool forceSelectable;
   final bool selected;
   final String Function(int) fmtBytes;
   final VoidCallback onTap;
@@ -2738,16 +2827,19 @@ class _FileRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            IosCheckbox(
-              value: selected,
-              size: 20,
-              hitTestSize: 22,
-              borderWidth: 1.6,
-              activeColor: cs.primary,
-              borderColor: cs.primary.withValues(alpha: 0.55),
-              onChanged: (_) => onToggle(),
-              enableHaptics: false,
-            ),
+            if (entry.isInUse && !forceSelectable)
+              const _StorageInUseLabel()
+            else
+              IosCheckbox(
+                value: selected,
+                size: 20,
+                hitTestSize: 22,
+                borderWidth: 1.6,
+                activeColor: cs.primary,
+                borderColor: cs.primary.withValues(alpha: 0.55),
+                onChanged: (_) => onToggle(),
+                enableHaptics: false,
+              ),
             const SizedBox(width: 10),
             Icon(
               Lucide.Paperclip,
@@ -2971,7 +3063,7 @@ Widget _iosNavRow(
   );
 }
 
-/// 本仓库自有的区块卡片：描边比共享 SectionCard 更浅（配色属本仓库自有资产）。
+/// 本仓库自有的区块卡片：描边比共享 SectionCard 更浅。
 Widget _iosSectionCard({required Widget child}) {
   return Builder(
     builder: (context) {

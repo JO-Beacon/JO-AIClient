@@ -31,6 +31,8 @@ import '../../../core/services/android_process_text.dart';
 import '../../../core/services/incoming_share_service.dart';
 import '../../../utils/platform_utils.dart';
 import '../../../desktop/search_provider_popover.dart';
+import '../../../core/models/context_compression_task.dart';
+import '../../../core/services/chat/chat_service.dart';
 import '../../../core/services/model_spec/model_spec_resolver.dart';
 import '../../../desktop/reasoning_level_popover.dart';
 import '../../../desktop/tools_popover.dart';
@@ -43,7 +45,10 @@ import '../../../icons/lucide_adapter.dart';
 import '../../chat/widgets/bottom_tools_sheet.dart';
 import '../../chat/widgets/chat_tools_sheet.dart';
 import '../../chat/utils/ensure_conversation.dart';
+import '../../chat/widgets/context_compression_status.dart';
+import '../../chat/widgets/context_dialog.dart';
 import '../../chat/widgets/context_management_sheet.dart';
+import '../../chat/widgets/context_operation_actions.dart';
 import '../../chat/widgets/reasoning_level_sheet.dart';
 import '../../search/widgets/search_settings_sheet.dart';
 import '../../model/widgets/model_select_sheet.dart';
@@ -72,6 +77,7 @@ import '../../chat/widgets/frosted/chat_frosted_backdrop.dart';
 import '../../browser/browser_navigation.dart';
 import '../../chat/widgets/chat_assistant_background.dart';
 import '../services/chat_read_position_store.dart';
+import '../services/tool_approval_service.dart';
 import '../controllers/home_view_model.dart';
 import '../controllers/scroll_controller.dart' as scroll_ctrl;
 import 'home_mobile_layout.dart';
@@ -721,6 +727,8 @@ class _HomePageState extends State<HomePage>
   late final Future<void> _chatReady;
   bool _readingIncomingShares = false;
   bool _incomingShareChanged = false;
+  final Map<String, String> _compressionNotices = {};
+  String? _contextOpsLoadedFor;
 
   // ============================================================================
   // 页面控制器（管理所有业务逻辑和状态）
@@ -967,6 +975,131 @@ class _HomePageState extends State<HomePage>
   // 构建方法
   // ============================================================================
 
+  void _scheduleContextOperationsLoad(
+    ChatService chat,
+    String? conversationId,
+  ) {
+    if (conversationId == null || _contextOpsLoadedFor == conversationId) {
+      return;
+    }
+    _contextOpsLoadedFor = conversationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        await chat.loadContextOperations(conversationId);
+      } catch (_) {
+        return;
+      }
+      if (!mounted || _controller.currentConversation?.id != conversationId) {
+        return;
+      }
+      setState(() {});
+    });
+  }
+
+  void _observeCompression() {
+    final chat = context.read<ChatService>();
+    for (final task in chat.contextCompression.tasks.toList()) {
+      final state = '${task.id}:${task.phase.name}:${task.error}';
+      if (_compressionNotices[task.conversationId] == state) continue;
+      _compressionNotices[task.conversationId] = state;
+      final phase = task.phase;
+      if (task.conversationId != _controller.currentConversation?.id ||
+          (task.active && phase != CompressionPhase.review)) {
+        continue;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            task.phase != phase ||
+            chat.contextCompression.taskFor(task.conversationId)?.id !=
+                task.id ||
+            _controller.currentConversation?.id != task.conversationId) {
+          return;
+        }
+        final l10n = AppLocalizations.of(context)!;
+        void retry() => _controller.compressContext(options: task.options);
+        void options() => _showCompressContextOptions();
+        switch (phase) {
+          case CompressionPhase.completed:
+            final node = chat
+                .contextOperationsFor(task.conversationId)
+                .where((operation) => operation.id == task.id)
+                .firstOrNull;
+            showAppSnackBar(
+              context,
+              message: l10n.compressSuccessSnack(
+                task.previousBudget == null
+                    ? '—'
+                    : contextTokenValue(task.previousBudget!.usedTokens),
+                task.budget == null
+                    ? '—'
+                    : contextTokenValue(task.budget!.usedTokens),
+              ),
+              actionLabel: task.resultConversationId != null
+                  ? l10n.contextOpenNewChat
+                  : l10n.contextDetailTitle,
+              onAction: () {
+                if (task.resultConversationId != null) {
+                  _controller.switchConversationAnimated(
+                    task.resultConversationId!,
+                  );
+                } else if (node != null) {
+                  showContextOperationDetails(
+                    context,
+                    chat: chat,
+                    conversationId: task.conversationId,
+                    operation: node,
+                    onViewOriginal: _controller.scrollToMessageId,
+                    onRecompress: options,
+                  );
+                }
+              },
+            );
+          case CompressionPhase.cancelled:
+            if (task.error != 'context_cleared') {
+              showAppSnackBar(context, message: l10n.compressCancelledSnack);
+            }
+          case CompressionPhase.review:
+            showAppSnackBar(
+              context,
+              message: task.error == 'context_budget_exceeded'
+                  ? l10n.compressOverSnack
+                  : l10n.contextSummaryNotSmaller,
+              type: NotificationType.warning,
+              actionLabel: l10n.compressAdjust,
+              onAction: () => showCompressionReview(
+                context,
+                chat: chat,
+                task: task,
+                onRecompress: options,
+              ),
+            );
+          case CompressionPhase.failed:
+          case CompressionPhase.interrupted:
+            final stale = task.error?.contains('context_changed') ?? false;
+            final nothing = task.error?.contains('no_messages') ?? false;
+            final reason = compressionErrorLabel(
+              l10n,
+              task.error ?? l10n.contextTaskInterrupted,
+            ).split('\n').first;
+            showAppSnackBar(
+              context,
+              message: stale
+                  ? l10n.compressStaleSnack
+                  : nothing
+                  ? l10n.compressContextNoMessages
+                  : l10n.compressFailedSnack(reason),
+              type: NotificationType.error,
+              actionLabel: l10n.compressTaskRetry,
+              onAction: retry,
+            );
+          default:
+            break;
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) =>
       // Keep action callbacks on the page's live context. Dialogs must not
@@ -989,6 +1122,7 @@ class _HomePageState extends State<HomePage>
     final cs = Theme.of(context).colorScheme;
     final settings = context.watch<SettingsProvider>();
     final assistant = context.watch<AssistantProvider>().currentAssistant;
+    _observeCompression();
 
     final modelInfo = getModelDisplayInfo(
       settings,
@@ -1526,8 +1660,55 @@ class _HomePageState extends State<HomePage>
 
     final settings = context.watch<SettingsProvider>();
     final suggestionsEnabled = settings.isSuggestionGenerationEnabled;
+    final chat = context.watch<ChatService>();
+    final conversationId = _controller.currentConversation?.id;
+    _scheduleContextOperationsLoad(chat, conversationId);
+    final compression = conversationId == null
+        ? null
+        : chat.contextCompression.taskFor(conversationId);
     return MessageListView(
       footer: footer,
+      contextTask: compression,
+      contextTaskRevision: compression == null
+          ? null
+          : '${compression.id}:${compression.phase.name}:${compression.anchorGroupId}',
+      contextTaskWaitingForApproval:
+          compression?.phase == CompressionPhase.waiting &&
+          context.watch<ToolApprovalService>().pendingRequests.any(
+            (request) => request.conversationId == conversationId,
+          ),
+      onOpenContextTask: (task, anchor) => showContextCompressionMenu(
+        context,
+        chat: chat,
+        task: task,
+        anchor: anchor,
+        onRetry: () => _controller.compressContext(options: task.options),
+        onAdjust: () => _showCompressContextOptions(),
+      ),
+      contextOperations: conversationId == null
+          ? const []
+          : chat.contextOperationsFor(conversationId),
+      onOpenContextOperation: (operation) => showContextOperationDetails(
+        context,
+        chat: chat,
+        conversationId: conversationId!,
+        operation: operation,
+        onViewOriginal: _controller.scrollToMessageId,
+        onRecompress: () => _showCompressContextOptions(),
+        onContinueNewChat: () async {
+          final copy = await chat.duplicateConversation(conversationId);
+          if (mounted && copy != null) {
+            await _controller.switchConversationAnimated(copy.id);
+          }
+        },
+      ),
+      onUndoContextOperation: (operation) =>
+          changeContextOperationWithConfirmation(
+            context,
+            chat: chat,
+            conversationId: conversationId!,
+            operation: operation,
+          ),
       isConversationGenerating: _controller.isCurrentConversationLoading,
       processingFilesMessageId: _controller.processingFilesMessageId,
       scrollController: _scrollController,
@@ -1722,7 +1903,6 @@ class _HomePageState extends State<HomePage>
                   chatModel.providerKey!,
                   chatModel.modelId!,
                 ),
-            conversationId: _controller.currentConversation?.id,
           );
         } else {
           _controller.dismissKeyboard();
@@ -2199,6 +2379,9 @@ class _HomePageState extends State<HomePage>
   }
 
   void _showContextManagementSheet() async {
+    await _controller.loadContextOperations();
+    final messageCountLabel = await _controller.contextMessageCountLabel();
+    if (!mounted) return;
     final cs = Theme.of(context).colorScheme;
     await showModalBottomSheet(
       context: context,
@@ -2213,15 +2396,14 @@ class _HomePageState extends State<HomePage>
           child: ContextManagementSheet(
             conversationId: _controller.currentConversation?.id,
             draftText: _inputController.text,
-            clearLabel: _controller.clearContextLabel(),
-            messageCountLabel: _controller.contextMessageCountLabel(),
+            messageCountLabel: messageCountLabel,
             onCompress: () async {
               await Navigator.of(ctx).maybePop();
               if (!mounted) return;
               await _showCompressContextOptions();
             },
             onClear: () async {
-              Navigator.of(ctx).maybePop();
+              await Navigator.of(ctx).maybePop();
               await _controller.clearContext();
             },
           ),

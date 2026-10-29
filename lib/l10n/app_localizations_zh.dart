@@ -121,7 +121,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storageSpaceRefreshTooltip => '刷新';
 
   @override
-  String get storageSpaceLoadFailed => '加载失败';
+  String get storageSpaceLoadFailed => '无法加载文件或检查文件使用情况，请刷新后重试。';
 
   @override
   String get storageSpaceTotalLabel => '已用空间';
@@ -177,9 +177,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storageSpaceSubCompletedRestoreRuns => '已完成的恢复快照';
 
   @override
-  String get storageSpaceCategoryAssistantData => '助手';
-
-  @override
   String get storageSpaceCategoryCache => '缓存';
 
   @override
@@ -218,12 +215,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get storageSpaceSubChatSharedMemory => '共享内存索引';
-
-  @override
-  String get storageSpaceSubAssistantAvatars => '头像';
-
-  @override
-  String get storageSpaceSubAssistantImages => '图片';
 
   @override
   String get storageSpaceSubCacheAvatars => '头像缓存';
@@ -332,16 +323,59 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get storageSpaceSourceLabel => '来源';
+  String get storageSpaceImageTypeLabel => '类型';
 
   @override
-  String get storageSpaceSourceAll => '全部';
+  String get storageSpaceImageTypeAll => '全部';
 
   @override
-  String get storageSpaceSourceUserUpload => '用户上传';
+  String get storageSpaceImageTypeChat => '聊天图片';
 
   @override
-  String get storageSpaceSourceAssistant => '助手发出';
+  String get storageSpaceImageTypeTool => '工具图片';
+
+  @override
+  String get storageSpaceImageTypeAvatar => '头像与背景';
+
+  @override
+  String get storageSpaceImageInUse => '使用中';
+
+  @override
+  String get storageSpaceImageInUseHint =>
+      '该文件仍被消息、工具结果、头像、背景或图标引用。请先解除引用，或使用强删模式。';
+
+  @override
+  String get storageSpaceImagesHint => '删除会影响聊天图片和工具结果。正在使用的文件会受到保护。';
+
+  @override
+  String storageSpaceDeleteImagesConfirmMessage(int count) {
+    return '删除 $count 张图片？相关聊天图片、工具截图及其会话副本将无法再查看或使用。正在使用的文件会保留。';
+  }
+
+  @override
+  String storageSpaceDeletedUploadsPartial(int deleted, int kept) {
+    return '已删除 $deleted 个项目；保留了 $kept 个正在使用或无法删除的项目。';
+  }
+
+  @override
+  String get storageSpaceForceDelete => '强删模式';
+
+  @override
+  String get storageSpaceForceDeleteHint => '强删模式：可以勾选仍在使用中的文件。删除前需要再次确认。';
+
+  @override
+  String get storageSpaceForceDeleteExit => '退出强删模式';
+
+  @override
+  String get storageSpaceForceDeleteTitle => '强删使用中的文件？';
+
+  @override
+  String storageSpaceForceDeleteMessage(int count) {
+    return '将强删 $count 个仍被引用的文件。历史消息可能缺图或缺少附件，后续对话重新读取这些资源时可能失败。此操作无法撤销。';
+  }
+
+  @override
+  String get storageSpaceForceDeleteConfirm => '仍要删除';
 
   @override
   String get storageSpaceSortLabel => '排序';
@@ -524,17 +558,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageSelectSheetClearButton => '清空翻译';
 
   @override
-  String get homePageClearContext => '临时屏蔽上下文';
-
-  @override
-  String contextMessageCount(int count) {
-    return '$count 条消息';
-  }
-
-  @override
-  String contextMessageCountLimited(int actual, int configured) {
-    return '$actual/$configured 条消息';
-  }
+  String get homePageClearContext => '清除上下文';
 
   @override
   String get homePageDefaultAssistant => '默认助手';
@@ -2262,6 +2286,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backupPageBackupNow => '立即备份';
 
   @override
+  String get backupPageIosSystemBackupNote =>
+      'JO-AIClient 的本地数据已设置为不参与 iCloud 系统备份。换机或卸载 App 前，请先导出备份文件。';
+
+  @override
   String get backupPageLocalBackup => '本地备份';
 
   @override
@@ -2548,22 +2576,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bottomToolsSheetUpload => '上传文件';
 
   @override
-  String get bottomToolsSheetClearContext => '临时屏蔽上下文';
-
-  @override
-  String get contextManagementMaskContext => '临时屏蔽上下文';
-
-  @override
-  String get contextManagementRestoreContext => '恢复上下文';
+  String get bottomToolsSheetClearContext => '清除上下文';
 
   @override
   String get compressContext => '压缩上下文';
 
   @override
-  String get compressContextDesc => '总结对话并开始新聊天';
+  String get compressContextDesc => '总结较早的消息，并在当前会话继续。';
 
   @override
-  String get clearContextDesc => '临时屏蔽更早的消息，仅将分界点之后的内容发送给模型。';
+  String get clearContextDesc => '标记上下文边界。更早的消息仍会显示，但不再发送给模型。';
 
   @override
   String get contextManagement => '上下文管理';
@@ -4840,6 +4862,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aboutPageAppName => 'JO-AIClient';
 
   @override
+  String get aboutPageAppNamePortable => 'JO-AIClient 便携版';
+
+  @override
   String get aboutPageKelivoSectionTitle => '关于 Kelivo';
 
   @override
@@ -4886,6 +4911,27 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String aboutPagePlatformOther(String os) {
     return '其他（$os）';
+  }
+
+  @override
+  String get portableDataMigrationTitle => '检测到已有数据';
+
+  @override
+  String get portableDataMigrationMessage =>
+      '便携版使用程序目录下的 data 文件夹。检测到安装版数据，是否复制到便携版数据目录？原数据不会被删除。';
+
+  @override
+  String get portableDataMigrationCopy => '复制并继续';
+
+  @override
+  String get portableDataMigrationExit => '退出';
+
+  @override
+  String get portableDataMigrationBusy => '正在复制数据，请保持应用开启…';
+
+  @override
+  String portableDataMigrationFailed(String error) {
+    return '迁移失败：$error';
   }
 
   @override
@@ -5185,13 +5231,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get displaySettingsPageChatFontSizeTitle => '聊天字体大小';
 
   @override
-  String get displaySettingsPageAutoScrollEnableTitle => '自动回到底部';
+  String get displaySettingsPageAutoScrollEnableTitle => '自动跟随底部';
 
   @override
-  String get displaySettingsPageAutoScrollIdleTitle => '自动回到底部延迟';
+  String get displaySettingsPageAutoScrollSubtitle =>
+      '开启后，流式输出时位于底部会自动跟随。上滑后保持阅读位置，主动回到底部后才继续跟随；关闭后不随新内容自动滚动。';
 
   @override
-  String get displaySettingsPageAutoScrollIdleSubtitle => '用户停止滚动后等待多久再自动回到底部';
+  String get displaySettingsPageAutoScrollEnabledLabel => '开启';
 
   @override
   String get displaySettingsPageAutoScrollDisabledLabel => '已关闭';
@@ -13189,6 +13236,14 @@ class AppLocalizationsZh extends AppLocalizations {
       'thinking + output_config.effort';
 
   @override
+  String get modelSpecFormDialectAnthropicBetweenTools =>
+      'Anthropic adaptive / between_tools';
+
+  @override
+  String get modelSpecFormDialectAnthropicBetweenToolsSubtitle =>
+      'Adaptive thinking; Off uses between_tools';
+
+  @override
   String get modelSpecFormDialectAnthropicEffort => 'Anthropic effort';
 
   @override
@@ -14424,6 +14479,495 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get wsContextChanged => '对话上下文已变化，请求失效。';
+
+  @override
+  String get dataDirectoryTitle => '数据存储目录';
+
+  @override
+  String get dataDirectoryChange => '更改目录';
+
+  @override
+  String get dataDirectoryChoose => '选择一个空的本地文件夹';
+
+  @override
+  String get dataDirectoryHint =>
+      '请选择本地磁盘上的空文件夹。聊天记录、附件和应用管理的文件将在重启后搬迁。少量设备设置和系统缓存仍保留在系统目录。';
+
+  @override
+  String get dataDirectoryPendingHint => '将在下次重启时搬迁。复制和校验完成前，原数据保持不变。目标目录：';
+
+  @override
+  String get dataDirectoryRestart => '重启并搬迁数据';
+
+  @override
+  String get dataDirectoryCancelMove => '取消搬迁，继续使用原目录';
+
+  @override
+  String get dataDirectoryPreviousHint =>
+      '已保留原数据副本。新目录成功启动后，可以清理旧副本以释放磁盘空间。再次更改目录前，请先清理此副本。';
+
+  @override
+  String get dataDirectoryCleanPrevious => '清理原数据副本';
+
+  @override
+  String get dataDirectoryCleanConfirm =>
+      '确定清理以下目录中的原数据副本？当前目录中的数据会保留，搬迁后发生变化的文件不会被删除。';
+
+  @override
+  String get dataDirectoryMoving => '正在搬迁并校验数据…请保持 JO-AIClient 开启。';
+
+  @override
+  String get dataDirectoryStartupFailed => '无法打开数据目录';
+
+  @override
+  String get dataDirectoryRetry => '重试';
+
+  @override
+  String get dataDirectoryUnavailable =>
+      '数据目录不可用。请重新连接磁盘，或将文件夹恢复到原位置后重试。应用不会创建空数据库。';
+
+  @override
+  String get dataDirectoryIdentityMismatch => '此文件夹与已设置的数据目录不匹配。请恢复原文件夹后重试。';
+
+  @override
+  String get dataDirectoryNotEmpty => '请选择空文件夹，不会覆盖已有文件。';
+
+  @override
+  String get dataDirectoryOverlap => '请选择当前数据目录之外的独立文件夹，不能选择其上级目录、子目录或磁盘根目录。';
+
+  @override
+  String get dataDirectoryLocalOnly => '请选择本地磁盘上的文件夹，不支持网络共享目录。';
+
+  @override
+  String get dataDirectoryFinishPrevious => '请先完成或取消待执行的搬迁，并清理保留的旧副本，再选择其他目录。';
+
+  @override
+  String get dataDirectoryPendingRestore => '有备份恢复尚未完成。请取消目录搬迁并重启，完成恢复后再更改目录。';
+
+  @override
+  String get dataDirectorySourceChanged =>
+      '原数据在复制后发生了变化，已保留原文件。若正在搬迁，请取消后重新开始；若正在清理，请先检查原目录。';
+
+  @override
+  String get dataDirectoryCopyChanged => '目标目录存在意外文件或文件变化，原数据已保留。请检查目标目录后重试。';
+
+  @override
+  String get dataDirectoryGenericError =>
+      '操作未完成。请检查磁盘剩余空间、文件夹权限，以及是否有其他 JO-AIClient 进程运行，然后重试。已有数据已保留。';
+
+  @override
+  String get dataDirectoryCancelHint => '取消搬迁会保留目标目录中已复制的文件，你可以检查后手动清理这些副本。';
+
+  @override
+  String get portableDataDirectoryPendingMove =>
+      '安装版还有未完成的数据目录搬迁。请先打开安装版完成或取消搬迁，然后再试。';
+
+  @override
+  String get portableDataDirectoryUnavailable => '安装版数据目录不可用。请重新连接磁盘或恢复文件夹后重试。';
+
+  @override
+  String get portableDataDirectoryInvalid => '无法验证安装版数据目录。没有创建便携版数据。';
+
+  @override
+  String get portableDataDirectoryBusy => '安装版可能仍在运行。请关闭安装版后重试。';
+
+  @override
+  String get portableDataDirectoryChanged => '复制期间安装版数据发生变化。没有创建便携版数据，请重试。';
+
+  @override
+  String get portableDataDirectoryPendingRestore =>
+      '安装版还有未完成的备份恢复。请先完成或取消恢复，再创建便携版数据。';
+
+  @override
+  String get chatInputBarQueuedPaused => '已暂停';
+
+  @override
+  String get compressAdjust => '调整';
+
+  @override
+  String get compressAdvanced => '高级选项';
+
+  @override
+  String get compressAdvancedOff => '重读原文 关';
+
+  @override
+  String get compressAdvancedOn => '重读原文 开';
+
+  @override
+  String compressApproxTokens(String value) {
+    return '约 $value tokens';
+  }
+
+  @override
+  String get compressIncludeAttachments => '附件文字与工具结果';
+
+  @override
+  String get compressIncludeAttachmentsDesc =>
+      '纳入已有附件文字、工具参数与结果；过长内容会截断并标明，不会重新识图。';
+
+  @override
+  String compressIncludeManual(int count) {
+    return '纳入人工补充 · $count 份';
+  }
+
+  @override
+  String compressKeepDescription(int count) {
+    return '保留最近 $count 条用户消息及其回复、工具过程；更早内容由摘要替代。纯附件消息也算一条。';
+  }
+
+  @override
+  String get compressModelGlobal => '全局设置 · 本次启动后固定';
+
+  @override
+  String get compressNothingNew => '自上次压缩后没有新的可压缩内容';
+
+  @override
+  String get compressOverSnack => '摘要过长，应用后会超出上下文上限，未应用';
+
+  @override
+  String get compressRegenerate => '重新压缩';
+
+  @override
+  String get compressReread => '重新读取已压缩的原始消息';
+
+  @override
+  String get compressRereadAll => '本段全部原文';
+
+  @override
+  String get compressRereadDesc => '处理多次压缩造成的信息损失，会增加本次用量';
+
+  @override
+  String get compressRereadLastLayer => '展开最近一层压缩';
+
+  @override
+  String get compressStaleSnack => '聊天内容已变化，压缩结果未应用';
+
+  @override
+  String get compressTaskAbandon => '放弃';
+
+  @override
+  String get compressTaskAdjustRetry => '调整选项后重试';
+
+  @override
+  String compressTaskElapsed(int i, int n, int seconds) {
+    return '第 $i/$n 段 · 已用 $seconds 秒';
+  }
+
+  @override
+  String get compressTaskMerging => '正在合并摘要';
+
+  @override
+  String get compressTaskRetry => '重试';
+
+  @override
+  String get compressTaskWaiting => '等待当前回复完成';
+
+  @override
+  String get compressTaskWaitingApproval => '等待工具审批完成';
+
+  @override
+  String get compressUsageInput => '本次摘要输入';
+
+  @override
+  String get compressUsageNext => '生效后下次请求';
+
+  @override
+  String compressUsageOriginal(String value) {
+    return '原 $value';
+  }
+
+  @override
+  String get compressUsageSummary => '预计摘要';
+
+  @override
+  String get contextBudgetExceeded => '预计上下文超过当前模型上限，请缩短摘要、重新压缩或选择上下文更大的模型。';
+
+  @override
+  String get contextChangeWaiting => '等待当前回复和工具执行结束后生效。';
+
+  @override
+  String get contextChanged => '历史已发生变化，请重新打开此操作并确认范围。';
+
+  @override
+  String get contextClearDetails => '此前聊天历史不再参与后续请求；系统提示、记忆和工具定义仍然生效。';
+
+  @override
+  String get contextDetailAfterUndo => '撤销后';
+
+  @override
+  String get contextDetailClearTitle => '上下文已清除';
+
+  @override
+  String get contextDetailContinueNewChat => '在新聊天继续';
+
+  @override
+  String get contextDetailCurrent => '当前上下文';
+
+  @override
+  String get contextDetailEdited => '已人工编辑';
+
+  @override
+  String get contextDetailExcluded => '不再发送';
+
+  @override
+  String get contextDetailInUse => '当前直接使用';
+
+  @override
+  String get contextDetailKept => '原样保留';
+
+  @override
+  String contextDetailKeptCount(int count) {
+    return '最近 $count 条用户消息及其回复、工具过程';
+  }
+
+  @override
+  String get contextDetailLegacy => '由旧版清除位置转换';
+
+  @override
+  String get contextDetailModel => '模型 · 时间';
+
+  @override
+  String get contextDetailNext => '下次请求';
+
+  @override
+  String contextDetailParts(int count) {
+    return '自动分 $count 段';
+  }
+
+  @override
+  String contextDetailRange(String from, String to, int count) {
+    return '第 $from–$to 条 · $count 条用户消息';
+  }
+
+  @override
+  String get contextDetailRead => '实际读取';
+
+  @override
+  String get contextDetailReplaced => '被替代范围';
+
+  @override
+  String get contextDetailSummaryLabel => '实际用于后续请求的摘要';
+
+  @override
+  String get contextDetailSuperseded => '已由后续摘要替代';
+
+  @override
+  String get contextDetailTitle => '压缩摘要';
+
+  @override
+  String get contextDetailViewOriginals => '查看被压缩的原文';
+
+  @override
+  String get contextDividerCompressed => '压缩上下文';
+
+  @override
+  String get contextDividerEdited => '已编辑';
+
+  @override
+  String get contextDividerFailed => '压缩失败';
+
+  @override
+  String get contextDividerRunning => '正在压缩上下文';
+
+  @override
+  String get contextDone => '完成';
+
+  @override
+  String contextEditCharacters(int count) {
+    return '$count 字';
+  }
+
+  @override
+  String get contextEditEmpty => '摘要不能为空。如需丢弃全部旧历史，请使用“清空上下文”。';
+
+  @override
+  String get contextEditPending => '已保存，当前回复结束后生效';
+
+  @override
+  String contextEditPreview(String value) {
+    return '保存后约 $value tokens。输入时不影响当前生效内容。';
+  }
+
+  @override
+  String get contextEditTitle => '编辑摘要';
+
+  @override
+  String get contextEditUnknownPreview => '用量暂不可用，保存前会重新检查。';
+
+  @override
+  String contextHistoryWindowNote(int count) {
+    return '原样保留的历史仍受当前聊天“最多发送 $count 条消息”的限制。';
+  }
+
+  @override
+  String get contextImpactClearTitle => '撤销较早的清除？';
+
+  @override
+  String contextImpactConfirm(int count) {
+    return '撤销 $count 个节点';
+  }
+
+  @override
+  String get contextImpactDeleteDescription =>
+      '删除原文时，一并撤销相关摘要及依赖后继，避免继续发送残留内容。其他消息与独立节点保持不变。';
+
+  @override
+  String get contextImpactDeleteTitle => '删除已压缩的原文？';
+
+  @override
+  String get contextImpactDescription =>
+      '相关摘要将一并撤销；原始聊天消息保留，不会自动调用模型。独立的上下文节点保持不变。';
+
+  @override
+  String get contextImpactEditTitle => '保存较早的摘要？';
+
+  @override
+  String get contextImpactKeep => '保持不变';
+
+  @override
+  String get contextImpactSave => '保存';
+
+  @override
+  String contextImpactSaveConfirm(int count) {
+    return '保存并撤销 $count 个节点';
+  }
+
+  @override
+  String get contextImpactSourceDescription =>
+      '确认后变更原文，并撤销概括过它的摘要及依赖后继。其他消息与独立节点保留，不会自动调用模型。';
+
+  @override
+  String get contextImpactSourceTitle => '修改已压缩的原文？';
+
+  @override
+  String get contextImpactUndoAlso => '一并撤销';
+
+  @override
+  String get contextImpactUndoOne => '撤销';
+
+  @override
+  String get contextImpactUndoTitle => '撤销较早的压缩？';
+
+  @override
+  String contextImpactUsage(String from, String to) {
+    return '约 $from → $to tokens';
+  }
+
+  @override
+  String get contextKeepInvalid => '请输入正整数的用户消息数量。';
+
+  @override
+  String get contextMore => '更多';
+
+  @override
+  String get contextOperationHidden => '已被后续清除隔开';
+
+  @override
+  String get contextOperationUndone => '已撤销';
+
+  @override
+  String get contextOriginalMessages => '查看原始消息';
+
+  @override
+  String get contextOverLimitWarning => '撤销后可能超出模型上下文上限，建议重新压缩。仍可撤销，发送前会再次检查。';
+
+  @override
+  String contextRangeInfo(int count, int keep) {
+    return '替代 $count 条消息；原样保留最近 $keep 条用户消息及后续回复。';
+  }
+
+  @override
+  String get contextRestore => '恢复';
+
+  @override
+  String contextSampledInfo(int count) {
+    return '本次只读取选定的 $count 字符，摘要会替代整个选定历史范围。';
+  }
+
+  @override
+  String get contextSourceScopeHint => '仅处理最近清除边界之后的历史，可能包含平时发送窗口之外的较早消息。';
+
+  @override
+  String get contextSummaryEmpty => '摘要不能为空；需要排除历史时请使用清除上下文。';
+
+  @override
+  String get contextSummaryHint => '这是后续请求实际使用的摘要，保存不会改写已有回复。附件仅使用已有文字，不会额外识图。';
+
+  @override
+  String get contextSummaryNotSmaller => '摘要没有比输入更短，请检查后再应用。';
+
+  @override
+  String get contextTaskCancel => '取消压缩';
+
+  @override
+  String get contextTaskCancelled => '压缩已取消';
+
+  @override
+  String get contextTaskCompleted => '压缩已完成';
+
+  @override
+  String get contextTaskInterrupted => '压缩已中断，输入内容已保留';
+
+  @override
+  String get contextTaskReview => '请检查摘要后再应用';
+
+  @override
+  String get contextTaskWait => '等待当前回复和工具执行结束';
+
+  @override
+  String get contextUndoClearTooltip => '撤销此次清除';
+
+  @override
+  String get contextUndoCompressTooltip => '撤销此次压缩';
+
+  @override
+  String contextUndoneSnack(String from, String to) {
+    return '已撤销 · $from → $to';
+  }
+
+  @override
+  String get contextViewGenerated => '查看已生成摘要';
+
+  @override
+  String get chatInputBarQueuedAfterCompress => '压缩完成后发送';
+
+  @override
+  String get chatInputBarQueuedCompressionCancelled => '压缩已取消，不会自动发送';
+
+  @override
+  String get chatInputBarQueuedCompressionFailed => '压缩失败，不会自动发送';
+
+  @override
+  String get compressCancelledSnack => '已取消压缩，当前上下文未改变';
+
+  @override
+  String get compressCopyResult => '复制结果';
+
+  @override
+  String get compressDiscardedSnack => '已清空上下文，进行中的压缩已废弃';
+
+  @override
+  String compressFailedSnack(String reason) {
+    return '压缩失败：$reason';
+  }
+
+  @override
+  String compressSuccessSnack(String from, String to) {
+    return '上下文已压缩 · $from → $to';
+  }
+
+  @override
+  String get contextOpenNewChat => '打开新聊天';
+
+  @override
+  String contextMessageCount(int count) {
+    return '$count 条消息';
+  }
+
+  @override
+  String contextMessageCountLimited(int actual, int configured) {
+    return '$actual/$configured 条消息';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -14543,7 +15087,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get storageSpaceRefreshTooltip => '刷新';
 
   @override
-  String get storageSpaceLoadFailed => '加载失败';
+  String get storageSpaceLoadFailed => '无法加载文件或检查文件使用情况，请刷新后重试。';
 
   @override
   String get storageSpaceTotalLabel => '已用空间';
@@ -14599,9 +15143,6 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get storageSpaceSubCompletedRestoreRuns => '已完成的恢复快照';
 
   @override
-  String get storageSpaceCategoryAssistantData => '助手';
-
-  @override
   String get storageSpaceCategoryCache => '缓存';
 
   @override
@@ -14640,12 +15181,6 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get storageSpaceSubChatSharedMemory => '共享内存索引';
-
-  @override
-  String get storageSpaceSubAssistantAvatars => '头像';
-
-  @override
-  String get storageSpaceSubAssistantImages => '图片';
 
   @override
   String get storageSpaceSubCacheAvatars => '头像缓存';
@@ -14754,16 +15289,59 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   }
 
   @override
-  String get storageSpaceSourceLabel => '来源';
+  String get storageSpaceImageTypeLabel => '类型';
 
   @override
-  String get storageSpaceSourceAll => '全部';
+  String get storageSpaceImageTypeAll => '全部';
 
   @override
-  String get storageSpaceSourceUserUpload => '用户上传';
+  String get storageSpaceImageTypeChat => '聊天图片';
 
   @override
-  String get storageSpaceSourceAssistant => '助手发出';
+  String get storageSpaceImageTypeTool => '工具图片';
+
+  @override
+  String get storageSpaceImageTypeAvatar => '头像与背景';
+
+  @override
+  String get storageSpaceImageInUse => '使用中';
+
+  @override
+  String get storageSpaceImageInUseHint =>
+      '该文件仍被消息、工具结果、头像、背景或图标引用。请先解除引用，或使用强删模式。';
+
+  @override
+  String get storageSpaceImagesHint => '删除会影响聊天图片和工具结果。正在使用的文件会受到保护。';
+
+  @override
+  String storageSpaceDeleteImagesConfirmMessage(int count) {
+    return '删除 $count 张图片？相关聊天图片、工具截图及其会话副本将无法再查看或使用。正在使用的文件会保留。';
+  }
+
+  @override
+  String storageSpaceDeletedUploadsPartial(int deleted, int kept) {
+    return '已删除 $deleted 个项目；保留了 $kept 个正在使用或无法删除的项目。';
+  }
+
+  @override
+  String get storageSpaceForceDelete => '强删模式';
+
+  @override
+  String get storageSpaceForceDeleteHint => '强删模式：可以勾选仍在使用中的文件。删除前需要再次确认。';
+
+  @override
+  String get storageSpaceForceDeleteExit => '退出强删模式';
+
+  @override
+  String get storageSpaceForceDeleteTitle => '强删使用中的文件？';
+
+  @override
+  String storageSpaceForceDeleteMessage(int count) {
+    return '将强删 $count 个仍被引用的文件。历史消息可能缺图或缺少附件，后续对话重新读取这些资源时可能失败。此操作无法撤销。';
+  }
+
+  @override
+  String get storageSpaceForceDeleteConfirm => '仍要删除';
 
   @override
   String get storageSpaceSortLabel => '排序';
@@ -14946,17 +15524,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get languageSelectSheetClearButton => '清空翻译';
 
   @override
-  String get homePageClearContext => '临时屏蔽上下文';
-
-  @override
-  String contextMessageCount(int count) {
-    return '$count 条消息';
-  }
-
-  @override
-  String contextMessageCountLimited(int actual, int configured) {
-    return '$actual/$configured 条消息';
-  }
+  String get homePageClearContext => '清除上下文';
 
   @override
   String get homePageDefaultAssistant => '默认助手';
@@ -16684,6 +17252,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get backupPageBackupNow => '立即备份';
 
   @override
+  String get backupPageIosSystemBackupNote =>
+      'JO-AIClient 的本地数据已设置为不参与 iCloud 系统备份。换机或卸载 App 前，请先导出备份文件。';
+
+  @override
   String get backupPageLocalBackup => '本地备份';
 
   @override
@@ -16970,22 +17542,16 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get bottomToolsSheetUpload => '上传文件';
 
   @override
-  String get bottomToolsSheetClearContext => '临时屏蔽上下文';
-
-  @override
-  String get contextManagementMaskContext => '临时屏蔽上下文';
-
-  @override
-  String get contextManagementRestoreContext => '恢复上下文';
+  String get bottomToolsSheetClearContext => '清除上下文';
 
   @override
   String get compressContext => '压缩上下文';
 
   @override
-  String get compressContextDesc => '总结对话并开始新聊天';
+  String get compressContextDesc => '总结较早的消息，并在当前会话继续。';
 
   @override
-  String get clearContextDesc => '临时屏蔽更早的消息，仅将分界点之后的内容发送给模型。';
+  String get clearContextDesc => '标记上下文边界。更早的消息仍会显示，但不再发送给模型。';
 
   @override
   String get contextManagement => '上下文管理';
@@ -19262,6 +19828,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get aboutPageAppName => 'JO-AIClient';
 
   @override
+  String get aboutPageAppNamePortable => 'JO-AIClient 便携版';
+
+  @override
   String get aboutPageKelivoSectionTitle => '关于 Kelivo';
 
   @override
@@ -19308,6 +19877,27 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String aboutPagePlatformOther(String os) {
     return '其他（$os）';
+  }
+
+  @override
+  String get portableDataMigrationTitle => '检测到已有数据';
+
+  @override
+  String get portableDataMigrationMessage =>
+      '便携版使用程序目录下的 data 文件夹。检测到安装版数据，是否复制到便携版数据目录？原数据不会被删除。';
+
+  @override
+  String get portableDataMigrationCopy => '复制并继续';
+
+  @override
+  String get portableDataMigrationExit => '退出';
+
+  @override
+  String get portableDataMigrationBusy => '正在复制数据，请保持应用开启…';
+
+  @override
+  String portableDataMigrationFailed(String error) {
+    return '迁移失败：$error';
   }
 
   @override
@@ -19607,13 +20197,14 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get displaySettingsPageChatFontSizeTitle => '聊天字体大小';
 
   @override
-  String get displaySettingsPageAutoScrollEnableTitle => '自动回到底部';
+  String get displaySettingsPageAutoScrollEnableTitle => '自动跟随底部';
 
   @override
-  String get displaySettingsPageAutoScrollIdleTitle => '自动回到底部延迟';
+  String get displaySettingsPageAutoScrollSubtitle =>
+      '开启后，流式输出时位于底部会自动跟随。上滑后保持阅读位置，主动回到底部后才继续跟随；关闭后不随新内容自动滚动。';
 
   @override
-  String get displaySettingsPageAutoScrollIdleSubtitle => '用户停止滚动后等待多久再自动回到底部';
+  String get displaySettingsPageAutoScrollEnabledLabel => '开启';
 
   @override
   String get displaySettingsPageAutoScrollDisabledLabel => '已关闭';
@@ -27611,6 +28202,14 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
       'thinking + output_config.effort';
 
   @override
+  String get modelSpecFormDialectAnthropicBetweenTools =>
+      'Anthropic adaptive / between_tools';
+
+  @override
+  String get modelSpecFormDialectAnthropicBetweenToolsSubtitle =>
+      'Adaptive thinking; Off uses between_tools';
+
+  @override
   String get modelSpecFormDialectAnthropicEffort => 'Anthropic effort';
 
   @override
@@ -28846,6 +29445,495 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get wsContextChanged => '对话上下文已变化，请求失效。';
+
+  @override
+  String get dataDirectoryTitle => '数据存储目录';
+
+  @override
+  String get dataDirectoryChange => '更改目录';
+
+  @override
+  String get dataDirectoryChoose => '选择一个空的本地文件夹';
+
+  @override
+  String get dataDirectoryHint =>
+      '请选择本地磁盘上的空文件夹。聊天记录、附件和应用管理的文件将在重启后搬迁。少量设备设置和系统缓存仍保留在系统目录。';
+
+  @override
+  String get dataDirectoryPendingHint => '将在下次重启时搬迁。复制和校验完成前，原数据保持不变。目标目录：';
+
+  @override
+  String get dataDirectoryRestart => '重启并搬迁数据';
+
+  @override
+  String get dataDirectoryCancelMove => '取消搬迁，继续使用原目录';
+
+  @override
+  String get dataDirectoryPreviousHint =>
+      '已保留原数据副本。新目录成功启动后，可以清理旧副本以释放磁盘空间。再次更改目录前，请先清理此副本。';
+
+  @override
+  String get dataDirectoryCleanPrevious => '清理原数据副本';
+
+  @override
+  String get dataDirectoryCleanConfirm =>
+      '确定清理以下目录中的原数据副本？当前目录中的数据会保留，搬迁后发生变化的文件不会被删除。';
+
+  @override
+  String get dataDirectoryMoving => '正在搬迁并校验数据…请保持 JO-AIClient 开启。';
+
+  @override
+  String get dataDirectoryStartupFailed => '无法打开数据目录';
+
+  @override
+  String get dataDirectoryRetry => '重试';
+
+  @override
+  String get dataDirectoryUnavailable =>
+      '数据目录不可用。请重新连接磁盘，或将文件夹恢复到原位置后重试。应用不会创建空数据库。';
+
+  @override
+  String get dataDirectoryIdentityMismatch => '此文件夹与已设置的数据目录不匹配。请恢复原文件夹后重试。';
+
+  @override
+  String get dataDirectoryNotEmpty => '请选择空文件夹，不会覆盖已有文件。';
+
+  @override
+  String get dataDirectoryOverlap => '请选择当前数据目录之外的独立文件夹，不能选择其上级目录、子目录或磁盘根目录。';
+
+  @override
+  String get dataDirectoryLocalOnly => '请选择本地磁盘上的文件夹，不支持网络共享目录。';
+
+  @override
+  String get dataDirectoryFinishPrevious => '请先完成或取消待执行的搬迁，并清理保留的旧副本，再选择其他目录。';
+
+  @override
+  String get dataDirectoryPendingRestore => '有备份恢复尚未完成。请取消目录搬迁并重启，完成恢复后再更改目录。';
+
+  @override
+  String get dataDirectorySourceChanged =>
+      '原数据在复制后发生了变化，已保留原文件。若正在搬迁，请取消后重新开始；若正在清理，请先检查原目录。';
+
+  @override
+  String get dataDirectoryCopyChanged => '目标目录存在意外文件或文件变化，原数据已保留。请检查目标目录后重试。';
+
+  @override
+  String get dataDirectoryGenericError =>
+      '操作未完成。请检查磁盘剩余空间、文件夹权限，以及是否有其他 JO-AIClient 进程运行，然后重试。已有数据已保留。';
+
+  @override
+  String get dataDirectoryCancelHint => '取消搬迁会保留目标目录中已复制的文件，你可以检查后手动清理这些副本。';
+
+  @override
+  String get portableDataDirectoryPendingMove =>
+      '安装版还有未完成的数据目录搬迁。请先打开安装版完成或取消搬迁，然后再试。';
+
+  @override
+  String get portableDataDirectoryUnavailable => '安装版数据目录不可用。请重新连接磁盘或恢复文件夹后重试。';
+
+  @override
+  String get portableDataDirectoryInvalid => '无法验证安装版数据目录。没有创建便携版数据。';
+
+  @override
+  String get portableDataDirectoryBusy => '安装版可能仍在运行。请关闭安装版后重试。';
+
+  @override
+  String get portableDataDirectoryChanged => '复制期间安装版数据发生变化。没有创建便携版数据，请重试。';
+
+  @override
+  String get portableDataDirectoryPendingRestore =>
+      '安装版还有未完成的备份恢复。请先完成或取消恢复，再创建便携版数据。';
+
+  @override
+  String get chatInputBarQueuedPaused => '已暂停';
+
+  @override
+  String get compressAdjust => '调整';
+
+  @override
+  String get compressAdvanced => '高级选项';
+
+  @override
+  String get compressAdvancedOff => '重读原文 关';
+
+  @override
+  String get compressAdvancedOn => '重读原文 开';
+
+  @override
+  String compressApproxTokens(String value) {
+    return '约 $value tokens';
+  }
+
+  @override
+  String get compressIncludeAttachments => '附件文字与工具结果';
+
+  @override
+  String get compressIncludeAttachmentsDesc =>
+      '纳入已有附件文字、工具参数与结果；过长内容会截断并标明，不会重新识图。';
+
+  @override
+  String compressIncludeManual(int count) {
+    return '纳入人工补充 · $count 份';
+  }
+
+  @override
+  String compressKeepDescription(int count) {
+    return '保留最近 $count 条用户消息及其回复、工具过程；更早内容由摘要替代。纯附件消息也算一条。';
+  }
+
+  @override
+  String get compressModelGlobal => '全局设置 · 本次启动后固定';
+
+  @override
+  String get compressNothingNew => '自上次压缩后没有新的可压缩内容';
+
+  @override
+  String get compressOverSnack => '摘要过长，应用后会超出上下文上限，未应用';
+
+  @override
+  String get compressRegenerate => '重新压缩';
+
+  @override
+  String get compressReread => '重新读取已压缩的原始消息';
+
+  @override
+  String get compressRereadAll => '本段全部原文';
+
+  @override
+  String get compressRereadDesc => '处理多次压缩造成的信息损失，会增加本次用量';
+
+  @override
+  String get compressRereadLastLayer => '展开最近一层压缩';
+
+  @override
+  String get compressStaleSnack => '聊天内容已变化，压缩结果未应用';
+
+  @override
+  String get compressTaskAbandon => '放弃';
+
+  @override
+  String get compressTaskAdjustRetry => '调整选项后重试';
+
+  @override
+  String compressTaskElapsed(int i, int n, int seconds) {
+    return '第 $i/$n 段 · 已用 $seconds 秒';
+  }
+
+  @override
+  String get compressTaskMerging => '正在合并摘要';
+
+  @override
+  String get compressTaskRetry => '重试';
+
+  @override
+  String get compressTaskWaiting => '等待当前回复完成';
+
+  @override
+  String get compressTaskWaitingApproval => '等待工具审批完成';
+
+  @override
+  String get compressUsageInput => '本次摘要输入';
+
+  @override
+  String get compressUsageNext => '生效后下次请求';
+
+  @override
+  String compressUsageOriginal(String value) {
+    return '原 $value';
+  }
+
+  @override
+  String get compressUsageSummary => '预计摘要';
+
+  @override
+  String get contextBudgetExceeded => '预计上下文超过当前模型上限，请缩短摘要、重新压缩或选择上下文更大的模型。';
+
+  @override
+  String get contextChangeWaiting => '等待当前回复和工具执行结束后生效。';
+
+  @override
+  String get contextChanged => '历史已发生变化，请重新打开此操作并确认范围。';
+
+  @override
+  String get contextClearDetails => '此前聊天历史不再参与后续请求；系统提示、记忆和工具定义仍然生效。';
+
+  @override
+  String get contextDetailAfterUndo => '撤销后';
+
+  @override
+  String get contextDetailClearTitle => '上下文已清除';
+
+  @override
+  String get contextDetailContinueNewChat => '在新聊天继续';
+
+  @override
+  String get contextDetailCurrent => '当前上下文';
+
+  @override
+  String get contextDetailEdited => '已人工编辑';
+
+  @override
+  String get contextDetailExcluded => '不再发送';
+
+  @override
+  String get contextDetailInUse => '当前直接使用';
+
+  @override
+  String get contextDetailKept => '原样保留';
+
+  @override
+  String contextDetailKeptCount(int count) {
+    return '最近 $count 条用户消息及其回复、工具过程';
+  }
+
+  @override
+  String get contextDetailLegacy => '由旧版清除位置转换';
+
+  @override
+  String get contextDetailModel => '模型 · 时间';
+
+  @override
+  String get contextDetailNext => '下次请求';
+
+  @override
+  String contextDetailParts(int count) {
+    return '自动分 $count 段';
+  }
+
+  @override
+  String contextDetailRange(String from, String to, int count) {
+    return '第 $from–$to 条 · $count 条用户消息';
+  }
+
+  @override
+  String get contextDetailRead => '实际读取';
+
+  @override
+  String get contextDetailReplaced => '被替代范围';
+
+  @override
+  String get contextDetailSummaryLabel => '实际用于后续请求的摘要';
+
+  @override
+  String get contextDetailSuperseded => '已由后续摘要替代';
+
+  @override
+  String get contextDetailTitle => '压缩摘要';
+
+  @override
+  String get contextDetailViewOriginals => '查看被压缩的原文';
+
+  @override
+  String get contextDividerCompressed => '压缩上下文';
+
+  @override
+  String get contextDividerEdited => '已编辑';
+
+  @override
+  String get contextDividerFailed => '压缩失败';
+
+  @override
+  String get contextDividerRunning => '正在压缩上下文';
+
+  @override
+  String get contextDone => '完成';
+
+  @override
+  String contextEditCharacters(int count) {
+    return '$count 字';
+  }
+
+  @override
+  String get contextEditEmpty => '摘要不能为空。如需丢弃全部旧历史，请使用“清空上下文”。';
+
+  @override
+  String get contextEditPending => '已保存，当前回复结束后生效';
+
+  @override
+  String contextEditPreview(String value) {
+    return '保存后约 $value tokens。输入时不影响当前生效内容。';
+  }
+
+  @override
+  String get contextEditTitle => '编辑摘要';
+
+  @override
+  String get contextEditUnknownPreview => '用量暂不可用，保存前会重新检查。';
+
+  @override
+  String contextHistoryWindowNote(int count) {
+    return '原样保留的历史仍受当前聊天“最多发送 $count 条消息”的限制。';
+  }
+
+  @override
+  String get contextImpactClearTitle => '撤销较早的清除？';
+
+  @override
+  String contextImpactConfirm(int count) {
+    return '撤销 $count 个节点';
+  }
+
+  @override
+  String get contextImpactDeleteDescription =>
+      '删除原文时，一并撤销相关摘要及依赖后继，避免继续发送残留内容。其他消息与独立节点保持不变。';
+
+  @override
+  String get contextImpactDeleteTitle => '删除已压缩的原文？';
+
+  @override
+  String get contextImpactDescription =>
+      '相关摘要将一并撤销；原始聊天消息保留，不会自动调用模型。独立的上下文节点保持不变。';
+
+  @override
+  String get contextImpactEditTitle => '保存较早的摘要？';
+
+  @override
+  String get contextImpactKeep => '保持不变';
+
+  @override
+  String get contextImpactSave => '保存';
+
+  @override
+  String contextImpactSaveConfirm(int count) {
+    return '保存并撤销 $count 个节点';
+  }
+
+  @override
+  String get contextImpactSourceDescription =>
+      '确认后变更原文，并撤销概括过它的摘要及依赖后继。其他消息与独立节点保留，不会自动调用模型。';
+
+  @override
+  String get contextImpactSourceTitle => '修改已压缩的原文？';
+
+  @override
+  String get contextImpactUndoAlso => '一并撤销';
+
+  @override
+  String get contextImpactUndoOne => '撤销';
+
+  @override
+  String get contextImpactUndoTitle => '撤销较早的压缩？';
+
+  @override
+  String contextImpactUsage(String from, String to) {
+    return '约 $from → $to tokens';
+  }
+
+  @override
+  String get contextKeepInvalid => '请输入正整数的用户消息数量。';
+
+  @override
+  String get contextMore => '更多';
+
+  @override
+  String get contextOperationHidden => '已被后续清除隔开';
+
+  @override
+  String get contextOperationUndone => '已撤销';
+
+  @override
+  String get contextOriginalMessages => '查看原始消息';
+
+  @override
+  String get contextOverLimitWarning => '撤销后可能超出模型上下文上限，建议重新压缩。仍可撤销，发送前会再次检查。';
+
+  @override
+  String contextRangeInfo(int count, int keep) {
+    return '替代 $count 条消息；原样保留最近 $keep 条用户消息及后续回复。';
+  }
+
+  @override
+  String get contextRestore => '恢复';
+
+  @override
+  String contextSampledInfo(int count) {
+    return '本次只读取选定的 $count 字符，摘要会替代整个选定历史范围。';
+  }
+
+  @override
+  String get contextSourceScopeHint => '仅处理最近清除边界之后的历史，可能包含平时发送窗口之外的较早消息。';
+
+  @override
+  String get contextSummaryEmpty => '摘要不能为空；需要排除历史时请使用清除上下文。';
+
+  @override
+  String get contextSummaryHint => '这是后续请求实际使用的摘要，保存不会改写已有回复。附件仅使用已有文字，不会额外识图。';
+
+  @override
+  String get contextSummaryNotSmaller => '摘要没有比输入更短，请检查后再应用。';
+
+  @override
+  String get contextTaskCancel => '取消压缩';
+
+  @override
+  String get contextTaskCancelled => '压缩已取消';
+
+  @override
+  String get contextTaskCompleted => '压缩已完成';
+
+  @override
+  String get contextTaskInterrupted => '压缩已中断，输入内容已保留';
+
+  @override
+  String get contextTaskReview => '请检查摘要后再应用';
+
+  @override
+  String get contextTaskWait => '等待当前回复和工具执行结束';
+
+  @override
+  String get contextUndoClearTooltip => '撤销此次清除';
+
+  @override
+  String get contextUndoCompressTooltip => '撤销此次压缩';
+
+  @override
+  String contextUndoneSnack(String from, String to) {
+    return '已撤销 · $from → $to';
+  }
+
+  @override
+  String get contextViewGenerated => '查看已生成摘要';
+
+  @override
+  String get chatInputBarQueuedAfterCompress => '压缩完成后发送';
+
+  @override
+  String get chatInputBarQueuedCompressionCancelled => '压缩已取消，不会自动发送';
+
+  @override
+  String get chatInputBarQueuedCompressionFailed => '压缩失败，不会自动发送';
+
+  @override
+  String get compressCancelledSnack => '已取消压缩，当前上下文未改变';
+
+  @override
+  String get compressCopyResult => '复制结果';
+
+  @override
+  String get compressDiscardedSnack => '已清空上下文，进行中的压缩已废弃';
+
+  @override
+  String compressFailedSnack(String reason) {
+    return '压缩失败：$reason';
+  }
+
+  @override
+  String compressSuccessSnack(String from, String to) {
+    return '上下文已压缩 · $from → $to';
+  }
+
+  @override
+  String get contextOpenNewChat => '打开新聊天';
+
+  @override
+  String contextMessageCount(int count) {
+    return '$count 条消息';
+  }
+
+  @override
+  String contextMessageCountLimited(int actual, int configured) {
+    return '$actual/$configured 条消息';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -28965,7 +30053,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get storageSpaceRefreshTooltip => '重新整理';
 
   @override
-  String get storageSpaceLoadFailed => '載入失敗';
+  String get storageSpaceLoadFailed => '無法載入檔案或檢查檔案使用情況，請重新整理後再試。';
 
   @override
   String get storageSpaceTotalLabel => '已用空間';
@@ -29021,9 +30109,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get storageSpaceSubCompletedRestoreRuns => '已完成的還原快照';
 
   @override
-  String get storageSpaceCategoryAssistantData => '助理';
-
-  @override
   String get storageSpaceCategoryCache => '快取';
 
   @override
@@ -29062,12 +30147,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get storageSpaceSubChatSharedMemory => '共享記憶體索引';
-
-  @override
-  String get storageSpaceSubAssistantAvatars => '頭像';
-
-  @override
-  String get storageSpaceSubAssistantImages => '圖片';
 
   @override
   String get storageSpaceSubCacheAvatars => '頭像快取';
@@ -29176,16 +30255,59 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get storageSpaceSourceLabel => '來源';
+  String get storageSpaceImageTypeLabel => '類型';
 
   @override
-  String get storageSpaceSourceAll => '全部';
+  String get storageSpaceImageTypeAll => '全部';
 
   @override
-  String get storageSpaceSourceUserUpload => '使用者上傳';
+  String get storageSpaceImageTypeChat => '聊天圖片';
 
   @override
-  String get storageSpaceSourceAssistant => '助理傳送';
+  String get storageSpaceImageTypeTool => '工具圖片';
+
+  @override
+  String get storageSpaceImageTypeAvatar => '頭像與背景';
+
+  @override
+  String get storageSpaceImageInUse => '使用中';
+
+  @override
+  String get storageSpaceImageInUseHint =>
+      '該檔案仍被訊息、工具結果、頭像、背景或圖示引用。請先解除引用，或使用強刪模式。';
+
+  @override
+  String get storageSpaceImagesHint => '刪除會影響聊天圖片和工具結果。正在使用的檔案會受到保護。';
+
+  @override
+  String storageSpaceDeleteImagesConfirmMessage(int count) {
+    return '刪除 $count 張圖片？相關聊天圖片、工具截圖及其會話副本將無法再查看或使用。正在使用的檔案會保留。';
+  }
+
+  @override
+  String storageSpaceDeletedUploadsPartial(int deleted, int kept) {
+    return '已刪除 $deleted 個項目；保留了 $kept 個正在使用或無法刪除的項目。';
+  }
+
+  @override
+  String get storageSpaceForceDelete => '強刪模式';
+
+  @override
+  String get storageSpaceForceDeleteHint => '強刪模式：可以勾選仍在使用中的檔案。刪除前需要再次確認。';
+
+  @override
+  String get storageSpaceForceDeleteExit => '退出強刪模式';
+
+  @override
+  String get storageSpaceForceDeleteTitle => '強刪使用中的檔案？';
+
+  @override
+  String storageSpaceForceDeleteMessage(int count) {
+    return '將強刪 $count 個仍被引用的檔案。歷史訊息可能缺圖或缺少附件，後續對話重新讀取這些資源時可能失敗。此操作無法復原。';
+  }
+
+  @override
+  String get storageSpaceForceDeleteConfirm => '仍要刪除';
 
   @override
   String get storageSpaceSortLabel => '排序';
@@ -29368,17 +30490,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get languageSelectSheetClearButton => '清空翻譯';
 
   @override
-  String get homePageClearContext => '暫時屏蔽上下文';
-
-  @override
-  String contextMessageCount(int count) {
-    return '$count 則訊息';
-  }
-
-  @override
-  String contextMessageCountLimited(int actual, int configured) {
-    return '$actual/$configured 則訊息';
-  }
+  String get homePageClearContext => '清除上下文';
 
   @override
   String get homePageDefaultAssistant => '預設助理';
@@ -31107,6 +32219,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get backupPageBackupNow => '立即備份';
 
   @override
+  String get backupPageIosSystemBackupNote =>
+      'JO-AIClient 的本機資料已設定為不參與 iCloud 系統備份。更換裝置或移除 App 前，請先匯出備份檔案。';
+
+  @override
   String get backupPageLocalBackup => '本機備份';
 
   @override
@@ -31392,22 +32508,16 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get bottomToolsSheetUpload => '上傳檔案';
 
   @override
-  String get bottomToolsSheetClearContext => '暫時屏蔽上下文';
-
-  @override
-  String get contextManagementMaskContext => '暫時屏蔽上下文';
-
-  @override
-  String get contextManagementRestoreContext => '恢復上下文';
+  String get bottomToolsSheetClearContext => '清除上下文';
 
   @override
   String get compressContext => '壓縮上下文';
 
   @override
-  String get compressContextDesc => '總結對話並開始新聊天';
+  String get compressContextDesc => '總結較早的訊息，並在目前會話繼續。';
 
   @override
-  String get clearContextDesc => '暫時屏蔽更早的訊息，僅將分界點之後的內容傳送給模型。';
+  String get clearContextDesc => '標記上下文邊界。更早的訊息仍會顯示，但不再傳送給模型。';
 
   @override
   String get contextManagement => '上下文管理';
@@ -33683,6 +34793,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get aboutPageAppName => 'JO-AIClient';
 
   @override
+  String get aboutPageAppNamePortable => 'JO-AIClient 便攜版';
+
+  @override
   String get aboutPageKelivoSectionTitle => '關於 Kelivo';
 
   @override
@@ -33729,6 +34842,27 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String aboutPagePlatformOther(String os) {
     return '其他（$os）';
+  }
+
+  @override
+  String get portableDataMigrationTitle => '偵測到已有資料';
+
+  @override
+  String get portableDataMigrationMessage =>
+      '可攜版使用程式目錄下的 data 資料夾。偵測到安裝版資料，是否複製到可攜版資料目錄？原始資料不會被刪除。';
+
+  @override
+  String get portableDataMigrationCopy => '複製並繼續';
+
+  @override
+  String get portableDataMigrationExit => '結束';
+
+  @override
+  String get portableDataMigrationBusy => '正在複製資料，請保持應用程式開啟…';
+
+  @override
+  String portableDataMigrationFailed(String error) {
+    return '遷移失敗：$error';
   }
 
   @override
@@ -34029,13 +35163,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get displaySettingsPageChatFontSizeTitle => '聊天字體大小';
 
   @override
-  String get displaySettingsPageAutoScrollEnableTitle => '自動回到底部';
+  String get displaySettingsPageAutoScrollEnableTitle => '自動跟隨底部';
 
   @override
-  String get displaySettingsPageAutoScrollIdleTitle => '自動回到底部延遲';
+  String get displaySettingsPageAutoScrollSubtitle =>
+      '開啟後，串流輸出時位於底部會自動跟隨。向上捲動後保持閱讀位置，主動回到底部後才繼續跟隨；關閉後不隨新內容自動捲動。';
 
   @override
-  String get displaySettingsPageAutoScrollIdleSubtitle => '使用者停止捲動後等待多久再自動回到底部';
+  String get displaySettingsPageAutoScrollEnabledLabel => '開啟';
 
   @override
   String get displaySettingsPageAutoScrollDisabledLabel => '已關閉';
@@ -42039,6 +43174,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       'thinking + output_config.effort';
 
   @override
+  String get modelSpecFormDialectAnthropicBetweenTools =>
+      'Anthropic adaptive / between_tools';
+
+  @override
+  String get modelSpecFormDialectAnthropicBetweenToolsSubtitle =>
+      'Adaptive thinking; Off uses between_tools';
+
+  @override
   String get modelSpecFormDialectAnthropicEffort => 'Anthropic effort';
 
   @override
@@ -43275,4 +44418,496 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get wsContextChanged => '對話上下文已變化，請求失效。';
+
+  @override
+  String get dataDirectoryTitle => '資料儲存目錄';
+
+  @override
+  String get dataDirectoryChange => '變更目錄';
+
+  @override
+  String get dataDirectoryChoose => '選擇一個空的本機資料夾';
+
+  @override
+  String get dataDirectoryHint =>
+      '請選擇本機磁碟上的空資料夾。聊天記錄、附件和應用程式管理的檔案將在重新啟動後搬遷。少量裝置設定和系統快取仍保留在系統目錄。';
+
+  @override
+  String get dataDirectoryPendingHint => '將在下次重新啟動時搬遷。複製和驗證完成前，原資料保持不變。目標目錄：';
+
+  @override
+  String get dataDirectoryRestart => '重新啟動並搬遷資料';
+
+  @override
+  String get dataDirectoryCancelMove => '取消搬遷，繼續使用原目錄';
+
+  @override
+  String get dataDirectoryPreviousHint =>
+      '已保留原資料副本。新目錄成功啟動後，可以清理舊副本以釋放磁碟空間。再次變更目錄前，請先清理此副本。';
+
+  @override
+  String get dataDirectoryCleanPrevious => '清理原資料副本';
+
+  @override
+  String get dataDirectoryCleanConfirm =>
+      '確定清理以下目錄中的原資料副本？目前目錄中的資料會保留，搬遷後發生變化的檔案不會被刪除。';
+
+  @override
+  String get dataDirectoryMoving => '正在搬遷並驗證資料…請保持 JO-AIClient 開啟。';
+
+  @override
+  String get dataDirectoryStartupFailed => '無法開啟資料目錄';
+
+  @override
+  String get dataDirectoryRetry => '重試';
+
+  @override
+  String get dataDirectoryUnavailable =>
+      '資料目錄無法使用。請重新連接磁碟，或將資料夾還原至原位置後重試。應用程式不會建立空資料庫。';
+
+  @override
+  String get dataDirectoryIdentityMismatch => '此資料夾與已設定的資料目錄不符。請還原原資料夾後重試。';
+
+  @override
+  String get dataDirectoryNotEmpty => '請選擇空資料夾，不會覆寫現有檔案。';
+
+  @override
+  String get dataDirectoryOverlap => '請選擇目前資料目錄之外的獨立資料夾，不能選擇其上層目錄、子目錄或磁碟根目錄。';
+
+  @override
+  String get dataDirectoryLocalOnly => '請選擇本機磁碟上的資料夾，不支援網路共用目錄。';
+
+  @override
+  String get dataDirectoryFinishPrevious => '請先完成或取消待執行的搬遷，並清理保留的舊副本，再選擇其他目錄。';
+
+  @override
+  String get dataDirectoryPendingRestore =>
+      '有備份還原尚未完成。請取消目錄搬遷並重新啟動，完成還原後再變更目錄。';
+
+  @override
+  String get dataDirectorySourceChanged =>
+      '原資料在複製後發生了變化，已保留原檔案。若正在搬遷，請取消後重新開始；若正在清理，請先檢查原目錄。';
+
+  @override
+  String get dataDirectoryCopyChanged => '目標目錄存在非預期檔案或檔案變更，原資料已保留。請檢查目標目錄後重試。';
+
+  @override
+  String get dataDirectoryGenericError =>
+      '操作未完成。請檢查磁碟剩餘空間、資料夾權限，以及是否有其他 JO-AIClient 處理程序執行，然後重試。現有資料已保留。';
+
+  @override
+  String get dataDirectoryCancelHint => '取消搬遷會保留目標目錄中已複製的檔案，你可以檢查後手動清理這些副本。';
+
+  @override
+  String get portableDataDirectoryPendingMove =>
+      '安裝版還有未完成的資料目錄搬遷。請先開啟安裝版完成或取消搬遷，然後再試。';
+
+  @override
+  String get portableDataDirectoryUnavailable =>
+      '安裝版資料目錄無法使用。請重新連接磁碟或還原資料夾後再試。';
+
+  @override
+  String get portableDataDirectoryInvalid => '無法驗證安裝版資料目錄。沒有建立可攜版資料。';
+
+  @override
+  String get portableDataDirectoryBusy => '安裝版可能仍在執行。請關閉安裝版後再試。';
+
+  @override
+  String get portableDataDirectoryChanged => '複製期間安裝版資料發生變化。沒有建立可攜版資料，請再試。';
+
+  @override
+  String get portableDataDirectoryPendingRestore =>
+      '安裝版還有未完成的備份還原。請先完成或取消還原，再建立可攜版資料。';
+
+  @override
+  String get chatInputBarQueuedPaused => '已暫停';
+
+  @override
+  String get compressAdjust => '調整';
+
+  @override
+  String get compressAdvanced => '進階選項';
+
+  @override
+  String get compressAdvancedOff => '重讀原文 關';
+
+  @override
+  String get compressAdvancedOn => '重讀原文 開';
+
+  @override
+  String compressApproxTokens(String value) {
+    return '約 $value tokens';
+  }
+
+  @override
+  String get compressIncludeAttachments => '附件文字與工具結果';
+
+  @override
+  String get compressIncludeAttachmentsDesc =>
+      '納入已有附件文字、工具參數與結果；過長內容會截斷並標明，不會重新識圖。';
+
+  @override
+  String compressIncludeManual(int count) {
+    return '納入人工補充 · $count 份';
+  }
+
+  @override
+  String compressKeepDescription(int count) {
+    return '保留最近 $count 則使用者訊息及其回覆、工具過程；較早內容由摘要取代。純附件訊息也算一則。';
+  }
+
+  @override
+  String get compressModelGlobal => '全域設定 · 本次啟動後固定';
+
+  @override
+  String get compressNothingNew => '自上次壓縮後沒有新的可壓縮內容';
+
+  @override
+  String get compressOverSnack => '摘要過長，套用後會超出上下文上限，未套用';
+
+  @override
+  String get compressRegenerate => '重新壓縮';
+
+  @override
+  String get compressReread => '重新讀取已壓縮的原始訊息';
+
+  @override
+  String get compressRereadAll => '本段全部原文';
+
+  @override
+  String get compressRereadDesc => '處理多次壓縮造成的資訊損失，會增加本次用量';
+
+  @override
+  String get compressRereadLastLayer => '展開最近一層壓縮';
+
+  @override
+  String get compressStaleSnack => '聊天內容已變更，壓縮結果未套用';
+
+  @override
+  String get compressTaskAbandon => '放棄';
+
+  @override
+  String get compressTaskAdjustRetry => '調整選項後重試';
+
+  @override
+  String compressTaskElapsed(int i, int n, int seconds) {
+    return '第 $i/$n 段 · 已用 $seconds 秒';
+  }
+
+  @override
+  String get compressTaskMerging => '正在合併摘要';
+
+  @override
+  String get compressTaskRetry => '重試';
+
+  @override
+  String get compressTaskWaiting => '等待目前回覆完成';
+
+  @override
+  String get compressTaskWaitingApproval => '等待工具審批完成';
+
+  @override
+  String get compressUsageInput => '本次摘要輸入';
+
+  @override
+  String get compressUsageNext => '生效後下次請求';
+
+  @override
+  String compressUsageOriginal(String value) {
+    return '原 $value';
+  }
+
+  @override
+  String get compressUsageSummary => '預計摘要';
+
+  @override
+  String get contextBudgetExceeded => '預計上下文超過目前模型上限，請縮短摘要、重新壓縮或選擇上下文更大的模型。';
+
+  @override
+  String get contextChangeWaiting => '等待目前回覆與工具執行結束後生效。';
+
+  @override
+  String get contextChanged => '歷史已發生變化，請重新開啟此操作並確認範圍。';
+
+  @override
+  String get contextClearDetails => '此前聊天歷史不再參與後續請求；系統提示、記憶和工具定義仍然生效。';
+
+  @override
+  String get contextDetailAfterUndo => '撤銷後';
+
+  @override
+  String get contextDetailClearTitle => '上下文已清除';
+
+  @override
+  String get contextDetailContinueNewChat => '在新聊天繼續';
+
+  @override
+  String get contextDetailCurrent => '目前上下文';
+
+  @override
+  String get contextDetailEdited => '已人工編輯';
+
+  @override
+  String get contextDetailExcluded => '不再傳送';
+
+  @override
+  String get contextDetailInUse => '目前直接使用';
+
+  @override
+  String get contextDetailKept => '原樣保留';
+
+  @override
+  String contextDetailKeptCount(int count) {
+    return '最近 $count 則使用者訊息及其回覆、工具過程';
+  }
+
+  @override
+  String get contextDetailLegacy => '由舊版清除位置轉換';
+
+  @override
+  String get contextDetailModel => '模型 · 時間';
+
+  @override
+  String get contextDetailNext => '下次請求';
+
+  @override
+  String contextDetailParts(int count) {
+    return '自動分 $count 段';
+  }
+
+  @override
+  String contextDetailRange(String from, String to, int count) {
+    return '第 $from–$to 則 · $count 則使用者訊息';
+  }
+
+  @override
+  String get contextDetailRead => '實際讀取';
+
+  @override
+  String get contextDetailReplaced => '被取代範圍';
+
+  @override
+  String get contextDetailSummaryLabel => '實際用於後續請求的摘要';
+
+  @override
+  String get contextDetailSuperseded => '已由後續摘要取代';
+
+  @override
+  String get contextDetailTitle => '壓縮摘要';
+
+  @override
+  String get contextDetailViewOriginals => '檢視被壓縮的原文';
+
+  @override
+  String get contextDividerCompressed => '壓縮上下文';
+
+  @override
+  String get contextDividerEdited => '已編輯';
+
+  @override
+  String get contextDividerFailed => '壓縮失敗';
+
+  @override
+  String get contextDividerRunning => '正在壓縮上下文';
+
+  @override
+  String get contextDone => '完成';
+
+  @override
+  String contextEditCharacters(int count) {
+    return '$count 字';
+  }
+
+  @override
+  String get contextEditEmpty => '摘要不能為空。如需捨棄全部舊歷史，請使用「清空上下文」。';
+
+  @override
+  String get contextEditPending => '已儲存，目前回覆結束後生效';
+
+  @override
+  String contextEditPreview(String value) {
+    return '儲存後約 $value tokens。輸入時不影響目前生效內容。';
+  }
+
+  @override
+  String get contextEditTitle => '編輯摘要';
+
+  @override
+  String get contextEditUnknownPreview => '用量暫不可用，儲存前會重新檢查。';
+
+  @override
+  String contextHistoryWindowNote(int count) {
+    return '原樣保留的歷史仍受目前聊天「最多傳送 $count 則訊息」的限制。';
+  }
+
+  @override
+  String get contextImpactClearTitle => '撤銷較早的清除？';
+
+  @override
+  String contextImpactConfirm(int count) {
+    return '撤銷 $count 個節點';
+  }
+
+  @override
+  String get contextImpactDeleteDescription =>
+      '刪除原文時，一併撤銷相關摘要及相依後繼，避免繼續傳送殘留內容。其他訊息與獨立節點保持不變。';
+
+  @override
+  String get contextImpactDeleteTitle => '刪除已壓縮的原文？';
+
+  @override
+  String get contextImpactDescription =>
+      '相關摘要將一併撤銷；原始聊天訊息保留，不會自動呼叫模型。獨立的上下文節點保持不變。';
+
+  @override
+  String get contextImpactEditTitle => '儲存較早的摘要？';
+
+  @override
+  String get contextImpactKeep => '保持不變';
+
+  @override
+  String get contextImpactSave => '儲存';
+
+  @override
+  String contextImpactSaveConfirm(int count) {
+    return '儲存並撤銷 $count 個節點';
+  }
+
+  @override
+  String get contextImpactSourceDescription =>
+      '確認後變更原文，並撤銷概括過它的摘要及相依後繼。其他訊息與獨立節點保留，不會自動呼叫模型。';
+
+  @override
+  String get contextImpactSourceTitle => '修改已壓縮的原文？';
+
+  @override
+  String get contextImpactUndoAlso => '一併撤銷';
+
+  @override
+  String get contextImpactUndoOne => '撤銷';
+
+  @override
+  String get contextImpactUndoTitle => '撤銷較早的壓縮？';
+
+  @override
+  String contextImpactUsage(String from, String to) {
+    return '約 $from → $to tokens';
+  }
+
+  @override
+  String get contextKeepInvalid => '請輸入正整數的使用者訊息數量。';
+
+  @override
+  String get contextMore => '更多';
+
+  @override
+  String get contextOperationHidden => '已被後續清除隔開';
+
+  @override
+  String get contextOperationUndone => '已撤銷';
+
+  @override
+  String get contextOriginalMessages => '檢視原始訊息';
+
+  @override
+  String get contextOverLimitWarning => '撤銷後可能超出模型上下文上限，建議重新壓縮。仍可撤銷，傳送前會再次檢查。';
+
+  @override
+  String contextRangeInfo(int count, int keep) {
+    return '替代 $count 則訊息；原樣保留最近 $keep 則使用者訊息及後續回覆。';
+  }
+
+  @override
+  String get contextRestore => '恢復';
+
+  @override
+  String contextSampledInfo(int count) {
+    return '本次只讀取選定的 $count 字元，摘要會替代整個選定歷史範圍。';
+  }
+
+  @override
+  String get contextSourceScopeHint => '僅處理最近清除邊界之後的歷史，可能包含平時傳送範圍之外的較早訊息。';
+
+  @override
+  String get contextSummaryEmpty => '摘要不能為空；需要排除歷史時請使用清除上下文。';
+
+  @override
+  String get contextSummaryHint =>
+      '這是後續請求實際使用的摘要，儲存不會改寫既有回覆。附件僅使用已有文字，不會額外辨識圖片。';
+
+  @override
+  String get contextSummaryNotSmaller => '摘要沒有比輸入更短，請檢查後再套用。';
+
+  @override
+  String get contextTaskCancel => '取消壓縮';
+
+  @override
+  String get contextTaskCancelled => '壓縮已取消';
+
+  @override
+  String get contextTaskCompleted => '壓縮已完成';
+
+  @override
+  String get contextTaskInterrupted => '壓縮已中斷，輸入內容已保留';
+
+  @override
+  String get contextTaskReview => '請檢查摘要後再套用';
+
+  @override
+  String get contextTaskWait => '等待目前回覆和工具執行結束';
+
+  @override
+  String get contextUndoClearTooltip => '撤銷此次清除';
+
+  @override
+  String get contextUndoCompressTooltip => '撤銷此次壓縮';
+
+  @override
+  String contextUndoneSnack(String from, String to) {
+    return '已撤銷 · $from → $to';
+  }
+
+  @override
+  String get contextViewGenerated => '檢視已產生摘要';
+
+  @override
+  String get chatInputBarQueuedAfterCompress => '壓縮完成後傳送';
+
+  @override
+  String get chatInputBarQueuedCompressionCancelled => '壓縮已取消，不會自動傳送';
+
+  @override
+  String get chatInputBarQueuedCompressionFailed => '壓縮失敗，不會自動傳送';
+
+  @override
+  String get compressCancelledSnack => '已取消壓縮，目前上下文未改變';
+
+  @override
+  String get compressCopyResult => '複製結果';
+
+  @override
+  String get compressDiscardedSnack => '已清空上下文，進行中的壓縮已捨棄';
+
+  @override
+  String compressFailedSnack(String reason) {
+    return '壓縮失敗：$reason';
+  }
+
+  @override
+  String compressSuccessSnack(String from, String to) {
+    return '上下文已壓縮 · $from → $to';
+  }
+
+  @override
+  String get contextOpenNewChat => '開啟新聊天';
+
+  @override
+  String contextMessageCount(int count) {
+    return '$count 則訊息';
+  }
+
+  @override
+  String contextMessageCountLimited(int actual, int configured) {
+    return '$actual/$configured 則訊息';
+  }
 }

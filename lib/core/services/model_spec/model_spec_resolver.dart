@@ -412,6 +412,7 @@ class ModelSpecResolver {
       vendor: vendor,
       match: match,
       guess: guess,
+      dialect: dialect,
       sources: sources,
     );
     final budgets = _resolveBudgets(
@@ -527,11 +528,16 @@ class ModelSpecResolver {
     required VendorDefaults vendor,
     required CatalogMatch? match,
     required ModelGuess guess,
+    required ReasoningDialect dialect,
     required Map<ModelSpecField, SpecSource> sources,
   }) {
     if (vendor.canDisable != null) {
       sources[ModelSpecField.reasoningCanDisable] = SpecSource.vendor;
       return vendor.canDisable!;
+    }
+    if (dialect == ReasoningDialect.anthropicBetweenTools) {
+      sources[ModelSpecField.reasoningCanDisable] = SpecSource.guess;
+      return true;
     }
     final catalog = _catalogCanDisable(match?.model);
     if (catalog != null) {

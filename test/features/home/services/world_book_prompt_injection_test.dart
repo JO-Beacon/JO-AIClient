@@ -60,6 +60,22 @@ class _Chat extends ChatService {
       (await repository.getConversation(id))!.messageIds.length;
 
   @override
+  Future<List<ChatMessage>> loadEffectiveContextMessages(
+    String id, {
+    required int limit,
+    String? throughRevisionId,
+    bool includeFollowingAssistant = false,
+  }) {
+    historyReads++;
+    return repository.getEffectiveContextMessages(
+      id,
+      limit: limit,
+      throughRevisionId: throughRevisionId,
+      includeFollowingAssistant: includeFollowingAssistant,
+    );
+  }
+
+  @override
   Future<List<ChatMessage>> loadSelectedContextMessages(
     String id, {
     required int truncateIndex,

@@ -383,6 +383,34 @@ void main() {
         maxOutput: 128000,
       );
       expectHit(
+        'claude-haiku-5-5',
+        dialect: ReasoningDialect.anthropicAdaptiveEffort,
+        levels: const [
+          ReasoningLevel.low,
+          ReasoningLevel.medium,
+          ReasoningLevel.high,
+          ReasoningLevel.xhigh,
+          ReasoningLevel.max,
+        ],
+        canDisable: true,
+        sampling: SamplingPolicy.never,
+        maxOutput: 128000,
+      );
+      expectHit(
+        'claude-sonnet-5-5',
+        dialect: ReasoningDialect.anthropicBetweenTools,
+        levels: const [
+          ReasoningLevel.low,
+          ReasoningLevel.medium,
+          ReasoningLevel.high,
+          ReasoningLevel.xhigh,
+          ReasoningLevel.max,
+        ],
+        canDisable: true,
+        sampling: SamplingPolicy.never,
+        maxOutput: 128000,
+      );
+      expectHit(
         'claude-sonnet-4-6',
         dialect: ReasoningDialect.anthropicAdaptiveEffort,
         levels: const [
@@ -487,6 +515,19 @@ void main() {
       );
       expectHit(
         'gemini-3.7-flash',
+        dialect: ReasoningDialect.geminiThinkingLevel,
+        levels: const [
+          ReasoningLevel.low,
+          ReasoningLevel.medium,
+          ReasoningLevel.high,
+        ],
+        canDisable: false,
+        sampling: SamplingPolicy.never,
+        maxOutput: 65536,
+        replay: ReasoningReplayPolicy.all,
+      );
+      expectHit(
+        'gemini-4-argon',
         dialect: ReasoningDialect.geminiThinkingLevel,
         levels: const [
           ReasoningLevel.low,

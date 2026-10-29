@@ -52,7 +52,7 @@
   "settingsPageCalculating": "Calculating…",
   "storageSpacePageTitle": "Storage Space",
   "storageSpaceRefreshTooltip": "Refresh",
-  "storageSpaceLoadFailed": "Failed to load storage usage",
+  "storageSpaceLoadFailed": "Could not load files or check which files are in use. Please refresh and try again.",
   "storageSpaceTotalLabel": "Used",
   "storageSpaceClearableLabel": "Clearable: {size}",
   "@storageSpaceClearableLabel": {
@@ -83,7 +83,6 @@
   "storageSpaceClearRestoreTracesButton": "Clear Restore Traces",
   "storageSpaceClearRestoreTracesConfirmMessage": "Clear completed restore snapshots? Your current database, settings, and files will not be affected.",
   "storageSpaceSubCompletedRestoreRuns": "Completed restore snapshots",
-  "storageSpaceCategoryAssistantData": "Assistants",
   "storageSpaceCategoryCache": "Cache",
   "storageSpaceCategoryLogs": "Logs",
   "storageSpaceCategoryOther": "Other",
@@ -97,8 +96,6 @@
   "storageSpaceSubChatDatabase": "Chat database",
   "storageSpaceSubChatWriteAheadLog": "Write-ahead log",
   "storageSpaceSubChatSharedMemory": "Shared memory index",
-  "storageSpaceSubAssistantAvatars": "Avatars",
-  "storageSpaceSubAssistantImages": "Images",
   "storageSpaceSubCacheAvatars": "Avatar cache",
   "storageSpaceSubCacheOther": "Other cache",
   "storageSpaceSubCacheSystem": "System cache",
@@ -191,10 +188,46 @@
       }
     }
   },
-  "storageSpaceSourceLabel": "Source",
-  "storageSpaceSourceAll": "All",
-  "storageSpaceSourceUserUpload": "User uploads",
-  "storageSpaceSourceAssistant": "Assistant",
+  "storageSpaceImageTypeLabel": "Type",
+  "storageSpaceImageTypeAll": "All",
+  "storageSpaceImageTypeChat": "Chat images",
+  "storageSpaceImageTypeTool": "Tool images",
+  "storageSpaceImageTypeAvatar": "Avatars & backgrounds",
+  "storageSpaceImageInUse": "In use",
+  "storageSpaceImageInUseHint": "This file is still referenced by a message, tool result, avatar, background, or icon. Remove the reference or use Force Delete Mode.",
+  "storageSpaceImagesHint": "Deleting images affects chat history and tool results. Files still in use are protected.",
+  "storageSpaceDeleteImagesConfirmMessage": "Delete {count} images? Related chat images, tool screenshots, and conversation copies will no longer be available. Files still in use will be kept.",
+  "storageSpaceDeletedUploadsPartial": "Deleted {deleted} items; kept {kept} items that are in use or could not be deleted.",
+  "storageSpaceForceDelete": "Force Delete Mode",
+  "storageSpaceForceDeleteHint": "Force Delete Mode: files still in use can be selected. Deletion requires a second confirmation.",
+  "storageSpaceForceDeleteExit": "Exit Force Delete Mode",
+  "storageSpaceForceDeleteTitle": "Force delete in-use files?",
+  "storageSpaceForceDeleteMessage": "Force delete {count} files that are still referenced? Chat history may lose images or attachments, and later requests may fail to read them. This cannot be undone.",
+  "storageSpaceForceDeleteConfirm": "Delete Anyway",
+  "@storageSpaceDeleteImagesConfirmMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@storageSpaceDeletedUploadsPartial": {
+    "placeholders": {
+      "deleted": {
+        "type": "int"
+      },
+      "kept": {
+        "type": "int"
+      }
+    }
+  },
+  "@storageSpaceForceDeleteMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "storageSpaceSortLabel": "Sort",
   "storageSpaceSortNewest": "Newest",
   "storageSpaceSortOldest": "Oldest",
@@ -255,26 +288,7 @@
   "languageDisplaySpanish": "Spanish",
   "languageSelectSheetTitle": "Select Translation Language",
   "languageSelectSheetClearButton": "Clear Translation",
-  "homePageClearContext": "Temporarily Mask Context",
-  "contextMessageCount": "{count} messages",
-  "@contextMessageCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "contextMessageCountLimited": "{actual}/{configured} messages",
-  "@contextMessageCountLimited": {
-    "placeholders": {
-      "actual": {
-        "type": "int"
-      },
-      "configured": {
-        "type": "int"
-      }
-    }
-  },
+  "homePageClearContext": "Clear Context",
   "homePageDefaultAssistant": "Default Assistant",
   "mermaidExportPng": "Export PNG",
   "mermaidExportFailed": "Export failed",
@@ -1013,6 +1027,7 @@
   "backupPageUserAgentHint": "Optional",
   "backupPageSave": "Save",
   "backupPageBackupNow": "Backup Now",
+  "backupPageIosSystemBackupNote": "JO-AIClient's local data is set to be excluded from iCloud device backups. Export a backup file before changing devices or deleting the app.",
   "backupPageLocalBackup": "Local Backup",
   "backupPageNativeBackup": "Native Backup",
   "backupPageKelivoCompatibleBackup": "Kelivo-Compatible Backup",
@@ -1126,12 +1141,10 @@
   "bottomToolsSheetCamera": "Camera",
   "bottomToolsSheetPhotos": "Photos",
   "bottomToolsSheetUpload": "Upload",
-  "bottomToolsSheetClearContext": "Temporarily Mask Context",
-  "contextManagementMaskContext": "Temporarily Mask Context",
-  "contextManagementRestoreContext": "Restore Context",
+  "bottomToolsSheetClearContext": "Clear Context",
   "compressContext": "Compress Context",
-  "compressContextDesc": "Summarize and start a new chat",
-  "clearContextDesc": "Temporarily mask earlier messages and only send messages after the boundary to the model.",
+  "compressContextDesc": "Summarize earlier messages and continue in this chat.",
+  "clearContextDesc": "Mark a context boundary. Earlier messages stay visible but are no longer sent.",
   "contextManagement": "Context Management",
   "compressingContext": "Compressing context...",
   "compressContextFailed": "Failed to compress context",
@@ -2268,6 +2281,7 @@
   "searchSettingsSheetOpenSearchServicesTooltip": "Open search services",
   "searchSettingsSheetNoServicesMessage": "No services. Add from Search Services.",
   "aboutPageAppName": "JO-AIClient",
+  "aboutPageAppNamePortable": "JO-AIClient Portable",
   "aboutPageKelivoSectionTitle": "About Kelivo",
   "mcpOAuthCallbackPageTitle": "JO-AIClient authorization",
   "mcpOAuthCallbackPageMessage": "Authorization received. You may close this window and return to JO-AIClient.",
@@ -2296,6 +2310,19 @@
   "@aboutPagePlatformOther": {
     "placeholders": {
       "os": {
+        "type": "String"
+      }
+    }
+  },
+  "portableDataMigrationTitle": "Existing data found",
+  "portableDataMigrationMessage": "The portable build stores its data in the data folder next to the program. Existing installed data was found. Copy it into the portable data folder? The original data will not be deleted.",
+  "portableDataMigrationCopy": "Copy and Continue",
+  "portableDataMigrationExit": "Exit",
+  "portableDataMigrationBusy": "Copying data. Please keep the app open…",
+  "portableDataMigrationFailed": "Migration failed: {error}",
+  "@portableDataMigrationFailed": {
+    "placeholders": {
+      "error": {
         "type": "String"
       }
     }
@@ -2406,9 +2433,9 @@
   "desktopDisplaySettingsTopicPositionRight": "Right",
   "displaySettingsPageNewChatOnLaunchSubtitle": "Automatically create a new chat on launch",
   "displaySettingsPageChatFontSizeTitle": "Chat Font Size",
-  "displaySettingsPageAutoScrollEnableTitle": "Auto-scroll to bottom",
-  "displaySettingsPageAutoScrollIdleTitle": "Auto-Scroll Back Delay",
-  "displaySettingsPageAutoScrollIdleSubtitle": "Wait time after user scroll before jumping to bottom",
+  "displaySettingsPageAutoScrollEnableTitle": "Auto-follow bottom",
+  "displaySettingsPageAutoScrollSubtitle": "While streaming, follow new content when at the bottom. Scrolling up pauses following until you return to the bottom. When off, new content does not scroll automatically.",
+  "displaySettingsPageAutoScrollEnabledLabel": "On",
   "displaySettingsPageAutoScrollDisabledLabel": "Off",
   "displaySettingsPageChatFontSampleText": "This is a sample chat text",
   "displaySettingsPageChatBackgroundMaskTitle": "Chat Background Overlay Opacity",
@@ -2454,7 +2481,7 @@
   "searchProviderYouDescription": "You.com Search API. Returns web and news results with highlights or snippets.",
   "themeSettingsPageColorPalettesSection": "Color Palettes",
   "themeAdvancedSettingsPageUseLayeredSheetTilesTitle": "Layered sheet tiles",
-  "themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle": "Action tiles inside sheets use a card fill. Turn off to keep sheets flat.",
+  "themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle": "By default, tiles match the sheet background.",
   "themeSettingsPageCustomPaletteName": "Custom",
   "themeSettingsPageCustomColorReset": "Reset",
   "themeSettingsPageCustomThemesSection": "Custom Themes",
@@ -4706,8 +4733,6 @@
   "themeAdvancedSettingsPageTitle": "Theme Advanced",
   "themeAdvancedSettingsPageUseLayeredSurfacesTitle": "Layered surfaces (experimental)",
   "themeAdvancedSettingsPageUseLayeredSurfacesSubtitle": "Darker page, brighter cards; both keep theme hue. Turn off to restore the previous look.",
-  "themeAdvancedSettingsPageUseLayeredSheetTilesTitle": "Layered sheet tiles",
-  "themeAdvancedSettingsPageUseLayeredSheetTilesSubtitle": "By default, tiles match the sheet background.",
   "searchServiceNameKelivo": "Kelivo",
   "memorySettingsInjectionMaxItemsOption": "{n}",
   "@memorySettingsInjectionMaxItemsOption": {
@@ -6113,9 +6138,21 @@
   "linuxHideTitleBarDescription": "Hides the system title bar and instead shows an app-drawn title bar with window controls.",
   "linuxHideTitleBarError": "Unable to change the title bar. Please try again.",
   "statsPageCost": "Cost ({currency})",
-  "@statsPageCost": {"placeholders": {"currency": {"type": "String"}}},
+  "@statsPageCost": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
   "statsPageModelsWithoutPricing": "{count, plural, one{{count} model without pricing} other{{count} models without pricing}}",
-  "@statsPageModelsWithoutPricing": {"placeholders": {"count": {"type": "int"}}},
+  "@statsPageModelsWithoutPricing": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "assistantEditReasoningFollowDefault": "Follow model default",
   "assistantEditReasoningClampedSubtitle": "The actual level is clamped to what each model supports",
   "reasoningLevelSheetTitle": "Reasoning",
@@ -6146,7 +6183,13 @@
   "reasoningLevelCompactXhigh": "xhigh",
   "reasoningLevelCompactMax": "max",
   "reasoningLevelBudgetTokens": "{budget} tokens",
-  "@reasoningLevelBudgetTokens": {"placeholders": {"budget": {"type": "String"}}},
+  "@reasoningLevelBudgetTokens": {
+    "placeholders": {
+      "budget": {
+        "type": "String"
+      }
+    }
+  },
   "contextUsageTitle": "Context window",
   "contextUsageStateExact": "Exact (from last response)",
   "contextUsageStateExactCalibrated": "Exact (breakdown scaled from estimate)",
@@ -6169,7 +6212,20 @@
   "contextUsageBucketUsed": "Used",
   "contextUsageFreeSpace": "Free space",
   "contextUsageUsedWindow": "{used} / {window} ({percent}%)",
-  "@contextUsageUsedWindow": {"description": "Context usage summary: used tokens, window size, and percent", "placeholders": {"used": {"type": "String"}, "window": {"type": "String"}, "percent": {"type": "int"}}},
+  "@contextUsageUsedWindow": {
+    "description": "Context usage summary: used tokens, window size, and percent",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "contextUsageNoWindow": "No context window",
   "contextUsageSetWindow": "Set context window",
   "contextUsageRefresh": "Refresh",
@@ -6198,6 +6254,8 @@
   "modelSpecFormDialectAnthropicBudgetSubtitle": "thinking.budget_tokens",
   "modelSpecFormDialectAnthropicAdaptiveEffort": "Anthropic adaptive effort",
   "modelSpecFormDialectAnthropicAdaptiveEffortSubtitle": "thinking + output_config.effort",
+  "modelSpecFormDialectAnthropicBetweenTools": "Anthropic adaptive / between_tools",
+  "modelSpecFormDialectAnthropicBetweenToolsSubtitle": "Adaptive thinking; Off uses between_tools",
   "modelSpecFormDialectAnthropicEffort": "Anthropic effort",
   "modelSpecFormDialectAnthropicEffortSubtitle": "thinking + output_config.effort",
   "modelSpecFormDialectGeminiThinkingBudget": "Gemini thinking budget",
@@ -6223,9 +6281,21 @@
   "modelSpecFormDefaultLevel": "Default level",
   "modelSpecFormBudgets": "Token budgets",
   "modelSpecFormBudgetPlaceholder": "{tokens}",
-  "@modelSpecFormBudgetPlaceholder": {"placeholders": {"tokens": {"type": "String"}}},
+  "@modelSpecFormBudgetPlaceholder": {
+    "placeholders": {
+      "tokens": {
+        "type": "String"
+      }
+    }
+  },
   "modelSpecFormCustomPatch": "JSON patch ({level})",
-  "@modelSpecFormCustomPatch": {"placeholders": {"level": {"type": "String"}}},
+  "@modelSpecFormCustomPatch": {
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
   "modelSpecFormCustomPatchHint": "e.g. reasoning_effort: high",
   "modelSpecFormInvalidJson": "Custom reasoning patch must be a valid JSON object",
   "modelSpecFormInvalidNumber": "Please enter a valid number",
@@ -6268,36 +6338,96 @@
   "modelSpecFormAdvancedSection": "Request",
   "modelCatalogTitle": "Model catalog",
   "modelCatalogSourceBundled": "Bundled snapshot · {date}",
-  "@modelCatalogSourceBundled": {"placeholders": {"date": {"type": "String"}}},
+  "@modelCatalogSourceBundled": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "modelCatalogSourceRemote": "models.dev · updated {date}",
-  "@modelCatalogSourceRemote": {"placeholders": {"date": {"type": "String"}}},
+  "@modelCatalogSourceRemote": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "modelCatalogAutoUpdate": "Check for updates on startup, skip if already updated today",
   "modelCatalogUpdateManual": "Manual only",
   "modelCatalogRefresh": "Update now",
   "modelCatalogUpdated": "Model catalog updated",
   "modelCatalogRefreshFailed": "Update failed: {error}",
-  "@modelCatalogRefreshFailed": {"placeholders": {"error": {"type": "String"}}},
+  "@modelCatalogRefreshFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "modelCatalogProviderCount": "{count} providers",
-  "@modelCatalogProviderCount": {"placeholders": {"count": {"type": "int"}}},
+  "@modelCatalogProviderCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "modelCatalogModelCount": "{count} models",
-  "@modelCatalogModelCount": {"placeholders": {"count": {"type": "int"}}},
+  "@modelCatalogModelCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "displaySettingsPageShowTotalTokensTitle": "Show tokens for the entire turn",
   "displaySettingsPageShowTotalTokensSubtitle": "Sum usage across all API requests in a reply. When off, show only the final request. Statistics always include all requests.",
   "displaySettingsShowReasoningLevelBadge": "Show reasoning level on the button",
   "displaySettingsShowReasoningLevelBadgeSubtitle": "Show the current level next to the reasoning icon in the input bar",
   "displaySettingsPageKeepAssistantListExpandedOnSidebarCloseTitle": "Don't collapse assistant list when closing sidebar",
   "tokenDetailFirstToken": "{value}s (first token)",
-  "@tokenDetailFirstToken": {"placeholders": {"value": {"type": "String"}}},
+  "@tokenDetailFirstToken": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "tokenDetailReasoningTokens": "{count} tokens",
-  "@tokenDetailReasoningTokens": {"placeholders": {"count": {"type": "int"}}},
+  "@tokenDetailReasoningTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "tokenDetailCacheWriteTokens": "{count} cache write tokens",
-  "@tokenDetailCacheWriteTokens": {"placeholders": {"count": {"type": "int"}}},
+  "@tokenDetailCacheWriteTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "tokenDetailCost": "{amount}",
-  "@tokenDetailCost": {"placeholders": {"amount": {"type": "String"}}},
+  "@tokenDetailCost": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "workspaceToolTitleViewImage": "View image",
   "workspaceToolHelpViewImage": "Let the model inspect an image from the workspace.",
   "oauthUsedValue": "Used {value}",
-  "@oauthUsedValue": {"placeholders": {"value": {"type": "String"}}},
+  "@oauthUsedValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "mcpOAuthSettings": "OAuth settings",
   "mcpOAuthAutomatic": "Automatic",
   "mcpOAuthMetadataUrl": "Client metadata document URL",
@@ -6333,8 +6463,12 @@
   "backupScopeSummary": "{selected} of {total} selected",
   "@backupScopeSummary": {
     "placeholders": {
-      "selected": {"type": "int"},
-      "total": {"type": "int"}
+      "selected": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "backupScopeDone": "Done",
@@ -6459,7 +6593,6 @@
   },
   "imageExportProcessing": "Combining image and preparing preview…",
   "imageExportSaving": "Saving image…",
-
   "browserActionBack": "Back",
   "browserActionClick": "Click",
   "browserActionCloseTab": "Close tab",
@@ -6658,7 +6791,6 @@
   "browserUserAgentInvalid": "Use a single line of up to 2048 printable ASCII characters.",
   "browserUserAgentMobile": "Mobile",
   "browserYesterday": "Yesterday",
-
   "browserActionFailed": "{action} failed",
   "@browserActionFailed": {
     "description": "Browser page card browserActionFailed",
@@ -6709,7 +6841,6 @@
     }
   },
   "displaySettingsPageShowBrowserPageCardsTitle": "Show webpage cards",
-
   "worldBookCopyEntries": "Copy to…",
   "worldBookMoveEntries": "Move to…",
   "worldBookSelectEntries": "Select entries",
@@ -6740,7 +6871,6 @@
     }
   },
   "worldBookTransferFailed": "Could not save the entries. Please try again.",
-
   "displaySettingsPageIosNativeSelectionMenuTitle": "iOS 26+ native selection menu",
   "displaySettingsPageIosNativeSelectionMenuSubtitle": "Applies to input and messages. Turn off if menus feel slow.",
   "toolApprovalByFullAccess": "Ran automatically",
@@ -6763,5 +6893,324 @@
   "wsDeniedMountReadonly": "Read-only mount. Can’t write.",
   "wsDeniedSkillsReadonly": "Skills folder is read-only.",
   "wsPathChanged": "Target changed while awaiting approval.",
-  "wsContextChanged": "Conversation context changed. Request expired."
+  "wsContextChanged": "Conversation context changed. Request expired.",
+  "dataDirectoryTitle": "Data directory",
+  "dataDirectoryChange": "Change directory",
+  "dataDirectoryChoose": "Choose an empty local folder",
+  "dataDirectoryHint": "Choose an empty folder on a local drive. Chat history, attachments and app-managed files move after a restart. Small device settings and system caches stay in their system locations.",
+  "dataDirectoryPendingHint": "The move is scheduled for the next restart. Your current data remains in place until copying and verification finish. Destination:",
+  "dataDirectoryRestart": "Restart and move data",
+  "dataDirectoryCancelMove": "Cancel move and keep original directory",
+  "dataDirectoryPreviousHint": "The original copy was retained. Once the new directory has started successfully, you can remove the old copy to free disk space. Clean it before changing directories again.",
+  "dataDirectoryCleanPrevious": "Clean up original copy",
+  "dataDirectoryCleanConfirm": "Remove the retained copy from the directory below? Data in the current directory will be kept. Files changed since the move will not be deleted.",
+  "dataDirectoryMoving": "Moving and verifying data… Please keep JO-AIClient open.",
+  "dataDirectoryStartupFailed": "Unable to open the data directory",
+  "dataDirectoryRetry": "Retry",
+  "dataDirectoryUnavailable": "The data directory is unavailable. Reconnect the drive or restore the folder to its original location, then retry. No empty database will be created.",
+  "dataDirectoryIdentityMismatch": "This folder does not match the configured data directory. Restore the original folder and retry.",
+  "dataDirectoryNotEmpty": "Choose an empty folder. Existing files will not be overwritten.",
+  "dataDirectoryOverlap": "Choose a separate folder outside the current data directory. Its parent folders and the drive root cannot be used.",
+  "dataDirectoryLocalOnly": "Choose a local drive rather than a network share.",
+  "dataDirectoryFinishPrevious": "Finish or cancel the pending move, and clean up the retained copy before choosing another directory.",
+  "dataDirectoryPendingRestore": "A backup restore is pending. Cancel the directory move and restart to finish restoring, then try the move again.",
+  "dataDirectorySourceChanged": "The original data has changed since the copy was made. It has been kept. Cancel the pending move before starting a new one; retained copies can be inspected manually.",
+  "dataDirectoryCopyChanged": "The destination contains unexpected or changed files. The original data has been kept. Check the destination before retrying.",
+  "dataDirectoryGenericError": "The operation could not finish. Check available disk space, folder permissions and whether another JO-AIClient process is running, then retry. Existing data has been kept.",
+  "dataDirectoryCancelHint": "Cancelling keeps any files already copied to the destination. You can inspect and remove that partial copy yourself.",
+  "portableDataDirectoryPendingMove": "The installed app has an unfinished data directory move. Open the installed app and finish or cancel it, then retry.",
+  "portableDataDirectoryUnavailable": "The installed data directory is unavailable. Reconnect the drive or restore the folder, then retry.",
+  "portableDataDirectoryInvalid": "The installed data directory could not be validated. No portable data was created.",
+  "portableDataDirectoryBusy": "The installed app may still be running. Close it, then retry.",
+  "portableDataDirectoryChanged": "The installed data changed while it was being copied. No portable data was created; retry.",
+  "portableDataDirectoryPendingRestore": "A backup restore is pending in the installed app. Finish or cancel it before creating portable data.",
+  "chatInputBarQueuedPaused": "Paused",
+  "compressAdjust": "Adjust",
+  "compressAdvanced": "Advanced",
+  "compressAdvancedOff": "Re-read originals off",
+  "compressAdvancedOn": "Re-read originals on",
+  "compressApproxTokens": "Approx. {value} tokens",
+  "compressIncludeAttachments": "Attachment text & tool results",
+  "compressIncludeAttachmentsDesc": "Include available attachment text and bounded tool records. Truncation is marked; images are not reinterpreted.",
+  "compressIncludeManual": "Include manual edits · {count}",
+  "compressKeepDescription": "Keep the latest {count} user messages with their replies and tools. Earlier history is summarized; attachment-only messages also count.",
+  "compressModelGlobal": "Global setting · fixed when started",
+  "compressNothingNew": "Nothing new to compress since the last summary",
+  "compressOverSnack": "The summary would exceed the context limit and was not applied.",
+  "compressRegenerate": "Recompress",
+  "compressReread": "Re-read compressed originals",
+  "compressRereadAll": "All originals in segment",
+  "compressRereadDesc": "Recover details lost across summaries. Uses more tokens.",
+  "compressRereadLastLayer": "Expand last layer",
+  "compressStaleSnack": "Chat history changed; the summary was not applied.",
+  "compressTaskAbandon": "Dismiss",
+  "compressTaskAdjustRetry": "Adjust options and retry",
+  "compressTaskElapsed": "Part {i}/{n} · {seconds}s elapsed",
+  "compressTaskMerging": "Merging summaries",
+  "compressTaskRetry": "Retry",
+  "compressTaskWaiting": "Waiting for the current reply",
+  "compressTaskWaitingApproval": "Waiting for tool approval",
+  "compressUsageInput": "Summary input",
+  "compressUsageNext": "Next request",
+  "compressUsageOriginal": "was {value}",
+  "compressUsageSummary": "Est. summary",
+  "contextBudgetExceeded": "The estimated context exceeds this model’s limit. Shorten the summary, compress again, or choose a model with a larger context.",
+  "contextChangeWaiting": "Waiting for the current reply and tools to finish before applying this change.",
+  "contextChanged": "History changed. Reopen this action to review its current scope.",
+  "contextClearDetails": "Earlier chat history is excluded from future requests. System instructions, memory and tool definitions still apply.",
+  "contextDetailAfterUndo": "After undo",
+  "contextDetailClearTitle": "Context cleared",
+  "contextDetailContinueNewChat": "Continue in new chat",
+  "contextDetailCurrent": "Current context",
+  "contextDetailEdited": "Manually edited",
+  "contextDetailExcluded": "Excluded history",
+  "contextDetailInUse": "In use",
+  "contextDetailKept": "Kept",
+  "contextDetailKeptCount": "Latest {count} user messages, replies and tools",
+  "contextDetailLegacy": "Converted from legacy clear",
+  "contextDetailModel": "Model · time",
+  "contextDetailNext": "Next request",
+  "contextDetailParts": "{count} segments",
+  "contextDetailRange": "Messages {from}–{to} · {count} user messages",
+  "contextDetailRead": "Read",
+  "contextDetailReplaced": "Replaced",
+  "contextDetailSummaryLabel": "Summary used in later requests",
+  "contextDetailSuperseded": "Superseded by a later summary",
+  "contextDetailTitle": "Summary",
+  "contextDetailViewOriginals": "View originals",
+  "contextDividerCompressed": "Context compressed",
+  "contextDividerEdited": "edited",
+  "contextDividerFailed": "Compression failed",
+  "contextDividerRunning": "Compressing context",
+  "contextDone": "Done",
+  "contextEditCharacters": "{count} characters",
+  "contextEditEmpty": "Summary cannot be empty. Use Clear context to exclude all earlier history.",
+  "contextEditPending": "Saved; applies after the current reply",
+  "contextEditPreview": "Approx. {value} tokens after saving. Editing does not change active context.",
+  "contextEditTitle": "Edit summary",
+  "contextEditUnknownPreview": "Usage is unavailable; it will be checked again before saving.",
+  "contextHistoryWindowNote": "Recent history is still limited by the chat’s {count}-message sending window.",
+  "contextImpactClearTitle": "Undo earlier clear?",
+  "contextImpactConfirm": "Undo {count} nodes",
+  "contextImpactDeleteDescription": "Delete the originals and undo related summaries so removed content is not sent again. Other messages and independent nodes are unchanged.",
+  "contextImpactDeleteTitle": "Delete compressed originals?",
+  "contextImpactDescription": "Related summaries will be undone together. Original messages and independent nodes are kept; no model is called automatically.",
+  "contextImpactEditTitle": "Save earlier summary?",
+  "contextImpactKeep": "Unchanged",
+  "contextImpactSave": "Save",
+  "contextImpactSaveConfirm": "Save and undo {count} nodes",
+  "contextImpactSourceDescription": "Change the originals and undo their summaries and dependent nodes together. Other messages and independent nodes are kept; no model is called.",
+  "contextImpactSourceTitle": "Change compressed originals?",
+  "contextImpactUndoAlso": "Also undone",
+  "contextImpactUndoOne": "Undo",
+  "contextImpactUndoTitle": "Undo earlier compression?",
+  "contextImpactUsage": "Approx. {from} → {to} tokens",
+  "contextKeepInvalid": "Enter a positive number of user messages.",
+  "contextMore": "More",
+  "contextOperationHidden": "Excluded by a later clear",
+  "contextOperationUndone": "Undone",
+  "contextOriginalMessages": "View original messages",
+  "contextOverLimitWarning": "Undo may exceed the context limit. You can still undo and recompress; sending checks the limit again.",
+  "contextRangeInfo": "Replaces {count} messages; keeps {keep} recent user messages and their replies.",
+  "contextRestore": "Restore",
+  "contextSampledInfo": "Only the selected {count} characters were read; the summary replaces the entire selected history range.",
+  "contextSourceScopeHint": "Only history after the latest clear is included. This may include older messages outside the normal send window.",
+  "contextSummaryEmpty": "The summary cannot be empty. Use Clear context to exclude history.",
+  "contextSummaryHint": "This is the summary used in subsequent requests. Saving changes does not rewrite existing replies. Attachments contribute only available text; images are not reinterpreted.",
+  "contextSummaryNotSmaller": "The summary is not shorter than its input. Review it before applying.",
+  "contextTaskCancel": "Cancel compression",
+  "contextTaskCancelled": "Compression cancelled",
+  "contextTaskCompleted": "Compression complete",
+  "contextTaskInterrupted": "Compression interrupted; input is preserved",
+  "contextTaskReview": "Review the summary before applying",
+  "contextTaskWait": "Waiting for the current reply and tools to finish",
+  "contextUndoClearTooltip": "Undo this clear",
+  "contextUndoCompressTooltip": "Undo this compression",
+  "contextUndoneSnack": "Undone · {from} → {to}",
+  "contextViewGenerated": "View generated summary",
+  "@compressApproxTokens": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@compressIncludeManual": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@compressKeepDescription": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@compressTaskElapsed": {
+    "placeholders": {
+      "i": {
+        "type": "int"
+      },
+      "n": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@compressUsageOriginal": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@contextDetailKeptCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextDetailParts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextDetailRange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextEditCharacters": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextEditPreview": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@contextHistoryWindowNote": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextImpactConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextImpactSaveConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextImpactUsage": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "@contextRangeInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "keep": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextSampledInfo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextUndoneSnack": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInputBarQueuedAfterCompress": "Sends after compression",
+  "chatInputBarQueuedCompressionCancelled": "Compression cancelled; sending stays paused",
+  "chatInputBarQueuedCompressionFailed": "Compression failed; sending stays paused",
+  "compressCancelledSnack": "Compression cancelled. Current context is unchanged.",
+  "compressCopyResult": "Copy result",
+  "compressDiscardedSnack": "Context cleared; the running compression was discarded.",
+  "compressFailedSnack": "Compression failed: {reason}",
+  "compressSuccessSnack": "Context compressed · {from} → {to}",
+  "contextOpenNewChat": "Open new chat",
+  "@compressFailedSnack": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "@compressSuccessSnack": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "contextMessageCount": "{count} messages",
+  "contextMessageCountLimited": "{actual}/{configured} messages",
+  "@contextMessageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextMessageCountLimited": {
+    "placeholders": {
+      "actual": {
+        "type": "int"
+      },
+      "configured": {
+        "type": "int"
+      }
+    }
+  }
 }

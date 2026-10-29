@@ -26,22 +26,17 @@ void main() {
 
     final models = MessageRenderModelProjector.project(
       messages: [user, selected, streaming],
-      contextDividerIndex: 1,
     );
 
     expect(models.map((model) => model.slotId), ['user', 'a2', 'tail']);
     expect(models[1].message, selected);
-    expect(models[1].showContextDivider, isTrue);
     expect(models[1].isLatestCompleteAssistant, isTrue);
     expect(models[2].isLatestCompleteAssistant, isFalse);
   });
 
   test('projects a single message without legacy selection input', () {
     final only = message('only', 'assistant');
-    final models = MessageRenderModelProjector.project(
-      messages: [only],
-      contextDividerIndex: -1,
-    );
+    final models = MessageRenderModelProjector.project(messages: [only]);
 
     expect(models.single.message, only);
   });
@@ -49,10 +44,7 @@ void main() {
   test('ignores legacy authoritative version counts', () {
     final selected = message('a1', 'assistant', groupId: 'answer', version: 1);
 
-    final models = MessageRenderModelProjector.project(
-      messages: [selected],
-      contextDividerIndex: -1,
-    );
+    final models = MessageRenderModelProjector.project(messages: [selected]);
 
     expect(models.single.message, selected);
   });

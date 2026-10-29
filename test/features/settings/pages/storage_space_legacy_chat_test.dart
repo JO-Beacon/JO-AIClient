@@ -165,29 +165,30 @@ void main() {
     );
   }
 
-  testWidgets('storage page keeps the user data directory entry on desktop', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-    try {
-      await tester.pumpWidget(
-        ChangeNotifierProvider(
-          create: (_) => SettingsProvider(createBusinessTestPreferences()),
-          child: const MaterialApp(
-            locale: Locale('en'),
-            supportedLocales: AppLocalizations.supportedLocales,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            home: StorageSpacePage(),
+  testWidgets(
+    'storage page leaves user data directory access to the data directory dialog',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await tester.pumpWidget(
+          ChangeNotifierProvider(
+            create: (_) => SettingsProvider(createBusinessTestPreferences()),
+            child: const MaterialApp(
+              locale: Locale('en'),
+              supportedLocales: AppLocalizations.supportedLocales,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              home: StorageSpacePage(),
+            ),
           ),
-        ),
-      );
-      await _pumpUntilFound(tester, find.text('Open User Data Directory'));
+        );
+        await _pumpUntilFound(tester, find.text('Storage Space'));
 
-      expect(find.text('Open User Data Directory'), findsOneWidget);
-    } finally {
-      debugDefaultTargetPlatformOverride = null;
-    }
-  });
+        expect(find.text('Open User Data Directory'), findsNothing);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 
   testWidgets('legacy hive files expose a per-file export action', (
     tester,

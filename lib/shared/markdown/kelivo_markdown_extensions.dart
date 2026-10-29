@@ -10,7 +10,8 @@ import 'package:Kelivo/shared/widgets/export_capture_scope.dart';
 import 'citation_syntax.dart';
 import 'diagram_code_blocks.dart';
 import 'highlight_adapter.dart';
-import 'link_image_handlers.dart';
+import 'markdown_image_sources.dart';
+import 'math_adapter.dart';
 import 'markdown_actions.dart';
 
 // Stable registration identity preserves the parser and completed prefix trees.
@@ -18,6 +19,7 @@ final kelivoMarkdownExtensions = MarkstreamExtensions(
   inlineSyntaxes: const [CitationSyntax(), LocalImagePathSyntax()],
   namedInlineBuilders: {'kelivo-citation': buildCitation},
   codeBlockBuilders: {
+    'math': _math,
     'mermaid': _diagram,
     'svg': _diagram,
     'xml': _diagram,
@@ -32,6 +34,34 @@ final kelivoMarkdownExtensions = MarkstreamExtensions(
   tableExtraActions: markdownTableActions,
   mobileTableToolbarBuilder: markdownMobileTableToolbar,
 );
+
+Widget _math(
+  BuildContext context,
+  CodeBlockNode node,
+  MarkstreamRenderContext rendering,
+) {
+  final settings = context.watch<SettingsProvider>();
+  final fallback = MarkstreamCodeBlock(
+    node: node,
+    theme: rendering.theme,
+    extensions: kelivoMarkdownExtensions,
+    options: markdownCodeOptions(settings),
+    labels: markdownLabels(context),
+    highlighter: KelivoCodeHighlighter.forTheme(rendering.theme),
+    streaming: rendering.streaming,
+    exporting: ExportCaptureScope.of(context),
+  );
+  if (settings.enableMathRendering &&
+      node.closed &&
+      node.code.trim().isNotEmpty) {
+    return KelivoMathBlock(
+      node: node,
+      theme: rendering.theme,
+      fallback: fallback,
+    );
+  }
+  return fallback;
+}
 
 Widget _diagram(
   BuildContext context,

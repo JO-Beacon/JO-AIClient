@@ -3,7 +3,6 @@ import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:Kelivo/utils/app_directories.dart';
 
@@ -63,7 +62,7 @@ DirectoryUsage measureDirectoryUsageSync(String path) {
 /// iOS fakefs install root: Application Support/environment/alpine-rootfs
 /// (`RootfsInstaller.rootfsDir`).
 Future<Directory> iosAlpineRootfsDir() async {
-  final support = await getApplicationSupportDirectory();
+  final support = await AppDirectories.getSupportDirectory();
   return Directory(p.join(support.path, 'environment', 'alpine-rootfs'));
 }
 

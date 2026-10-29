@@ -17,6 +17,7 @@ import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/update_release_notes_card.dart';
 import '../../../shared/widgets/update_status_label.dart';
 import '../../../core/services/haptics.dart';
+import '../../../core/app_build_identity.dart';
 import '../../dev/pages/markdown_playground_page.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
@@ -28,8 +29,8 @@ class AboutPage extends StatefulWidget {
 }
 
 class _AboutPageState extends State<AboutPage> {
-  static const String _upstreamKelivoVersion = '1.3.1';
-  static const String _upstreamKelivoBuildNumber = '80';
+  static const String _upstreamKelivoVersion = '1.3.2';
+  static const String _upstreamKelivoBuildNumber = '81';
 
   String _version = '';
   String _buildNumber = '';
@@ -160,7 +161,10 @@ class _AboutPageState extends State<AboutPage> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    l10n.aboutPageAppName,
+                                    appDisplayName(
+                                      l10n.aboutPageAppName,
+                                      l10n.aboutPageAppNamePortable,
+                                    ),
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: AppFontWeights.semibold,
@@ -257,6 +261,14 @@ class _AboutPageState extends State<AboutPage> {
                 label: l10n.aboutPageGithub,
                 onTap: () =>
                     _openUrl('https://github.com/JO-Beacon/JO-AIClient'),
+              ),
+              _iosDivider(context),
+              _iosNavRow(
+                context,
+                icon: Lucide.Earth,
+                label: l10n.aboutPageWebsite,
+                onTap: () =>
+                    _openUrl('https://jo-beacon.github.io/JO-AIClient/'),
               ),
               _iosDivider(context),
               _iosNavRow(

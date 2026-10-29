@@ -10,6 +10,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import '../models/context_operation.dart';
 import 'package:Kelivo/core/models/tool_permission_mode.dart';
 import '../models/composer_draft.dart';
 import '../models/token_usage.dart';
@@ -37,6 +38,8 @@ import 'chat_database_observer.dart';
 import 'generation_run.dart';
 import 'generation_run_commands.dart';
 import 'schema_migrations.dart';
+
+part 'chat_context_repository.dart';
 
 typedef ChatDatabaseSnapshotInfo = ({
   int schemaVersion,
@@ -4030,6 +4033,17 @@ class ChatDatabaseRepository {
     return {for (final row in rows) row.read<String>('asset_id')};
   }
 
+  /// Keep an active appearance asset out of the next bounded GC batch so it
+  /// cannot repeatedly displace other files that are ready for collection.
+  Future<void> deferAssetGc(
+    AssetGcCandidate candidate, {
+    required DateTime notBefore,
+  }) => _db.customStatement(
+    'UPDATE asset_gc_rows SET not_before = ?, generation = generation + 1 '
+    'WHERE asset_id = ? AND generation = ?;',
+    [notBefore.microsecondsSinceEpoch, candidate.assetId, candidate.generation],
+  );
+
   Future<bool> isAssetGcClaimStillValid(AssetGcCandidate candidate) async {
     final pathForm = candidate.path.isEmpty ? ' ' : candidate.path;
     final altForm = _alternateAssetPathForm(pathForm);
@@ -4503,6 +4517,7 @@ class ChatDatabaseRepository {
     String? assistantId,
   }) {
     return _db.transaction(() async {
+      await readContextOperations(sourceId);
       final sourceRow = await (_db.select(
         _db.conversationRows,
       )..where((row) => row.id.equals(sourceId))).getSingleOrNull();
@@ -4611,6 +4626,11 @@ class ChatDatabaseRepository {
         messageIdMap: messageIdMap,
         groupIdMap: groupIdMap,
       );
+      await _copyContextOperations(
+        sourceId: sourceId,
+        targetId: targetId,
+        groups: groupIdMap,
+      );
       final insertedRow = await (_db.select(
         _db.conversationRows,
       )..where((row) => row.id.equals(targetId))).getSingle();
@@ -4620,6 +4640,7 @@ class ChatDatabaseRepository {
 
   Future<Conversation?> duplicateConversation(String sourceId) {
     return _db.transaction(() async {
+      await readContextOperations(sourceId);
       final sourceRow = await (_db.select(
         _db.conversationRows,
       )..where((row) => row.id.equals(sourceId))).getSingleOrNull();
@@ -4782,6 +4803,12 @@ class ChatDatabaseRepository {
         );
         await _writeConversationTree(duplicatedTree);
       }
+      await _copyContextOperations(
+        sourceId: sourceId,
+        targetId: targetId,
+        groups: groupIdMap,
+        completeHistory: true,
+      );
       return duplicate;
     });
   }
@@ -7665,13 +7692,34 @@ class ChatDatabaseRepository {
         [targetId, entry.value, entry.key],
       );
     }
+    // 上下文操作随会话一起合并；锚点、覆盖范围和依赖都要按新的消息 ID
+    // 重映射，否则清除/压缩节点会在导入后失效。
+    final sourceContext = await _db
+        .customSelect(
+          'SELECT payload FROM merge_source.extension_entity_rows '
+          'WHERE kind=? AND id=?',
+          variables: [
+            Variable<String>(ContextOperation.entityKind),
+            Variable<String>(sourceId),
+          ],
+        )
+        .getSingleOrNull();
+    if (sourceContext != null) {
+      await _copyContextOperations(
+        sourceId: sourceId,
+        targetId: targetId,
+        groups: groupIdMap,
+        sourcePayload: sourceContext.read<String>('payload'),
+        completeHistory: true,
+      );
+    }
     // 合并的修订绕过了 _replaceMessageParts，因此在 GC 可能把附件文件视为
     // 未引用之前，先让带附件的修订加入资源引用回填队列。
     await _db.customStatement(
       'INSERT OR IGNORE INTO asset_reference_dirty_rows(revision_id) '
       'SELECT DISTINCT revision_id FROM main.message_part_rows '
       "WHERE conversation_id = ? AND (kind IN ('image', 'file') "
-        "OR (kind = 'tool_call' AND payload LIKE '%\"previewImage\"%'));",
+      "OR (kind = 'tool_call' AND payload LIKE '%\"previewImage\"%'));",
       [targetId],
     );
     final sourceBranches = await _db
@@ -8139,6 +8187,15 @@ class ChatDatabaseRepository {
             _db.conversationRows,
           )..where((t) => t.id.equals(id))).go();
           if (deleted == 0) return;
+          await (_db.delete(_db.extensionEntityRows)..where(
+                (row) =>
+                    row.kind.isIn([
+                      ContextOperation.entityKind,
+                      'contextCompressionTask',
+                    ]) &
+                    row.ownerId.equals(id),
+              ))
+              .go();
           final now = DateTime.now().toUtc();
           await _db
               .into(_db.tombstoneRows)
@@ -8407,6 +8464,14 @@ class ChatDatabaseRepository {
           .where((row) => effectiveMessageIds.contains(row.id))
           .toList(growable: false);
       if (deletedRows.isEmpty) return null;
+      final deletedGroups = {
+        for (final row in deletedRows) row.groupId ?? row.id,
+      };
+      await _revokeContextForGroups(
+        conversationId,
+        deletedGroups,
+        removedGroups: deletedGroups,
+      );
 
       // 版本组在时间线查询中以 MIN(message_order) 为锚，后续 revision 得到
       // 会话末尾的 order。因此删除锚行会让幸存 revision 漂移到追加位置

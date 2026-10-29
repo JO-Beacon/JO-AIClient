@@ -7,13 +7,11 @@ final class MessageRenderModel {
   const MessageRenderModel({
     required this.slotId,
     required this.message,
-    required this.showContextDivider,
     required this.isLatestCompleteAssistant,
   });
 
   final String slotId;
   final ChatMessage message;
-  final bool showContextDivider;
   final bool isLatestCompleteAssistant;
 }
 
@@ -22,7 +20,6 @@ final class MessageRenderModelProjector {
 
   static List<MessageRenderModel> project({
     required List<ChatMessage> messages,
-    required int contextDividerIndex,
   }) {
     var latestCompleteAssistantIndex = -1;
     for (var index = messages.length - 1; index >= 0; index--) {
@@ -35,27 +32,11 @@ final class MessageRenderModelProjector {
 
     return List<MessageRenderModel>.unmodifiable([
       for (final (index, message) in messages.indexed)
-        _projectSlot(
-          index: index,
+        MessageRenderModel(
+          slotId: message.id,
           message: message,
-          contextDividerIndex: contextDividerIndex,
-          latestCompleteAssistantIndex: latestCompleteAssistantIndex,
+          isLatestCompleteAssistant: index == latestCompleteAssistantIndex,
         ),
     ]);
-  }
-
-  static MessageRenderModel _projectSlot({
-    required int index,
-    required ChatMessage message,
-    required int contextDividerIndex,
-    required int latestCompleteAssistantIndex,
-  }) {
-    return MessageRenderModel(
-      slotId: message.id,
-      message: message,
-      showContextDivider:
-          contextDividerIndex >= 0 && index == contextDividerIndex,
-      isLatestCompleteAssistant: index == latestCompleteAssistantIndex,
-    );
   }
 }

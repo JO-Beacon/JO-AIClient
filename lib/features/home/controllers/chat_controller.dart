@@ -707,21 +707,6 @@ class ChatController extends ChangeNotifier {
     );
   }
 
-  int loadedWindowTruncateIndex() {
-    final raw = _currentConversation?.truncateIndex ?? -1;
-    if (raw < 0) return -1;
-    if (raw <= _loadedStartIndex) return -1;
-
-    final loadedEnd = _loadedStartIndex + _messages.length;
-    if (raw >= loadedEnd) return _messages.length;
-    return raw - _loadedStartIndex;
-  }
-
-  Conversation conversationForLoadedWindow(Conversation conversation) {
-    if (_currentConversation?.id != conversation.id) return conversation;
-    final localTruncateIndex = loadedWindowTruncateIndex();
-    return conversation.copyWith(truncateIndex: localTruncateIndex);
-  }
 
   /// 仅使用当前已加载窗口的折叠投影，绝不通过
   /// [ChatService.getMessagesRange] / 完整顺序骨架遍历整个会话。
@@ -761,9 +746,8 @@ class ChatController extends ChangeNotifier {
     String? throughRevisionId,
     bool includeFollowingAssistant = false,
   }) {
-    return _chatService.loadSelectedContextMessages(
+    return _chatService.loadEffectiveContextMessages(
       conversation.id,
-      truncateIndex: conversation.truncateIndex,
       limit: maxMessages,
       throughRevisionId: throughRevisionId,
       includeFollowingAssistant: includeFollowingAssistant,
@@ -1150,15 +1134,7 @@ class ChatController extends ChangeNotifier {
   List<MessageRenderModel> get messageRenderModels {
     return _renderModelsCache ??= MessageRenderModelProjector.project(
       messages: collapsedMessages,
-      contextDividerIndex: _collapsedContextDividerIndex(),
     );
-  }
-
-  int _collapsedContextDividerIndex() {
-    final raw = loadedWindowTruncateIndex();
-    if (raw <= 0) return -1;
-    final limit = raw.clamp(0, _messages.length);
-    return limit - 1;
   }
 
   /// 兼容旧调用方的消息索引；运行时每条消息都是独立槽位。

@@ -268,7 +268,7 @@ void main() {
     },
   );
 
-  testWidgets('clear-context label counts logical messages, not revisions', (
+  testWidgets('context message count follows the effective context', (
     tester,
   ) async {
     final controller = await pumpHarness(tester);
@@ -280,7 +280,7 @@ void main() {
         ),
       );
       final conversation = await chatService.createConversation(
-        title: 'Versioned Chat',
+        title: 'Counted Chat',
         assistantId: assistantProvider.currentAssistantId,
       );
       await chatService.addMessage(
@@ -288,37 +288,30 @@ void main() {
         role: 'user',
         content: 'Question',
       );
-      final answer = await chatService.addMessage(
+      await chatService.addMessage(
         conversationId: conversation.id,
         role: 'assistant',
-        content: 'Answer v1',
-      );
-      await chatService.appendMessageVersion(
-        messageId: answer.id,
-        content: 'Answer v2',
-      );
-      await chatService.appendMessageVersion(
-        messageId: answer.id,
-        content: 'Answer v3',
+        content: 'Answer',
       );
       await controller.chatController.setCurrentConversationAndLoad(
         chatService.getConversation(conversation.id)!,
       );
 
-      expect(controller.debugViewModel.getContextMessageCount(), (
+      expect(await controller.debugViewModel.getContextMessageCount(), (
         actual: 2,
         configured: 10,
       ));
 
-      await controller.debugViewModel.clearContext();
+      await controller.debugViewModel.clearContextOperation();
 
-      expect(controller.debugViewModel.getContextMessageCount(), (
+      expect(await controller.debugViewModel.getContextMessageCount(), (
         actual: 0,
         configured: 10,
       ));
     });
     expect(tester.takeException(), isNull);
   });
+
 }
 
 class _ControllerHarness extends StatefulWidget {

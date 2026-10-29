@@ -1,4 +1,5 @@
 import '../../../core/services/scheduled_tasks_service.dart';
+import '../services/context_assembly.dart';
 import '../services/context_usage_service.dart';
 import '../../../core/models/reasoning_request.dart';
 import 'dart:async';
@@ -8,12 +9,14 @@ import '../../../core/models/chat_input_data.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/chat_message.dart';
 import '../../../core/models/compress_context_options.dart';
+import '../../../core/models/context_operation.dart';
 import '../../../core/models/conversation.dart';
 import '../../../core/models/conversation_tree.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/api/chat_api_service.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/chat/context_compression_service.dart';
 import '../../../core/services/model_spec/model_spec_resolver.dart';
 import '../../../core/services/logging/flutter_logger.dart';
 import '../../../core/services/memory/memory_pipeline.dart';
@@ -105,6 +108,90 @@ class HomeViewModel extends ChangeNotifier {
     _chatActions.onAssistantMessageFinished = _onAssistantMessageFinished;
     _chatActions.onFileProcessingStarted = _onFileProcessingStarted;
     _chatActions.onFileProcessingFinished = _onFileProcessingFinished;
+    _chatService.contextCompression.isConversationBusy = _isConversationBusy;
+    _chatService.contextCompression.estimateCandidate =
+        _estimateCompressedContext;
+    _chatService.contextCompression.addListener(_onCompressionChanged);
+    _chatService.contextCompression.onContextChangeFinished = (id, applied) {
+      notifyListeners();
+      if (applied) unawaited(_drainQueuedInputIfReady(id));
+    };
+    for (final task in _chatService.contextCompression.tasks.toList()) {
+      _chatService.contextCompression.resumeIfReady(task.conversationId);
+    }
+  }
+
+  bool _isConversationBusy(String id) =>
+      _chatController.isConversationLoading(id) ||
+      _chatActions.isSendInFlight(id) ||
+      _chatActions.activeStreamingMessageId(id) != null;
+
+  Future<CompressionBudget> _estimateCompressedContext(
+    String id,
+    List<ChatMessage> history,
+  ) async {
+    final settings = _contextProvider.read<SettingsProvider>();
+    final conversation = _chatService.getConversation(id);
+    if (conversation == null) throw StateError('conversation_not_found');
+    final assistant = _contextProvider
+        .read<AssistantProvider>()
+        .resolveConversationAssistant(conversation.assistantId);
+    final model = _messageGenerationService.getModelConfig(
+      settings,
+      assistant,
+      conversation,
+    );
+    if (model.providerKey == null || model.modelId == null) {
+      throw StateError('no_model');
+    }
+    final config = settings.getProviderConfig(model.providerKey!);
+    final messages = List<ChatMessage>.of(history);
+    final queued = _queuedInput;
+    if (queued != null && queued.conversationId == id) {
+      messages.add(
+        ChatMessage(
+          role: 'user',
+          conversationId: id,
+          parts: await MessageGenerationService.buildPersistedUserMessageParts(
+            queued.input,
+            assistant: assistant,
+          ),
+        ),
+      );
+    }
+    final preview = await _messageGenerationService.previewContextAssembly(
+      conversationId: id,
+      providerKey: model.providerKey!,
+      modelId: model.modelId!,
+      assistantId: conversation.assistantId,
+      messagesOverride: messages,
+    );
+    final estimate = estimateContextBuckets(
+      ContextEstimateJob(
+        preview: preview,
+        kind: ProviderConfig.classify(
+          model.providerKey!,
+          explicitType: config.providerType,
+        ),
+      ),
+    );
+    final window = ModelSpecResolver.instance
+        .spec(config, model.modelId!)
+        .contextWindow;
+    final reserve =
+        assistant?.maxTokens ??
+        (window == null ? 0 : (window ~/ 10).clamp(1, 4096));
+    return (usedTokens: estimate.total + reserve, contextWindow: window);
+  }
+
+  void _onCompressionChanged() {
+    for (final task in _chatService.contextCompression.tasks) {
+      if (task.phase == CompressionPhase.completed &&
+          task.resultConversationId == null) {
+        unawaited(_drainQueuedInputIfReady(task.conversationId));
+      }
+    }
+    notifyListeners();
   }
 
   // ============================================================================
@@ -1321,22 +1408,59 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 清除上下文（在尾部切换截断）。
-  Future<void> clearContext() async {
+  /// 清除上下文：追加一条可撤销的上下文操作。
+  Future<void> clearContextOperation() async {
     final convo = currentConversation;
     if (convo == null) return;
-
-    final defaultTitle = getTitleForLocale(_contextProvider);
     await _clearSuggestionsFor(convo.id);
-    final updated = await _chatService.toggleTruncateAtTail(
-      convo.id,
-      defaultTitle: defaultTitle,
-    );
-    if (updated != null) {
-      _chatController.updateCurrentConversation(updated);
-      notifyListeners();
-    }
+    await _chatService.clearConversationContext(convo.id);
+    notifyListeners();
   }
+
+  /// 当前会话有效上下文中实际参与请求的原始消息条数。
+  ///
+  /// 先按活动路径读取完整历史，再投影清除/压缩操作，最后排除合成摘要。
+  /// 助手设置消息上限时按上限截断。
+  Future<({int actual, int? configured})> getContextMessageCount() async {
+    final assistant = _contextProvider
+        .read<AssistantProvider>()
+        .currentAssistant;
+    final configured = (assistant?.limitContextMessages ?? false)
+        ? (assistant?.contextMessageSize ?? 0)
+        : 0;
+    final conversationId = currentConversation?.id;
+    var remaining = 0;
+    if (conversationId != null) {
+      final messages = await _chatService.loadActiveTimelineMessages(
+        conversationId,
+      );
+      final operations = await _chatService.loadContextOperations(
+        conversationId,
+      );
+      final effective = ContextHistory.resolve(
+        messages,
+        ContextHistory.applicable(operations, messages),
+      );
+      remaining = effective
+          .where((message) => !ContextOperation.isSummary(message))
+          .length;
+    }
+    if (configured > 0) {
+      return (
+        actual: remaining > configured ? configured : remaining,
+        configured: configured,
+      );
+    }
+    return (actual: remaining, configured: null);
+  }
+
+  Future<void> loadContextOperations() async {
+    final id = currentConversation?.id;
+    if (id == null) return;
+    await _chatService.loadContextOperations(id);
+    notifyListeners();
+  }
+
 
   Future<void> setConversationModel({
     String? providerKey,
@@ -1505,6 +1629,73 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
+  /// 在当前会话内启动可撤销的上下文压缩任务。
+  Future<String?> compressContextInPlace({
+    required CompressContextOptions options,
+  }) async {
+    final convo = currentConversation;
+    if (convo == null) return 'no_conversation';
+
+    final locale = Localizations.localeOf(_contextProvider).toLanguageTag();
+    final settings = _contextProvider.read<SettingsProvider>();
+    final assistant = _contextProvider
+        .read<AssistantProvider>()
+        .resolveConversationAssistant(convo.assistantId);
+    final resolvedModel = resolveCompressContextModel(
+      compressProvider: settings.compressModelProvider,
+      compressModelId: settings.compressModelId,
+      summaryProvider: settings.summaryModelProvider,
+      summaryModelId: settings.summaryModelId,
+      titleProvider: settings.titleModelProvider,
+      titleModelId: settings.titleModelId,
+      assistantProvider: assistant?.chatModelProvider,
+      assistantModelId: assistant?.chatModelId,
+      currentProvider: settings.currentModelProvider,
+      currentModelId: settings.currentModelId,
+    );
+    final providerKey = resolvedModel.providerKey;
+    final modelId = resolvedModel.modelId;
+    if (providerKey == null || modelId == null) return 'no_model';
+
+    final config = settings.getProviderConfig(providerKey);
+    final reasoning = settings.compressGenerationReasoningFor(assistant);
+    final spec = ModelSpecResolver.instance.spec(config, modelId);
+    try {
+      await _chatService.contextCompression.start(
+        convo.id,
+        CompressionRequest(
+          options: options,
+          model: modelId,
+          contextWindowTokens: spec.contextWindow,
+          generate: (content, requestId) async {
+            final result = await ChatApiService.generateMessage(
+              conversationId: convo.id,
+              requestId: requestId,
+              config: config,
+              modelId: modelId,
+              reasoning: reasoning,
+              textOnly: true,
+              messages: [
+                {
+                  'role': 'user',
+                  'content': settings.compressPrompt
+                      .replaceAll('{content}', content)
+                      .replaceAll('{locale}', locale),
+                },
+              ],
+            );
+            return result.text;
+          },
+        ),
+      );
+      await _chatService.contextCompression.waitForTask(convo.id);
+      notifyListeners();
+      return null;
+    } catch (error) {
+      return error.toString();
+    }
+  }
+
   /// 更新当前会话引用。
   void updateCurrentConversation(Conversation? conversation) {
     _chatController.updateCurrentConversation(conversation);
@@ -1593,55 +1784,11 @@ class HomeViewModel extends ChangeNotifier {
     return _chatController.groupMessagesByGroup();
   }
 
-  /// 当前会话上下文中实际参与请求的消息条数。
-  ///
-  /// [actual] 统计上下文分界点之后的消息数，助手设了上限时按上限截断；
-  /// [configured] 即该上限，未设上限时为 null。
-  ({int actual, int? configured}) getContextMessageCount() {
-    final assistant = _contextProvider
-        .read<AssistantProvider>()
-        .currentAssistant;
-    final configured = (assistant?.limitContextMessages ?? false)
-        ? (assistant?.contextMessageSize ?? 0)
-        : 0;
-    // 时间线总数和 truncateIndex 都使用逻辑消息槽位。
-    final remaining = computeClearContextRemainingMessageCount(
-      totalMessages: _chatController.totalMessageCount,
-      truncateIndex: currentConversation == null
-          ? -1
-          : _chatService.getContextStartIndex(currentConversation!.id),
-    );
-    if (configured > 0) {
-      return (
-        actual: remaining > configured ? configured : remaining,
-        configured: configured,
-      );
-    }
-    return (actual: remaining, configured: null);
-  }
-
-  bool get isContextMasked {
-    final conversationId = currentConversation?.id;
-    if (conversationId == null) return false;
-    return _chatService.getContextStartIndex(conversationId) >= 0;
-  }
 
   /// [_maybeGenerateSummaryFor] 的测试入口。
   @visibleForTesting
   Future<void> debugMaybeGenerateSummaryFor(String conversationId) =>
       _maybeGenerateSummaryFor(conversationId);
-
-  @visibleForTesting
-  static int computeClearContextRemainingMessageCount({
-    required int totalMessages,
-    required int truncateIndex,
-  }) {
-    final safeTruncateIndex =
-        (truncateIndex < 0 || truncateIndex > totalMessages)
-        ? 0
-        : truncateIndex;
-    return totalMessages - safeTruncateIndex;
-  }
 
   // ============================================================================
   // 标题生成
@@ -2059,6 +2206,11 @@ class HomeViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _conversationTreeReloadSerial++;
+    _chatService.contextCompression.removeListener(_onCompressionChanged);
+    _chatService.contextCompression.isConversationBusy = null;
+    _chatService.contextCompression.isInputPaused = null;
+    _chatService.contextCompression.estimateCandidate = null;
+    _chatService.contextCompression.onContextChangeFinished = null;
     _fileProcessingIndicator.dispose();
     super.dispose();
   }

@@ -6,7 +6,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
+import '../../../utils/app_directories.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/settings_provider.dart';
@@ -784,6 +784,6 @@ Future<String> _defaultLoadBundledJson() {
 }
 
 Future<Directory> _defaultCacheDirectory() async {
-  final support = await getApplicationSupportDirectory();
+  final support = await AppDirectories.getSupportDirectory();
   return Directory('${support.path}/model_catalog');
 }

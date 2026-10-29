@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'windows_explorer_arguments.dart';
+import '../core/app_build_identity.dart';
+import '../core/services/storage/windows_data_directory.dart';
 
 /// Platform-specific application data directory utilities.
 ///
@@ -21,9 +23,30 @@ class AppDirectories {
   /// - Windows/macOS/Linux: Application Support directory
   /// - iOS: private Application Support storage
   /// - Android: Application Documents directory
+  static Directory getPortableDataDirectory() {
+    final executable = File(Platform.resolvedExecutable);
+    return Directory(p.join(executable.parent.path, 'data'));
+  }
+
+  /// Support data for plugins and app services. Portable Windows keeps it
+  /// beside the executable; other platforms use the system support folder.
+  static Future<Directory> getSupportDirectory() async {
+    if (kIsPortableBuild && Platform.isWindows) {
+      return getPortableDataDirectory();
+    }
+    return getApplicationSupportDirectory();
+  }
+
   static Future<Directory> getAppDataDirectory() async {
+    if (kIsPortableBuild && Platform.isWindows) {
+      return getPortableDataDirectory();
+    }
     switch (defaultTargetPlatform) {
       case TargetPlatform.windows:
+        if (!WindowsDataDirectory.isInitialized) {
+          return await getApplicationSupportDirectory();
+        }
+        return (await WindowsDataDirectory.instance).directory;
       case TargetPlatform.macOS:
       case TargetPlatform.linux:
         return await getApplicationSupportDirectory();

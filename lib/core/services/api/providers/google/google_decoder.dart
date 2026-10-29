@@ -345,7 +345,7 @@ class GoogleStreamDecoder implements StreamChunkDecoder {
     final fc = p['functionCall'];
     final rawPart = Map<String, dynamic>.from(p);
 
-    if (isGemini3 && !thought && rawPart.isNotEmpty) {
+    if (!thought && rawPart.isNotEmpty) {
       roundModelParts.add(rawPart);
     }
 

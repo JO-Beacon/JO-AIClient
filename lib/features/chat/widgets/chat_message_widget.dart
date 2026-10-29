@@ -2,9 +2,10 @@ import 'tool_permission_widgets.dart';
 import '../../provider/widgets/oauth_message_recovery.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:Kelivo/desktop/desktop_overlay_backdrop.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform, visibleForTesting, mapEquals;
-import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import '../../../core/services/haptics.dart';
@@ -34,6 +35,7 @@ import 'package:intl/intl.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import '../../../utils/safe_resize_image.dart';
 import '../../../utils/utf16_safe_cut.dart';
+import '../../../utils/unicode_sanitizer.dart';
 import '../../../utils/avatar_cache.dart';
 import '../../../utils/assistant_regex.dart';
 import '../../../core/models/assistant.dart';
@@ -42,6 +44,7 @@ import '../../../core/providers/tts_provider.dart';
 import '../../../shared/markdown/markdown_with_code_highlight.dart';
 import '../../../shared/widgets/app_selection_area.dart';
 import '../../../shared/widgets/avatar_image_editor.dart';
+import '../../../shared/widgets/cached_avatar_image.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/audio_clip_player.dart';
 import '../../../core/utils/multimodal_input_utils.dart';
@@ -600,7 +603,7 @@ Widget _buildTextToSpeechReplayRow(
     children: [
       Expanded(
         child: Text(
-          text,
+          UnicodeSanitizer.sanitize(text),
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: fontSize, height: 1.4, color: textColor),
@@ -639,10 +642,12 @@ String _toolTitleFor(
 }) {
   final l10n = AppLocalizations.of(context)!;
   if (name == LocalToolNames.askUser) {
-    return _askUserToolTitleFor(l10n, args);
+    return UnicodeSanitizer.sanitize(_askUserToolTitleFor(l10n, args));
   }
   final localToolTitle = _localToolTitleFor(l10n, name, args);
-  if (localToolTitle != null) return localToolTitle;
+  if (localToolTitle != null) {
+    return UnicodeSanitizer.sanitize(localToolTitle);
+  }
   if (isWorkspaceToolName(name)) {
     return workspaceToolTitle(l10n, name);
   }
@@ -666,18 +671,20 @@ String _toolTitleFor(
     case 'create_memory':
       return l10n.chatMessageWidgetCreateMemory;
     case 'search_web':
-      final q = (args['query'] ?? '').toString();
+      final q = UnicodeSanitizer.sanitize((args['query'] ?? '').toString());
       return l10n.chatMessageWidgetWebSearch(q);
-    case 'fetch_url':
-      final url = (args['url'] ?? '').toString().trim();
-      final host = Uri.tryParse(url)?.host ?? '';
-      return l10n.chatMessageWidgetWebFetch(host.isEmpty ? url : host);
     case 'builtin_search':
       return l10n.chatMessageWidgetBuiltinSearch;
+    case 'fetch_url':
+      final url = UnicodeSanitizer.sanitize(
+        (args['url'] ?? '').toString().trim(),
+      );
+      final host = Uri.tryParse(url)?.host ?? '';
+      return l10n.chatMessageWidgetWebFetch(host.isEmpty ? url : host);
     default:
       return isResult
-          ? l10n.chatMessageWidgetToolResult(name)
-          : l10n.chatMessageWidgetToolCall(name);
+          ? l10n.chatMessageWidgetToolResult(UnicodeSanitizer.sanitize(name))
+          : l10n.chatMessageWidgetToolCall(UnicodeSanitizer.sanitize(name));
   }
 }
 
@@ -1747,8 +1754,8 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: DesktopOverlayBackdrop(
+                      sigma: 14,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: cs.surfaceContainerHigh.withValues(
@@ -1861,43 +1868,18 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         ),
       );
     } else if (avatarType == 'url' && avatarValue != null) {
-      final url = avatarValue;
-      avatarContent = FutureBuilder<String?>(
-        future: AvatarCache.getPath(url),
-        builder: (ctx, snap) {
-          final p = snap.data;
-          if (p != null && File(p).existsSync()) {
-            return ClipOval(
-              child: Image.file(
-                File(p),
-                width: 32,
-                height: 32,
-                fit: BoxFit.cover,
-              ),
-            );
-          }
-          return ClipOval(
-            child: Image.network(
-              url,
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
-                  Icon(Lucide.User, size: 18, color: cs.primary),
-            ),
-          );
-        },
+      avatarContent = CachedAvatarImage(
+        source: avatarValue,
+        isNetwork: true,
+        size: 32,
+        fallback: Icon(Lucide.User, size: 18, color: cs.primary),
       );
     } else if (avatarType == 'file' && avatarValue != null) {
-      final fixed = SandboxPathResolver.fix(avatarValue);
-      final f = File(fixed);
-      if (f.existsSync()) {
-        avatarContent = ClipOval(
-          child: Image.file(f, width: 32, height: 32, fit: BoxFit.cover),
-        );
-      } else {
-        avatarContent = Icon(Lucide.User, size: 18, color: cs.primary);
-      }
+      avatarContent = CachedAvatarImage(
+        source: avatarValue,
+        size: 32,
+        fallback: Icon(Lucide.User, size: 18, color: cs.primary),
+      );
     } else {
       avatarContent = Icon(Lucide.User, size: 18, color: cs.primary);
     }
@@ -2323,7 +2305,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       );
     } else {
       content = Text(
-        visualText,
+        UnicodeSanitizer.sanitize(visualText),
         style: TextStyle(
           fontSize: baseUser,
           height: 1.4,
@@ -2779,7 +2761,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       );
     } else {
       assistantContent = Text(
-        visualContent,
+        UnicodeSanitizer.sanitize(visualContent),
         style: TextStyle(
           fontSize: baseAssistant,
           height: 1.5,
@@ -4008,6 +3990,14 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
     final av = (widget.assistantAvatar ?? '').trim();
     if (av.isNotEmpty) {
       if (av.startsWith('http')) {
+        if (widget.assistantAvatarTransform == null) {
+          return CachedAvatarImage(
+            source: av,
+            isNetwork: true,
+            size: 32,
+            fallback: _assistantInitial(cs),
+          );
+        }
         return FutureBuilder<String?>(
           future: AvatarCache.getPath(av),
           builder: (ctx, snap) {
@@ -4037,6 +4027,13 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         final fixed = SandboxPathResolver.fix(av);
         final f = File(fixed);
         if (f.existsSync()) {
+          if (widget.assistantAvatarTransform == null) {
+            return CachedAvatarImage(
+              source: fixed,
+              size: 32,
+              fallback: _assistantInitial(cs),
+            );
+          }
           return AvatarImage(
             path: fixed,
             size: 32,
@@ -5380,6 +5377,7 @@ class _ChainOfThoughtReasoningStepState
   final ValueNotifier<int> _elapsedTick = ValueNotifier<int>(0);
   Timer? _elapsedTimer;
   final ScrollController _scroll = ScrollController();
+  bool _followBottom = true;
   bool _hasOverflow = false;
   bool? _localExpanded;
 
@@ -5429,10 +5427,14 @@ class _ChainOfThoughtReasoningStepState
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_updateFollowBottom);
     _syncElapsedTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkOverflow();
-      if (widget.step.loading && _scroll.hasClients) {
+      if (mounted &&
+          widget.step.loading &&
+          _followBottom &&
+          _scroll.hasClients) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
@@ -5442,14 +5444,25 @@ class _ChainOfThoughtReasoningStepState
   void didUpdateWidget(covariant _ChainOfThoughtReasoningStep oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncElapsedTimer();
-    if (widget.step.loading) {
+    if (widget.step.loading && widget.step.text != oldWidget.step.text) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients) {
+        if (mounted &&
+            widget.step.loading &&
+            _followBottom &&
+            _scroll.hasClients) {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
         }
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverflow());
+  }
+
+  void _updateFollowBottom() {
+    if (!_scroll.hasClients) return;
+    final position = _scroll.position;
+    _followBottom =
+        position.userScrollDirection != ScrollDirection.forward &&
+        position.extentAfter <= 1;
   }
 
   @override
@@ -6150,7 +6163,7 @@ class _ChainOfThoughtToolStepState extends State<_ChainOfThoughtToolStep> {
       content,
       metadata: metadata,
     );
-    _cleanText = cleanText;
+    _cleanText = UnicodeSanitizer.sanitize(cleanText);
     _imagePaths = paths;
   }
 
@@ -6273,14 +6286,16 @@ class _ChainOfThoughtToolStepState extends State<_ChainOfThoughtToolStep> {
         ? WeatherToolResult.tryParse(cleanText)
         : null;
     final String summaryText = approvalRequest != null
-        ? _argsSummary(approvalRequest.arguments)
+        ? UnicodeSanitizer.sanitize(_argsSummary(approvalRequest.arguments))
         : cleanText.isNotEmpty
         ? cleanText
-        : ((widget.part.arguments['query'] ??
-                      widget.part.arguments['url'] ??
-                      widget.part.arguments['text']) ??
-                  '')
-              .toString();
+        : UnicodeSanitizer.sanitize(
+            ((widget.part.arguments['query'] ??
+                        widget.part.arguments['url'] ??
+                        widget.part.arguments['text']) ??
+                    '')
+                .toString(),
+          );
     final bool shouldShowSummary = showToolResultSummary;
     final askUserExpanded = _askUserExpanded ?? true;
     final ttsText = widget.part.toolName == LocalToolNames.textToSpeech

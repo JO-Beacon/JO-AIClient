@@ -25,6 +25,7 @@
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    applyBackupPolicy()
     GeneratedPluginRegistrant.register(with: self)
     if let registrar = registrar(forPlugin: "BrowserGlass") {
       registrar.register(
@@ -131,9 +132,8 @@
           }
           result(nil)
 
-        // 本地数据库副本位于 Documents 下，而 iCloud 会整份备份 Documents。
-        // 这类副本可达数 GB，且都能从活动数据库重新生成，备份它们只会撑大
-        // ——甚至撑坏——用户的 iCloud 备份，却不多保护任何东西。
+        // 应用根目录的备份排除由 AppBackupPolicy 统一处理；这里保留
+        // 独立本地副本目录的排除，避免它们脱离根目录策略。
         case "excludeFromBackup":
           guard
             let arguments = call.arguments as? [String: Any],
@@ -162,6 +162,23 @@
       WorkspacePlugin.register(messenger: controller.binaryMessenger, presenter: controller)
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    // Reapply for existing installs and directories replaced while suspended.
+    applyBackupPolicy()
+    super.applicationDidBecomeActive(application)
+  }
+
+  private func applyBackupPolicy() {
+    do {
+      try AppBackupPolicy.apply(
+        in: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true))
+    } catch {
+      // Metadata errors must not stop users from accessing or exporting data.
+      // The next foreground activation retries the exclusion.
+      NSLog("[AppBackupPolicy] Could not exclude app data from backup: %@", String(describing: error))
+    }
   }
 
   override func userNotificationCenter(

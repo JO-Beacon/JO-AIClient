@@ -18,6 +18,7 @@ import '../../database/chat_database_repository.dart';
 import '../../database/composer_draft_store.dart';
 import '../../database/generation_run.dart';
 import '../../models/chat_message.dart';
+import '../../models/context_operation.dart';
 import '../../models/assistant.dart';
 import '../../models/composer_draft.dart';
 import '../../models/message_part.dart';
@@ -35,6 +36,14 @@ import '../api/providers/claude/claude_thinking_recovery.dart';
 import '../api/providers/google/gemini_thought_signature.dart';
 import '../api/providers/openai/responses_history.dart';
 import '../mcp/mcp_image_snapshot.dart';
+import '../storage/storage_image_usage.dart';
+import '../logging/log_payload_elider.dart';
+import '../memory/memory_block_builder.dart';
+import '../../../utils/mcp_structured_image.dart';
+import '../../../utils/utf16_safe_cut.dart';
+import 'context_compression_service.dart';
+
+part 'chat_context_operations.dart';
 
 final class LoadedTimelineSlot {
   const LoadedTimelineSlot({required this.identity, required this.message});
@@ -271,6 +280,26 @@ class ChatService extends ChangeNotifier {
   // 改摘要、换模型/助手、改 MCP 选择…），流式增量不算。
   final Map<String, int> _contextRevisions = {};
   final Map<String, ValueNotifier<int>> _contextRevisionNotifiers = {};
+  final Map<String, List<ContextOperation>> _contextOperations = {};
+  final Map<String, int> _contextStartIndices = {};
+  final Map<String, int> _contextStateVersions = {};
+  ContextCompressionService? _contextCompression;
+  ContextCompressionService get contextCompression {
+    _contextCompression ??= ContextCompressionService(this)
+      ..addListener(notifyListeners);
+    return _contextCompression!;
+  }
+
+  List<ContextOperation> contextOperationsFor(String conversationId) =>
+      List<ContextOperation>.unmodifiable(
+        _contextOperations[conversationId] ?? const <ContextOperation>[],
+      );
+
+  void _notifyContextChanged(String conversationId) {
+    _bumpContextRevision(conversationId);
+    _contextStateVersions[conversationId] = contextRevision(conversationId);
+    notifyListeners();
+  }
 
   int contextRevision(String conversationId) =>
       _contextRevisions[conversationId] ?? 0;
@@ -292,6 +321,9 @@ class ChatService extends ChangeNotifier {
 
   void _forgetContextRevision(String conversationId) {
     _contextRevisions.remove(conversationId);
+    _contextOperations.remove(conversationId);
+    _contextStartIndices.remove(conversationId);
+    _contextStateVersions.remove(conversationId);
     final notifier = _contextRevisionNotifiers.remove(conversationId);
     notifier?.dispose();
   }
@@ -349,6 +381,7 @@ class ChatService extends ChangeNotifier {
       await _resetStaleStreamingFlags();
 
       _initialized = true;
+      await contextCompression.restore();
       notifyListeners();
       late final Future<void> postStartupMaintenance;
       postStartupMaintenance =
@@ -398,6 +431,7 @@ class ChatService extends ChangeNotifier {
         await assetMaintenance;
       } catch (_) {}
     }
+    await _contextCompression?.cancelAll(interrupted: true);
     // Abort idle waits so close never waits for an animation to finish.
     _initialized = false;
     // 存储已随数据库句柄一起关闭；先摘掉监听，避免关闭后的异步保存回调进来。
@@ -413,6 +447,8 @@ class ChatService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _contextCompression?.removeListener(notifyListeners);
+    _contextCompression?.dispose();
     if (_initialized || _initFuture != null) {
       unawaited(close());
     }
@@ -810,8 +846,17 @@ class ChatService extends ChangeNotifier {
     );
   }
 
-  int getContextStartIndex(String conversationId) =>
-      _conversationsCache[conversationId]?.truncateIndex ?? -1;
+  int getContextStartIndex(String conversationId) {
+    final operations = _contextOperations[conversationId];
+    if (operations != null) {
+      final clear = operations
+          .where((op) => !op.revoked && !op.isCompression)
+          .lastOrNull;
+      if (clear != null) return clear.sourceGroups.length;
+    }
+    // 尚未加载上下文操作时回退到旧字段，兼容迁移和旧读取路径。
+    return _conversationsCache[conversationId]?.truncateIndex ?? -1;
+  }
 
   Future<void> _syncContextBoundaryToActivePath(
     String conversationId,
@@ -1410,6 +1455,20 @@ class ChatService extends ChangeNotifier {
     return selected;
   }
 
+  /// Reads the messages that actually enter the model request: the active
+  /// branch plus any clear/compress operation projected onto it.
+  Future<List<ChatMessage>> loadEffectiveContextMessages(
+    String conversationId, {
+    required int limit,
+    String? throughRevisionId,
+    bool includeFollowingAssistant = false,
+  }) => _loadEffectiveContextMessages(
+    conversationId,
+    limit: limit,
+    throughRevisionId: throughRevisionId,
+    includeFollowingAssistant: includeFollowingAssistant,
+  );
+
   Future<List<ChatMessage>> loadMessages(String conversationId) async {
     if (!_initialized) return const [];
     // 要求已知计数：未知值 (-1) 不得作为缓存命中短路。
@@ -1879,6 +1938,9 @@ class ChatService extends ChangeNotifier {
 
   Future<Conversation?> duplicateConversation(String id) async {
     if (!_initialized) await init();
+    // Operations are part of the conversation's context history; loading them
+    // first lets the repository remap their anchors and dependencies.
+    await loadContextOperations(id);
     final duplicate = await _repo.duplicateConversation(id);
     if (duplicate == null) return null;
 
@@ -2012,9 +2074,8 @@ class ChatService extends ChangeNotifier {
     return deleted;
   }
 
-  Future<List<({String path, String kind})>> _extractLocalAttachmentsFromMessage(
-    ChatMessage message,
-  ) async {
+  Future<List<({String path, String kind})>>
+  _extractLocalAttachmentsFromMessage(ChatMessage message) async {
     final fromParts = <String, ({String path, String kind})>{};
     final previews = <String>{};
     for (final part in message.parts) {
@@ -2258,10 +2319,13 @@ class ChatService extends ChangeNotifier {
         notBefore: effectiveNow.add(_assetGcDelay),
       );
       final candidates = await _repo.claimAssetGc(now: effectiveNow);
+      if (candidates.isEmpty) return;
+      final imageUsage = await StorageImageUsage.load(includeMessages: false);
       final appDataDir = await AppDirectories.getContentDirectory();
       final allowedRoots = [
         p.normalize(p.join(appDataDir.absolute.path, 'upload')),
         p.normalize(p.join(appDataDir.absolute.path, 'images')),
+        p.normalize(p.join(appDataDir.absolute.path, 'avatars')),
       ];
       for (final candidate in candidates) {
         final paths = [
@@ -2270,6 +2334,7 @@ class ChatService extends ChangeNotifier {
         ].whereType<String>();
         final regularFiles = <File>[];
         var safe = true;
+        var appearanceInUse = false;
         for (final candidatePath in paths) {
           final resolved = SandboxPathResolver.resolveForIo(candidatePath);
           if (resolved == null) {
@@ -2277,6 +2342,11 @@ class ChatService extends ChangeNotifier {
             break;
           }
           final normalized = p.normalize(File(resolved).absolute.path);
+          if (imageUsage.isInUse(normalized)) {
+            appearanceInUse = true;
+            safe = false;
+            break;
+          }
           if (!allowedRoots.any((root) => p.isWithin(root, normalized))) {
             safe = false;
             break;
@@ -2286,6 +2356,13 @@ class ChatService extends ChangeNotifier {
             followLinks: false,
           );
           if (type == FileSystemEntityType.file) {
+            if (imageUsage.isInUse(
+              await File(normalized).resolveSymbolicLinks(),
+            )) {
+              appearanceInUse = true;
+              safe = false;
+              break;
+            }
             if (await _recentlyReusedPreview(File(normalized), effectiveNow)) {
               safe = false;
               break;
@@ -2295,6 +2372,12 @@ class ChatService extends ChangeNotifier {
             safe = false;
             break;
           }
+        }
+        if (appearanceInUse) {
+          await _repo.deferAssetGc(
+            candidate,
+            notBefore: effectiveNow.add(const Duration(hours: 6)),
+          );
         }
         if (!safe) continue;
         if (!await _repo.isAssetGcClaimStillValid(candidate)) continue;
@@ -4559,6 +4642,7 @@ class ChatService extends ChangeNotifier {
     required String title,
     required String? assistantId,
     required List<ChatMessage> sourceMessages,
+    bool activate = true,
   }) async {
     if (!_initialized) await init();
     // 分叉继承源会话的工作区绑定（toolsUsed 不继承）。
@@ -4573,6 +4657,7 @@ class ChatService extends ChangeNotifier {
     final persisted = await createConversation(
       title: title,
       assistantId: assistantId,
+      activate: activate,
     );
     await _copyConversationSettingsFrom(persisted.id, sourceExtras);
     final sourceIds = sourceMessages
@@ -4636,7 +4721,7 @@ class ChatService extends ChangeNotifier {
         }
       }
     }
-    _currentConversationId = persisted.id;
+    if (activate) _currentConversationId = persisted.id;
     notifyListeners();
     return _conversationsCache[persisted.id] ?? persisted;
   }
@@ -5281,6 +5366,11 @@ class ChatService extends ChangeNotifier {
     if (changed > 0 || cacheChanged) notifyListeners();
   }
 
+  /// Legacy test and old-data helper for the retired temporary-mask feature.
+  ///
+  /// Production UI must use context clear operations instead. Kept so tests
+  /// can build legacy truncateIndex states for migration coverage.
+  @visibleForTesting
   Future<Conversation?> toggleTruncateAtTail(
     String conversationId, {
     String? defaultTitle,

@@ -13,6 +13,7 @@ import 'desktop_tray_controller.dart';
 import 'window_appearance.dart';
 import 'window_title_bar.dart';
 import '../core/services/notification_service.dart';
+import '../core/app_build_identity.dart';
 import '../core/providers/settings_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_font_weights.dart';
@@ -348,7 +349,7 @@ class _TitleBarLeading extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          l10n.aboutPageAppName,
+          appDisplayName(l10n.aboutPageAppName, l10n.aboutPageAppNamePortable),
           style: TextStyle(
             fontSize: 13,
             fontWeight: AppFontWeights.semibold,

@@ -26,6 +26,7 @@ import 'package:Kelivo/core/models/chat_message.dart';
 import 'package:Kelivo/core/models/conversation.dart';
 import 'package:Kelivo/core/models/composer_draft.dart';
 import 'package:Kelivo/core/models/message_part.dart';
+import 'package:Kelivo/core/services/backup/backup_task_progress.dart';
 import 'package:Kelivo/core/services/backup/data_sync.dart';
 import 'package:Kelivo/core/services/backup/joaiclient_archive.dart';
 import 'package:Kelivo/core/services/backup/restore_receipt.dart';
@@ -882,12 +883,14 @@ void main() {
       final input = InputFileStream(zipFile.path);
       final archive = ZipDecoder().decodeStream(input);
       try {
-        final manifest = jsonDecode(
-          utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
-        ) as Map<String, dynamic>;
+        final manifest =
+            jsonDecode(
+                  utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
+                )
+                as Map<String, dynamic>;
         expect(manifest['format'], 'jo-aiclient-backup');
-        expect(manifest['formatVersion'], 1);
-        expect(manifest['minimumReadableFormatVersion'], 1);
+        expect(manifest['formatVersion'], 2);
+        expect(manifest['minimumReadableFormatVersion'], 2);
       } finally {
         archive.clearSync();
         input.closeSync();
@@ -913,9 +916,11 @@ void main() {
       final input = InputFileStream(backupFile.path);
       final archive = ZipDecoder().decodeStream(input);
       try {
-        final manifest = jsonDecode(
-          utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
-        ) as Map<String, dynamic>;
+        final manifest =
+            jsonDecode(
+                  utf8.decode(archive.findFile('manifest.json')!.readBytes()!),
+                )
+                as Map<String, dynamic>;
         expect(manifest['format'], 'kelivo-backup');
         expect(manifest['formatVersion'], 2);
       } finally {
@@ -940,6 +945,7 @@ void main() {
         );
 
         final progressSignal = Completer<void>();
+        final phases = <BackupPhase>[];
         final chatService = ChatService();
         addTearDown(() async {
           // 等待数据库真正关闭，再允许外层清理临时目录。
@@ -952,12 +958,15 @@ void main() {
         ).restoreFromLocalFile(
           backupFile,
           const WebDavConfig(includeChats: true, includeFiles: true),
-          onProgress: (_) {
+          onProgress: (progress) {
+            phases.add(progress.phase);
             if (!progressSignal.isCompleted) progressSignal.complete();
           },
         );
 
         await progressSignal.future;
+        expect(phases, isNot(contains(BackupPhase.decrypting)));
+        expect(phases, contains(BackupPhase.extracting));
       },
     );
 

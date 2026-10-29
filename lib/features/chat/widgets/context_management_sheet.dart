@@ -6,15 +6,15 @@ import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
+import '../../../shared/widgets/section_card.dart';
 import 'context_usage_header.dart';
 
-/// 移动端底部面板：压缩上下文或清空上下文。
+/// Bottom sheet for mobile: compress context or clear context.
 class ContextManagementSheet extends StatelessWidget {
   const ContextManagementSheet({
     super.key,
     this.onCompress,
     this.onClear,
-    this.clearLabel,
     this.messageCountLabel,
     this.conversationId,
     this.draftText = '',
@@ -22,9 +22,8 @@ class ContextManagementSheet extends StatelessWidget {
 
   final VoidCallback? onCompress;
   final VoidCallback? onClear;
-  final String? clearLabel;
 
-  /// 当前上下文中的消息条数，例如“12 条消息”，显示在屏蔽那一行的右侧。
+  /// 当前有效上下文中的消息条数，例如“12 条消息”。
   final String? messageCountLabel;
   final String? conversationId;
   final String draftText;
@@ -32,7 +31,7 @@ class ContextManagementSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final bg = Theme.of(context).colorScheme.surface;
+    final bg = context.overlaySurface;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -54,7 +53,7 @@ class ContextManagementSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 拖拽把手
+          // Drag handle
           Container(
             width: 40,
             height: 4,
@@ -86,7 +85,7 @@ class ContextManagementSheet extends StatelessWidget {
                   const SizedBox(height: 8),
                   _OptionRow(
                     icon: Lucide.Eraser,
-                    label: clearLabel ?? l10n.bottomToolsSheetClearContext,
+                    label: l10n.bottomToolsSheetClearContext,
                     description: l10n.clearContextDesc,
                     trailing: messageCountLabel,
                     onTap: () {
@@ -123,7 +122,7 @@ class _OptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final cardColor = context.appColors.surfaceFill;
+    final cardColor = sheetTileColor(context);
     final radius = BorderRadius.circular(14);
 
     return IosCardPress(

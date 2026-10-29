@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import './app_directories.dart';
 import './kelivo_file_uri.dart';
@@ -30,7 +29,7 @@ class SandboxPathResolver {
       final dir = await AppDirectories.getContentDirectory();
       _docsDir = dir.path;
       try {
-        final sup = await getApplicationSupportDirectory();
+        final sup = await AppDirectories.getSupportDirectory();
         _supportDir = sup.path;
       } catch (_) {
         _supportDir = null;
@@ -406,6 +405,21 @@ class SandboxPathResolver {
       return path.replaceAll('\\', '/');
     }
     return path;
+  }
+
+  /// Key for de-duplicating media sources that may spell one file differently
+  /// (e.g. `kelivo-file:` URI vs. absolute path). Windows drive paths compare
+  /// with `/` separators and case-insensitively; everything else is [fix].
+  static String dedupeKey(String src) {
+    if (src.startsWith('http') || src.startsWith('data:')) return src;
+    String path;
+    try {
+      path = fix(src);
+    } catch (_) {
+      path = src;
+    }
+    if (!_looksLikeWindowsDrivePath(path)) return path;
+    return path.replaceAll('\\', '/').toLowerCase();
   }
 
   // 暴露当前目录用于诊断

@@ -204,7 +204,7 @@ class ChatScrollController {
     required this._scrollController,
     required this._onStateChanged,
     required this._getAutoScrollEnabled,
-    required this._getAutoScrollIdleSeconds,
+    this.getAutoScrollIdleSeconds,
     this._getTopRevealInset,
     this.isGenerating,
   }) {
@@ -217,7 +217,7 @@ class ChatScrollController {
     // 连接自动跟随回调，实现零延迟底部固定
     if (scrollController is ChatAutoFollowScrollController) {
       scrollController.shouldAutoFollow = () =>
-          _getAutoScrollEnabled() &&
+          _checkAutoScrollEnabled() &&
           (isGenerating?.call() ?? false) &&
           _autoStickToBottom &&
           !_isUserScrolling &&
@@ -228,7 +228,9 @@ class ChatScrollController {
   final ScrollController _scrollController;
   final VoidCallback _onStateChanged;
   final bool Function() _getAutoScrollEnabled;
-  final int Function() _getAutoScrollIdleSeconds;
+
+  /// Legacy test compatibility; the delay setting no longer exists.
+  final int Function()? getAutoScrollIdleSeconds;
   final double Function()? _getTopRevealInset;
   final bool Function()? isGenerating;
 
@@ -251,7 +253,7 @@ class ChatScrollController {
   Timer? _navButtonsHideTimer;
   static const int _navButtonsHideDelayMs = 2000;
 
-  /// 用户是否正在主动滚动。
+  /// 用户滚动后暂停跟随，直到主动回到底部。
   bool _isUserScrolling = false;
   bool get isUserScrolling => _isUserScrolling;
 
@@ -261,9 +263,6 @@ class ChatScrollController {
 
   /// 上一次滚动回调时的像素位置，用于分辨“内容变长”与“用户离开底部”。
   double? _lastPixels;
-
-  /// 检测用户滚动结束的计时器。
-  Timer? _userScrollTimer;
 
   /// 生成结束后短暂保持布局阶段的尾部固定，吸收终态控件高度变化。
   Timer? _bottomHoldTimer;
@@ -324,7 +323,7 @@ class ChatScrollController {
   /// 必须在新视口尺寸布局前请求；否则旧像素偏移会在新底部上方
   /// 绘制一帧。
   bool pinBottomDuringViewportResizeIfNeeded() {
-    if (!isNearBottom(24)) return false;
+    if (_isUserScrolling || !isNearBottom(24)) return false;
     positionAtBottomOnNextLayout();
     return true;
   }
@@ -337,49 +336,48 @@ class ChatScrollController {
     return _scrollController.position.maxScrollExtent >= minExtent;
   }
 
-  /// 根据当前位置刷新自动保持底部状态。
-  void refreshAutoStickToBottom() {
-    try {
-      final nearBottom = isNearBottom();
-      if (!nearBottom) {
-        _autoStickToBottom = false;
-      } else if (!_isUserScrolling) {
-        final enabled = _getAutoScrollEnabled();
-        if (enabled || _autoStickToBottom) {
-          _autoStickToBottom = true;
-        }
-      }
-    } catch (_) {}
+  bool _checkAutoScrollEnabled() {
+    final enabled = _getAutoScrollEnabled();
+    // 关闭跟随时内容仍可能增长但像素不动，记录脱离状态，
+    // 避免用户重新开启跟随后被拉到底部。
+    if (!enabled &&
+        _scrollController.positions.any(
+          (position) =>
+              position.hasContentDimensions && position.extentAfter > 1,
+        )) {
+      _autoStickToBottom = false;
+    }
+    return enabled;
   }
 
   /// 处理滚动控制器变化（由滚动监听器调用）。
   void _onScrollControllerChanged() {
     try {
       if (!_scrollController.hasClients) return;
-      final autoScrollEnabled = _getAutoScrollEnabled();
       final position = _scrollController.position;
       final pixels = position.pixels;
       final previousPixels = _lastPixels;
       _lastPixels = pixels;
       // 内容变长（流式排版、末条从估算变实测）时，与底部的距离会变大，
-      // 但像素并未向上移动；这不代表用户想停止跟随。只有像素真的上移
-      // 或用户主动滚动，才算离开底部。
+      // 但像素并未向上移动；这不代表用户想停止跟随。
       final pixelsMovedUp =
           previousPixels != null && pixels < previousPixels - 0.5;
-
-      // 仅在不在底部附近时显示
+      final direction = position.userScrollDirection;
+      // 按钮显示允许小范围容差，但跟随不能在这个带宽内恢复。
       final atBottom = isNearBottom(24);
-      if (!atBottom) {
+      if (direction == ScrollDirection.forward) {
+        // 滚轮事件会在下一次布局前重置方向，因此待执行的底部固定
+        // 必须在这一帧之前取消。
+        _cancelProgrammaticNavigation();
+        _isUserScrolling = true;
+        _autoStickToBottom = false;
+      } else if (!isNearBottom(1)) {
         if (pixelsMovedUp || _isUserScrolling) {
           _autoStickToBottom = false;
         }
-      } else if (_isUserScrolling) {
-        // 用户主动滚动回底部时立即重新启用自动跟随，
-        // 使流式内容无需等待空闲计时器就能继续固定。
+      } else {
+        // 键盘滚动可能带着空闲方向到达；只在实际底部恢复跟随。
         _isUserScrolling = false;
-        _userScrollTimer?.cancel();
-        _autoStickToBottom = true;
-      } else if (autoScrollEnabled || _autoStickToBottom) {
         _autoStickToBottom = true;
       }
       final shouldShow = !atBottom;
@@ -394,21 +392,19 @@ class ChatScrollController {
   /// 程序化位置变化绝不能调用此方法。
   void handleUserScrollIntent() {
     _cancelProgrammaticNavigation();
-    _isUserScrolling = true;
-    _autoStickToBottom = false;
+    final returnedToBottom =
+        _scrollController.hasClients &&
+        isNearBottom(1) &&
+        _scrollController.position.userScrollDirection !=
+            ScrollDirection.forward;
+    _isUserScrolling = !returnedToBottom;
+    _autoStickToBottom = returnedToBottom;
     _lastJumpUserMessageId = null;
     if (!_showNavButtons) {
       _showNavButtons = true;
       _onStateChanged();
     }
     _resetNavButtonsHideTimer();
-    _userScrollTimer?.cancel();
-    final secs = _getAutoScrollIdleSeconds();
-    _userScrollTimer = Timer(Duration(seconds: secs), () {
-      _isUserScrolling = false;
-      refreshAutoStickToBottom();
-      _onStateChanged();
-    });
   }
 
   /// 重置导航按钮的自动隐藏计时器。
@@ -456,7 +452,6 @@ class ChatScrollController {
     _cancelProgrammaticNavigation(stopDrivenScroll: true);
     _lastJumpUserMessageId = null;
     _isUserScrolling = false;
-    _userScrollTimer?.cancel();
     _autoStickToBottom = true;
     final controller = _scrollController;
     if (controller is! ChatAutoFollowScrollController) {
@@ -478,7 +473,6 @@ class ChatScrollController {
     _cancelProgrammaticNavigation(stopDrivenScroll: true);
     _lastJumpUserMessageId = null;
     _isUserScrolling = false;
-    _userScrollTimer?.cancel();
     _autoStickToBottom = true;
 
     for (var pass = 0; pass < 3; pass++) {
@@ -506,7 +500,6 @@ class ChatScrollController {
   void forceScrollToBottom({bool animate = true}) {
     _cancelProgrammaticNavigation(stopDrivenScroll: true);
     _isUserScrolling = false;
-    _userScrollTimer?.cancel();
     _lastJumpUserMessageId = null;
     revealNavButtons();
     _autoStickToBottom = true;
@@ -519,7 +512,6 @@ class ChatScrollController {
     Duration postSwitchDelay = const Duration(milliseconds: 220),
   }) {
     _isUserScrolling = false;
-    _userScrollTimer?.cancel();
     final request = ++_deferredBottomRequest;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (request == _deferredBottomRequest) {
@@ -596,8 +588,9 @@ class ChatScrollController {
   /// 会在布局期间自动处理底部固定。此方法保留为边界情况的轻量兜底
   /// （例如普通 ScrollController）。
   void autoScrollToBottomIfNeeded() {
-    final enabled = _getAutoScrollEnabled();
-    if (!enabled || !_autoStickToBottom) return;
+    if (!_checkAutoScrollEnabled() || !_autoStickToBottom || _isUserScrolling) {
+      return;
+    }
     // 使用自定义 ScrollPosition 时，底部固定发生在
     // applyContentDimensions 中（布局期间、绘制之前）。
     // 流式路径不需要帧后回调。
@@ -1158,7 +1151,6 @@ class ChatScrollController {
   /// 重置用户滚动状态（例如强制滚动时）。
   void resetUserScrolling() {
     _isUserScrolling = false;
-    _userScrollTimer?.cancel();
   }
 
   // ============================================================================
@@ -1168,7 +1160,6 @@ class ChatScrollController {
   /// 释放资源。
   void dispose() {
     _scrollController.removeListener(_onScrollControllerChanged);
-    _userScrollTimer?.cancel();
     _navButtonsHideTimer?.cancel();
     _bottomHoldTimer?.cancel();
     _cancelIndexedNavigation();

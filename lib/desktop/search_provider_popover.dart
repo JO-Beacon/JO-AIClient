@@ -1,6 +1,5 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
+import 'desktop_overlay_backdrop.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
@@ -191,8 +190,8 @@ class _GlassPanel extends StatelessWidget {
     final radius = borderRadius ?? BorderRadius.circular(14);
     return ClipRRect(
       borderRadius: radius,
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: DesktopOverlayBackdrop(
+        sigma: 20,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: AppOverlayColors.desktopPopoverSurface(cs),

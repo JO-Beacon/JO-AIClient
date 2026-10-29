@@ -30,9 +30,18 @@ env:
 
 jobs:
   build-macos:
-    name: Build macOS
+    name: Build macOS (${{ matrix.renderer }})
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - renderer: Impeller
+            suffix: ''
+          - renderer: Skia
+            suffix: '-compat'
     env:
+      PACKAGE_SUFFIX: ${{ matrix.suffix }}
       # 未配置时 tool/macos_sign_and_notarize.sh 会跳过签名。说明见 docs/macos-signing.md。
       MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -85,8 +94,23 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Disable Impeller for compatibility build
+        if: matrix.renderer == 'Skia'
+        run: |
+          plist=macos/Runner/Info.plist
+          if plutil -extract FLTEnableImpeller raw "$plist" >/dev/null 2>&1; then
+            plutil -replace FLTEnableImpeller -bool false "$plist"
+          else
+            plutil -insert FLTEnableImpeller -bool false "$plist"
+          fi
+
       - name: Build macOS
         run: flutter build macos --release
+
+      - name: Verify compatibility renderer
+        if: matrix.renderer == 'Skia'
+        run: |
+          test "$(plutil -extract FLTEnableImpeller raw -expect bool build/macos/Build/Products/Release/JO-AIClient.app/Contents/Info.plist)" = false
 
       - name: Sign app with Developer ID
         run: bash tool/macos_sign_and_notarize.sh sign-app "build/macos/Build/Products/Release/JO-AIClient.app"
@@ -101,21 +125,21 @@ jobs:
             --window-size 800 400 \
             --icon-size 100 \
             --app-drop-link 600 185 \
-            "JO-AIClient_macos_${VERSION}.dmg" \
+            "JO-AIClient_macos_${VERSION}${PACKAGE_SUFFIX}.dmg" \
             "build/macos/Build/Products/Release/JO-AIClient.app" || true
-          if [ ! -f "JO-AIClient_macos_${VERSION}.dmg" ]; then
+          if [ ! -f "JO-AIClient_macos_${VERSION}${PACKAGE_SUFFIX}.dmg" ]; then
             hdiutil create -volname JO-AIClient \
               -srcfolder "build/macos/Build/Products/Release/JO-AIClient.app" \
-              -ov -format UDZO "JO-AIClient_macos_${VERSION}.dmg"
+              -ov -format UDZO "JO-AIClient_macos_${VERSION}${PACKAGE_SUFFIX}.dmg"
           fi
 
       - name: Notarize and verify DMG
-        run: bash tool/macos_sign_and_notarize.sh notarize-dmg "JO-AIClient_macos_${VERSION}.dmg" "build/macos/Build/Products/Release/JO-AIClient.app"
+        run: bash tool/macos_sign_and_notarize.sh notarize-dmg "JO-AIClient_macos_${VERSION}${PACKAGE_SUFFIX}.dmg" "build/macos/Build/Products/Release/JO-AIClient.app"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macOS-DMG
+          name: macOS-DMG${{ matrix.suffix }}
           path: JO-AIClient_macos_*.dmg
 
       - name: Publish to GitHub Release

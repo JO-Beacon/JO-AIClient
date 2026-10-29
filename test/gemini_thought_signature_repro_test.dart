@@ -309,6 +309,12 @@ void main() {
           expect(functionCalls, hasLength(2));
           expect(_thoughtSignatureOf(functionCalls[0]), 'sig-search-docs');
           expect(_hasThoughtSignature(functionCalls[1]), isFalse);
+          expect(contents, hasLength(3));
+          final responses = (contents[2]['parts'] as List)
+              .cast<Map>()
+              .map((p) => (p['functionResponse'] as Map)['name'])
+              .toList();
+          expect(responses, ['search_docs', 'fetch_markdown']);
 
           request.response.statusCode = HttpStatus.ok;
           request.response.headers.contentType = ContentType(

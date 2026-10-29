@@ -262,7 +262,7 @@ final _claudeCases = <_ClaudeCase>[
     },
   ),
   _ClaudeCase(
-    name: 'Opus 4.7 off disables thinking and keeps sampling',
+    name: 'Opus 4.7 off disables thinking and strips sampling',
     modelId: 'claude-opus-4-7',
     thinkingBudget: 0,
     temperature: 0.7,
@@ -270,8 +270,8 @@ final _claudeCases = <_ClaudeCase>[
     verify: (body) {
       expect(body['thinking'], {'type': 'disabled'});
       expect(body.containsKey('output_config'), isFalse);
-      expect(body['temperature'], 0.7);
-      expect(body['top_p'], 0.8);
+      expect(body.containsKey('temperature'), isFalse);
+      expect(body.containsKey('top_p'), isFalse);
     },
   ),
   _ClaudeCase(
@@ -329,6 +329,20 @@ final _claudeCases = <_ClaudeCase>[
     topP: 0.8,
     verify: (body) {
       expect(body['thinking'], {'type': 'disabled'});
+      expect(body.containsKey('output_config'), isFalse);
+      expect(body['max_tokens'], 128000);
+      expect(body.containsKey('temperature'), isFalse);
+      expect(body.containsKey('top_p'), isFalse);
+    },
+  ),
+  _ClaudeCase(
+    name: 'Sonnet 5.5 off uses between_tools',
+    modelId: 'claude-sonnet-5-5',
+    thinkingBudget: 0,
+    temperature: 0.7,
+    topP: 0.8,
+    verify: (body) {
+      expect(body['thinking'], {'type': 'between_tools'});
       expect(body.containsKey('output_config'), isFalse);
       expect(body['max_tokens'], 128000);
       expect(body.containsKey('temperature'), isFalse);

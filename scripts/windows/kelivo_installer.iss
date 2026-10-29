@@ -14,6 +14,9 @@
 #ifndef OutputDir
   #define OutputDir "."
 #endif
+#ifndef OutputSuffix
+  #define OutputSuffix ""
+#endif
 
 ; 快捷方式与文件类型图标改用一份独立的 .ico，装进目标目录时文件名带版本号。
 ;
@@ -53,7 +56,7 @@ DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir={#OutputDir}
-OutputBaseFilename=JO-AIClient-v{#AppVersion}-windows-{#SetupArch}-setup
+OutputBaseFilename=JO-AIClient-v{#AppVersion}-windows-{#SetupArch}{#OutputSuffix}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

@@ -2,12 +2,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../../utils/app_directories.dart';
 
 /// Imported icons are owned thumbnails, never references to picker cache files.
 class BackgroundIconStore {
   BackgroundIconStore({Future<Directory> Function()? supportDirectory})
-    : _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
+    : _supportDirectory =
+          supportDirectory ?? AppDirectories.getSupportDirectory;
 
   final Future<Directory> Function() _supportDirectory;
 

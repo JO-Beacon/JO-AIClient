@@ -5,7 +5,7 @@ name: PR Checks
 # 详见 AGENTS.md 3.7.2。
 
 env:
-  FLUTTER_VERSION: '3.44.9'
+  FLUTTER_VERSION: '3.47.6'
 
 on:
   pull_request:

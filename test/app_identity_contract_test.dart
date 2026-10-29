@@ -153,8 +153,8 @@ void main() {
           'lib/features/settings/pages/about_page.dart',
           'lib/desktop/setting/about_pane.dart',
         ]) {
-          _expectContains(path, "_upstreamKelivoVersion = '1.3.1'");
-          _expectContains(path, "_upstreamKelivoBuildNumber = '80'");
+          _expectContains(path, "_upstreamKelivoVersion = '1.3.2'");
+          _expectContains(path, "_upstreamKelivoBuildNumber = '81'");
           _expectContains(path, 'https://github.com/JO-Beacon/JO-AIClient');
           _expectContains(path, 'https://github.com/Chevey339/kelivo');
         }
@@ -468,10 +468,10 @@ void main() {
           (token: 'android-*-release.apk.sha256', count: 2),
         ],
         '.github/workflows/build-windows.yml': [
-          (token: 'windows-x64-portable.zip', count: 2),
-          (token: 'windows-x64-portable.zip.sha256', count: 2),
-          (token: 'windows-x64-setup.exe', count: 2),
-          (token: 'windows-x64-setup.exe.sha256', count: 2),
+          (token: 'windows-x64*portable.zip', count: 2),
+          (token: 'windows-x64*portable.zip.sha256', count: 2),
+          (token: 'windows-x64*setup.exe', count: 2),
+          (token: 'windows-x64*setup.exe.sha256', count: 2),
         ],
         '.github/workflows/build-linux.yml': [
           (token: 'linux-x64-archive.tar.gz', count: 2),
@@ -486,7 +486,7 @@ void main() {
       for (final MapEntry(key: path, value: expectations)
           in expectedTokens.entries) {
         final workflow = _read(path);
-        expect(workflow, contains("FLUTTER_VERSION: '3.44.9'"));
+        expect(workflow, contains("FLUTTER_VERSION: '3.47.6'"));
         expect(workflow, contains('workflow_dispatch:'));
         expect(
           workflow,
@@ -514,6 +514,57 @@ void main() {
           );
         }
       }
+    });
+
+    test('uses a user-facing compatibility suffix without renderer jargon', () {
+      for (final path in [
+        '.github/workflows/build-windows.yml',
+        '.github/workflows/build-windows-arm64.yml',
+        '.github/workflows/build-macos.yml',
+      ]) {
+        final workflow = _read(path);
+        expect(workflow, contains('-compat'), reason: path);
+        expect(
+          workflow.toLowerCase(),
+          isNot(contains('noimpeller')),
+          reason: '$path must not expose renderer jargon in artifacts',
+        );
+      }
+    });
+
+    test('keeps every workflow on the same Flutter version', () {
+      const expectedVersion = '3.47.6';
+      final workflows =
+          Directory('.github/workflows')
+              .listSync()
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.yml'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
+      final versions = <String, String>{};
+      for (final file in workflows) {
+        final source = file.readAsStringSync();
+        final matches = RegExp(
+          r"FLUTTER_VERSION:\s*'([^']+)'",
+        ).allMatches(source);
+        if (matches.isEmpty) continue;
+        final values = matches.map((match) => match.group(1)!).toSet();
+        expect(
+          values,
+          hasLength(1),
+          reason: '${file.path} has multiple Flutter versions',
+        );
+        versions[file.path] = values.single;
+      }
+
+      expect(versions.values.toSet(), {
+        expectedVersion,
+      }, reason: 'Every workflow must pin the same Flutter version');
+      expect(
+        versions.length,
+        greaterThanOrEqualTo(6),
+        reason: 'Expected all release and PR workflows to declare a version',
+      );
     });
 
     test('keeps release tags on the full application version', () {

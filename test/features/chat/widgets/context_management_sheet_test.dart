@@ -174,10 +174,10 @@ void main() {
     usage.notifyListeners();
     await tester.pump();
     expect(tester.takeException(), isNull);
-    // 本仓库把“清空上下文”改成了可逆转的屏蔽/恢复，文案相应不同。
-    await tester.ensureVisible(find.text('Temporarily Mask Context'));
+    // 产品已改为可撤销的“清除上下文”，旧的临时屏蔽入口不再存在。
+    await tester.ensureVisible(find.text('Clear Context'));
     await tester.pumpAndSettle();
-    expect(find.text('Temporarily Mask Context').hitTestable(), findsOneWidget);
+    expect(find.text('Clear Context').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

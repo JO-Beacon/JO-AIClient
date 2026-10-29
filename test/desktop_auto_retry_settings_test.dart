@@ -45,7 +45,7 @@ void main() {
     expect(label, findsOneWidget);
     await tester.ensureVisible(label);
 
-    final row = find.ancestor(of: label, matching: find.byType(Row)).last;
+    final row = find.ancestor(of: label, matching: find.byType(Row)).first;
     final trigger = find.descendant(of: row, matching: find.text('On'));
     expect(trigger, findsOneWidget);
     await tester.tap(trigger);

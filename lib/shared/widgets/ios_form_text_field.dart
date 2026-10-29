@@ -158,9 +158,12 @@ class IosFormTextField extends StatelessWidget {
             border: InputBorder.none,
             contentPadding: EdgeInsets.zero,
             suffixIcon: suffix,
-            suffixIconConstraints: const BoxConstraints(
-              minWidth: 36,
-              minHeight: 36,
+            // 必须同时限制最大尺寸。只给 minWidth 会让 IosIconButton 内部的
+            // Center 在 loose constraints 下撑满整行，透明按钮覆盖输入框，
+            // 移动端点击输入框实际点到的是显示/隐藏口令按钮。
+            suffixIconConstraints: const BoxConstraints.tightFor(
+              width: 36,
+              height: 36,
             ),
           ),
         );

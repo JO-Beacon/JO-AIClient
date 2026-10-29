@@ -1,4 +1,6 @@
 import 'chat_message.dart';
+import 'context_operation.dart';
+import 'message_part.dart';
 import '../utils/token_estimator.dart';
 import '../../utils/utf16_safe_cut.dart';
 
@@ -9,15 +11,67 @@ class CompressContextOptions {
     required this.mode,
     this.maxChars,
     this.keepUserMessages,
+    this.historySource = ContextHistorySource.effective,
+    this.includeEditedSummaries = true,
+    this.includeAttachmentsAndTools = true,
+    this.regenerateExisting = false,
+    this.newConversation = false,
   });
 
   static const int defaultMaxChars = 6000;
   static const int defaultRequestMaxChars = 6000;
-  static const int defaultKeepUserMessages = 3;
+  static const int defaultKeepUserMessages = 6;
+
+  /// Hard cap on a single compress request, in UTF-16 code units.
+  static const int safeRequestChars = 100000;
+
+  /// Assumed context window when model metadata is missing.
+  static const int defaultContextWindowTokens = 32000;
+
+  /// Fraction of the context window reserved for the compress prompt
+  /// wrapper and the model's completion.
+  static const double contextReserveFraction = 0.30;
+
+  /// Conservative chars/token (CJK-heavy).
+  static const double charsPerToken = 1.6;
+
+  static const int contextRetryMaxSplits = 5;
+  static const int contextRetryMinSplitChars = 512;
 
   final CompressContextLimitMode mode;
   final int? maxChars;
   final int? keepUserMessages;
+  final ContextHistorySource historySource;
+  final bool includeEditedSummaries;
+  final bool includeAttachmentsAndTools;
+  final bool regenerateExisting;
+  final bool newConversation;
+
+  Map<String, dynamic> toJson() => {
+    'mode': mode.name,
+    'maxChars': maxChars,
+    'keep': keepUserMessages,
+    'source': historySource.name,
+    'includeEdited': includeEditedSummaries,
+    'includeAttachmentsAndTools': includeAttachmentsAndTools,
+    'regenerateExisting': regenerateExisting,
+    'newConversation': newConversation,
+  };
+
+  factory CompressContextOptions.fromJson(Map<String, dynamic> json) =>
+      CompressContextOptions(
+        mode: CompressContextLimitMode.values.byName(json['mode'] as String),
+        maxChars: json['maxChars'] as int?,
+        keepUserMessages: json['keep'] as int?,
+        historySource: ContextHistorySource.values.byName(
+          json['source'] as String,
+        ),
+        includeEditedSummaries: json['includeEdited'] as bool? ?? true,
+        includeAttachmentsAndTools:
+            json['includeAttachmentsAndTools'] as bool? ?? true,
+        regenerateExisting: json['regenerateExisting'] == true,
+        newConversation: json['newConversation'] == true,
+      );
 }
 
 /// Resolve the model used by context compression.
@@ -67,6 +121,80 @@ String buildCompressContextContent(
   };
 }
 
+bool isCompressionUserMessage(ChatMessage message) =>
+    message.role == 'user' &&
+    !ContextOperation.isSummary(message) &&
+    !message.id.startsWith('context-note:') &&
+    (message.content.trim().isNotEmpty ||
+        message.parts.any((part) => part is ImagePart || part is FilePart));
+
+typedef CompressionSelection = ({
+  List<ChatMessage> effective,
+  List<ChatMessage> retained,
+  List<ChatMessage> covered,
+  List<ChatMessage> input,
+  List<String> dependencies,
+  bool needsRegeneration,
+});
+
+/// The options preview and the actual task use the same range selection.
+CompressionSelection selectCompressionHistory(
+  List<ChatMessage> messages,
+  List<ContextOperation> operations,
+  CompressContextOptions options,
+) {
+  final activeOperations = ContextHistory.applicable(operations, messages);
+  final effective = ContextHistory.resolve(messages, activeOperations);
+  final keep = options.mode == CompressContextLimitMode.keepRecent
+      ? options.keepUserMessages ??
+            CompressContextOptions.defaultKeepUserMessages
+      : 0;
+  final retained = keep == 0
+      ? <ChatMessage>[]
+      : selectKeepRecentMessages(effective, keep);
+  final prefix = effective.take(effective.length - retained.length).toList();
+  final dependencies = prefix
+      .where(ContextOperation.isSummary)
+      .map((m) => m.id.substring(ContextOperation.summaryPrefix.length))
+      .toList();
+  final groups = <String>{
+    for (final message in prefix)
+      if (!ContextOperation.isSummary(message)) ContextHistory.group(message),
+    for (final operation in activeOperations)
+      if (dependencies.contains(operation.id)) ...operation.sourceGroups,
+  };
+  final expanded = ContextHistory.compressionInput(
+    messages,
+    activeOperations,
+    source: options.historySource,
+    includeEditedSummaries: options.includeEditedSummaries,
+  );
+  return (
+    effective: effective,
+    retained: retained,
+    covered: messages
+        .where((m) => groups.contains(ContextHistory.group(m)))
+        .toList(),
+    dependencies: dependencies,
+    needsRegeneration:
+        prefix.isNotEmpty &&
+        prefix.every(ContextOperation.isSummary) &&
+        options.historySource == ContextHistorySource.effective &&
+        !options.regenerateExisting,
+    input: expanded.where((message) {
+      if (groups.contains(ContextHistory.group(message))) return true;
+      final operation = activeOperations
+          .where(
+            (op) =>
+                message.id == op.summaryMessageId ||
+                message.id == 'context-note:${op.id}',
+          )
+          .firstOrNull;
+      return operation != null && operation.sourceGroups.every(groups.contains);
+    }).toList(),
+  );
+}
+
 /// Select the trailing messages beginning at the last N non-empty user turns.
 /// Assistant/tool messages after the selected user turn remain verbatim.
 List<ChatMessage> selectKeepRecentMessages(
@@ -77,22 +205,19 @@ List<ChatMessage> selectKeepRecentMessages(
   final userIndices = <int>[];
   for (var i = 0; i < messages.length; i++) {
     final message = messages[i];
-    if (message.role == 'user' && message.content.trim().isNotEmpty) {
+    if (isCompressionUserMessage(message)) {
       userIndices.add(i);
     }
   }
   if (userIndices.isEmpty) return const <ChatMessage>[];
-  if (userIndices.length <= keepUserMessages) return List.of(messages);
+  if (userIndices.length <= keepUserMessages) {
+    return messages.skipWhile(ContextOperation.isSummary).toList();
+  }
   return messages.sublist(userIndices[userIndices.length - keepUserMessages]);
 }
 
 int countUserMessages(List<ChatMessage> messages) {
-  return messages
-      .where(
-        (message) =>
-            message.role == 'user' && message.content.trim().isNotEmpty,
-      )
-      .length;
+  return messages.where(isCompressionUserMessage).length;
 }
 
 int defaultKeepUserMessageCountFor(int userMessageCount) {

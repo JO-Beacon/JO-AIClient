@@ -303,7 +303,7 @@ ProgressCallback? adaptBackupProgressSink(BackupProgressSink? sink) {
 
 class DataSync {
   static const _backupFormat = 'jo-aiclient-backup';
-  static const _backupFormatVersion = 1;
+  static const _backupFormatVersion = 2;
   static const _legacyBackupFormat = 'kelivo-backup';
   static const _legacyBackupFormatVersion = 2;
 
@@ -324,7 +324,7 @@ class DataSync {
   ///（而不只是认不出来）的东西。纯新增时保持原值不动，
   /// 正是这样才能让明天的备份仍能恢复到今天的构建里。
   ///
-  static const _minimumReadableFormatVersion = 1;
+  static const _minimumReadableFormatVersion = 2;
   static const _manifestEntryName = 'manifest.json';
   static const _databaseEntryName = 'database/${DatabaseNames.current}';
   static const legacyDatabaseEntryName = 'database/${DatabaseNames.legacy}';
@@ -1906,8 +1906,7 @@ class DataSync {
       throw const FormatException('manifest.json');
     }
     final manifest = decoded.cast<String, dynamic>();
-    if (!_isKnownArchiveFormat(manifest) ||
-        !_acceptsArchiveFormat(manifest)) {
+    if (!_isKnownArchiveFormat(manifest) || !_acceptsArchiveFormat(manifest)) {
       throw const FormatException('manifest_version');
     }
     final rawEntries = manifest['entries'];
@@ -2171,11 +2170,14 @@ class DataSync {
     if (format == _legacyBackupFormat) {
       // 旧 JO 包与上游 v2 共用这个格式号；上游 v3 也在这里读入，
       // 数据库仍必须是上游 schema 3。
-      return formatVersion == _legacyBackupFormatVersion ||
-          formatVersion == 3;
+      return formatVersion == _legacyBackupFormatVersion || formatVersion == 3;
     }
     if (format != _backupFormat) return false;
     if (formatVersion == _backupFormatVersion) return true;
+    // Format 1 is the pre-context-operation archive. New builds keep reading
+    // it, while format-1 builds reject format 2 through the minimum-read
+    // declaration written in every new manifest.
+    if (formatVersion == 1) return true;
     if (formatVersion < _backupFormatVersion) return false;
     final declared = manifest[backupMinimumReadableFormatKey];
     return declared is int && declared >= 1 && declared <= _backupFormatVersion;
@@ -2428,10 +2430,7 @@ class DataSync {
           }
           try {
             onProgress?.call(
-              const BackupProgress(
-                phase: BackupPhase.decrypting,
-                processed: 0,
-              ),
+              const BackupProgress(phase: BackupPhase.decrypting, processed: 0),
             );
             await KelivoBackupEncryption.decryptFile(
               source: file,
@@ -2454,8 +2453,7 @@ class DataSync {
           mode: mode,
           onProgress: onProgress,
           cancelToken: cancelToken,
-          allowUnverifiedForwardCompatible:
-              allowUnverifiedForwardCompatible,
+          allowUnverifiedForwardCompatible: allowUnverifiedForwardCompatible,
         );
         return;
       } finally {
@@ -2480,8 +2478,7 @@ class DataSync {
             mode: mode,
             onProgress: onProgress,
             cancelToken: cancelToken,
-            allowUnverifiedForwardCompatible:
-                allowUnverifiedForwardCompatible,
+            allowUnverifiedForwardCompatible: allowUnverifiedForwardCompatible,
             password: password,
           );
           return;
@@ -2684,8 +2681,7 @@ class DataSync {
       throw const FormatException('manifest.json');
     }
     final manifest = decoded.cast<String, dynamic>();
-    if (!_isKnownArchiveFormat(manifest) ||
-        !_acceptsArchiveFormat(manifest)) {
+    if (!_isKnownArchiveFormat(manifest) || !_acceptsArchiveFormat(manifest)) {
       throw const FormatException('manifest_version');
     }
     final payloadKind = manifest['payloadKind'];
@@ -3774,9 +3770,13 @@ class DataSync {
       if (isJoaiclient) {
         payloadFile = File(p.join(extractDir.path, '_payload.zip'));
         registerLiveTempPath(payloadFile.path);
+        // v2 的 protection=0 是明文容器，不经过解密；只有带 password 的
+        // 加密容器才显示解密阶段。否则未加密备份恢复时会误报“正在解密”。
         onProgress?.call(
-          const BackupProgress(
-            phase: BackupPhase.decrypting,
+          BackupProgress(
+            phase: password == null
+                ? BackupPhase.extracting
+                : BackupPhase.decrypting,
             processed: 0,
           ),
         );
