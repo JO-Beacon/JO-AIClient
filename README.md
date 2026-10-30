@@ -17,7 +17,7 @@
 
 **Windows 用户必看**：安装包和便携包已经**随包附带**所需的 VC++ 运行库，正常下载安装即可，不需要另外安装。只有当你**单独拷贝程序文件**到其它电脑、或系统运行库被破坏时，才需要按系统匹配补装：普通 x64 电脑装 [64 位版](https://aka.ms/vc14/vc_redist.x64.exe)，ARM 电脑（Windows on ARM）装 [ARM64 版](https://aka.ms/vc14/vc_redist.arm64.exe)，也可从[微软官网](https://learn.microsoft.com/zh-cn/cpp/windows/latest-supported-vc-redist?view=msvc-180#latest-supported-redistributable-version)手动下载。
 
-Windows 和 macOS 的下载列表同时提供文件名带 `-compat` 的兼容版。正常使用不需要选它；如果遇到黑屏、花屏或其他显卡渲染异常，可以换用兼容版。
+Windows 的下载列表同时提供文件名带 `-compat` 的兼容版。正常使用不需要选它；如果遇到黑屏、花屏或其他显卡渲染异常，可以换用兼容版。
 
 - ✅ **[Android](https://github.com/JO-Beacon/JO-AIClient/releases/latest)**（提供 arm64-v8a、armeabi-v7a、x86_64 三个安装包）
 - ✅ **[Windows AMD64](https://github.com/JO-Beacon/JO-AIClient/releases/latest)**（中文安装程序与免安装便携版均提供）
